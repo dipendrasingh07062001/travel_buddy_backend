@@ -14,7 +14,8 @@ Node.js and TypeScript backend for the Travel Buddy platform.
 cp .env.example .env
 npm install
 docker compose up -d postgres
-npm run db:migrate:dev -- --name initial_foundation
+npm run db:migrate:deploy
+npm run db:seed
 npm run dev
 ```
 
@@ -29,9 +30,32 @@ The API runs at `http://localhost:3000` by default.
 - API documentation: `http://localhost:3000/docs`
 - Health endpoint: `GET http://localhost:3000/api/v1/health`
 - Readiness endpoint: `GET http://localhost:3000/api/v1/readiness`
+- Browse public trips: `GET http://localhost:3000/api/v1/trips`
+- Public trip details: `GET http://localhost:3000/api/v1/trips/:tripId`
 
 The health endpoint reports whether the Node.js process is running. The
 readiness endpoint also checks whether PostgreSQL is reachable.
+
+## Public trips API
+
+`GET /api/v1/trips` supports these optional query parameters:
+
+- `origin`: case-insensitive partial city match
+- `destination`: exact community slug, such as `manali`
+- `departureFrom` and `departureTo`: `YYYY-MM-DD` date window
+- `minBudget` and `maxBudget`: inclusive budget overlap
+- `transport`: `BUS`, `TRAIN`, `FLIGHT`, `CAR`, `MOTORCYCLE`, `OTHER`, or
+  `UNDECIDED`
+- `sort`: `newest` (default) or `departure_asc`
+- `page` and `pageSize`: page-based pagination; page size is capped at 100
+
+Only `PUBLISHED` and `FULL` trips in active communities are public. Draft,
+paused, cancelled, and completed trips return `404` from the details endpoint so
+their existence is not disclosed.
+
+Run `npm run db:seed` to load repeatable local sample data. The seed is safe to
+run more than once. Open `/docs` after starting the server to explore the full
+request and response schemas.
 
 ## Database workflow
 
