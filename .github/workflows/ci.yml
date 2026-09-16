@@ -1,0 +1,72 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: travel_buddy_test
+          POSTGRES_USER: travel_buddy
+          POSTGRES_PASSWORD: travel_buddy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U travel_buddy -d travel_buddy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://travel_buddy:travel_buddy@localhost:5432/travel_buddy_test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate database schema
+        run: npm run db:validate
+
+      - name: Apply test database migrations
+        run: npm run db:migrate:deploy
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run database integration tests
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high

@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum IdentityType {
+  EMAIL
+  PHONE
+}
+
+enum PolicyType {
+  TERMS
+  PRIVACY
+  COMMUNITY_STANDARDS
+}
+
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  status            UserStatus         @default(ACTIVE)
+  displayName       String?            @map("display_name") @db.VarChar(100)
+  birthDate         DateTime?          @map("birth_date") @db.Date
+  identities        AuthIdentity[]
+  sessions          Session[]
+  policyAcceptances PolicyAcceptance[]
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([status])
+  @@map("users")
+}
+
+model AuthIdentity {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  type            IdentityType
+  normalizedValue String       @map("normalized_value") @db.VarChar(320)
+  verifiedAt      DateTime?    @map("verified_at") @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([type, normalizedValue])
+  @@index([userId])
+  @@map("auth_identities")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(255)
+  userAgent        String?   @map("user_agent") @db.VarChar(500)
+  ipHash           String?   @map("ip_hash") @db.VarChar(128)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt       DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PolicyAcceptance {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  policyType PolicyType @map("policy_type")
+  version    String     @db.VarChar(50)
+  acceptedAt DateTime   @default(now()) @map("accepted_at") @db.Timestamptz(6)
+  ipHash     String?    @map("ip_hash") @db.VarChar(128)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, policyType, version])
+  @@index([policyType, version])
+  @@map("policy_acceptances")
+}
