@@ -6,3 +6,5 @@ src/generated/
 .env.*
 !.env.example
 *.log
+*-firebase-adminsdk-*.json
+firebase-service-account*.json

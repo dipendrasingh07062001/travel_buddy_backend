@@ -25,6 +25,10 @@ const envSchema = z.object({
     .default(
       'postgresql://travel_buddy:travel_buddy@localhost:5432/travel_buddy',
     ),
+  FIREBASE_PROJECT_ID: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().trim().min(1).optional(),
+  ),
 });
 
 const result = envSchema.safeParse(process.env);
@@ -34,6 +38,11 @@ if (!result.success) {
     'Invalid environment configuration',
     z.treeifyError(result.error),
   );
+  process.exit(1);
+}
+
+if (result.data.NODE_ENV === 'production' && !result.data.FIREBASE_PROJECT_ID) {
+  console.error('FIREBASE_PROJECT_ID is required when NODE_ENV=production');
   process.exit(1);
 }
 

@@ -32,6 +32,8 @@ The API runs at `http://localhost:3000` by default.
 - Readiness endpoint: `GET http://localhost:3000/api/v1/readiness`
 - Browse public trips: `GET http://localhost:3000/api/v1/trips`
 - Public trip details: `GET http://localhost:3000/api/v1/trips/:tripId`
+- Firebase account bootstrap: `POST http://localhost:3000/api/v1/auth/bootstrap`
+- Current user: `GET http://localhost:3000/api/v1/me`
 
 The health endpoint reports whether the Node.js process is running. The
 readiness endpoint also checks whether PostgreSQL is reachable.
@@ -56,6 +58,30 @@ their existence is not disclosed.
 Run `npm run db:seed` to load repeatable local sample data. The seed is safe to
 run more than once. Open `/docs` after starting the server to explore the full
 request and response schemas.
+
+## Firebase authentication
+
+Flutter signs users in with Firebase Authentication and sends the resulting ID
+token on protected requests:
+
+```http
+Authorization: Bearer <firebase-id-token>
+```
+
+The backend verifies that token and links its Firebase UID to a local PostgreSQL
+user. Call `POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
+operation is idempotent and returns `201` only when it creates the local account.
+Subsequent calls return `200`. `GET /api/v1/me` returns the authenticated local
+profile.
+
+Set `FIREBASE_PROJECT_ID` to the shared Firebase project ID. For local
+development, set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute path of a
+service-account JSON file kept outside this repository. In deployed
+environments, use the hosting platform's workload identity or secret manager.
+Never commit service-account credentials.
+
+Automated HTTP tests inject a fake token verifier and therefore do not need
+Firebase credentials. Real Firebase requests require the project configuration.
 
 ## Database workflow
 
