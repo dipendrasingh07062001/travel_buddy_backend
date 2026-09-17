@@ -11,10 +11,15 @@ import {
   registerHealthRoutes,
   type HealthRouteDependencies,
 } from './modules/health/health.routes.js';
+import {
+  registerTripRoutes,
+  type TripRouteDependencies,
+} from './modules/trips/trip.routes.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
   health?: Partial<HealthRouteDependencies>;
+  trips?: Partial<TripRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -51,6 +56,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
+      await registerTripRoutes(api, options.trips);
     },
     { prefix: '/api/v1' },
   );

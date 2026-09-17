@@ -24,6 +24,30 @@ enum PolicyType {
   COMMUNITY_STANDARDS
 }
 
+enum CommunityStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TripStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  FULL
+  COMPLETED
+  CANCELLED
+}
+
+enum TripTransport {
+  BUS
+  TRAIN
+  FLIGHT
+  CAR
+  MOTORCYCLE
+  OTHER
+  UNDECIDED
+}
+
 model User {
   id                String             @id @default(uuid()) @db.Uuid
   status            UserStatus         @default(ACTIVE)
@@ -32,12 +56,59 @@ model User {
   identities        AuthIdentity[]
   sessions          Session[]
   policyAcceptances PolicyAcceptance[]
+  trips             Trip[]
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("users")
+}
+
+model Community {
+  id          String          @id @default(uuid()) @db.Uuid
+  slug        String          @unique @db.VarChar(120)
+  name        String          @db.VarChar(120)
+  region      String?         @db.VarChar(120)
+  countryCode String          @default("IN") @map("country_code") @db.Char(2)
+  description String?
+  status      CommunityStatus @default(ACTIVE)
+  trips       Trip[]
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, name])
+  @@map("communities")
+}
+
+model Trip {
+  id               String        @id @default(uuid()) @db.Uuid
+  ownerId          String        @map("owner_id") @db.Uuid
+  communityId      String        @map("community_id") @db.Uuid
+  originCity       String        @map("origin_city") @db.VarChar(120)
+  startDate        DateTime      @map("start_date") @db.Date
+  endDate          DateTime      @map("end_date") @db.Date
+  flexibilityDays  Int           @default(0) @map("flexibility_days")
+  durationDays     Int           @map("duration_days")
+  budgetMin        Decimal?      @map("budget_min") @db.Decimal(12, 2)
+  budgetMax        Decimal?      @map("budget_max") @db.Decimal(12, 2)
+  currency         String        @default("INR") @db.Char(3)
+  currentGroupSize Int           @default(1) @map("current_group_size")
+  desiredGroupSize Int           @map("desired_group_size")
+  transport        TripTransport @default(UNDECIDED)
+  description      String
+  status           TripStatus    @default(DRAFT)
+  publishedAt      DateTime?     @map("published_at") @db.Timestamptz(6)
+  owner            User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  community        Community     @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, startDate])
+  @@index([communityId, status, startDate])
+  @@index([ownerId])
+  @@index([originCity])
+  @@map("trips")
 }
 
 model AuthIdentity {
