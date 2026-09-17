@@ -34,6 +34,8 @@ The API runs at `http://localhost:3000` by default.
 - Public trip details: `GET http://localhost:3000/api/v1/trips/:tripId`
 - Firebase account bootstrap: `POST http://localhost:3000/api/v1/auth/bootstrap`
 - Current user: `GET http://localhost:3000/api/v1/me`
+- Update current profile: `PATCH http://localhost:3000/api/v1/me/profile`
+- Public user profile: `GET http://localhost:3000/api/v1/users/:userId`
 
 The health endpoint reports whether the Node.js process is running. The
 readiness endpoint also checks whether PostgreSQL is reachable.
@@ -82,6 +84,18 @@ Never commit service-account credentials.
 
 Automated HTTP tests inject a fake token verifier and therefore do not need
 Firebase credentials. Real Firebase requests require the project configuration.
+
+## User profiles
+
+Authenticated adults can update their display name, birth date, general city or
+region, biography, languages, travel interests, and activity-visibility
+preferences with `PATCH /api/v1/me/profile`. Exact birth dates and privacy
+settings are returned only to the authenticated account through `/me`.
+
+`GET /api/v1/users/:userId` is public and deliberately returns an approximate
+age range and account-creation month. It never returns exact birth date, email,
+phone number, Firebase UID, internal photo storage key, or privacy settings.
+Profile-photo upload is deferred until an object-storage provider is selected.
 
 ## Database workflow
 

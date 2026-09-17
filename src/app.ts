@@ -8,12 +8,15 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { env } from './config/env.js';
 import { checkDatabase } from './database/client.js';
 import { AppError } from './errors/app-error.js';
+import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import {
   registerHealthRoutes,
   type HealthRouteDependencies,
 } from './modules/health/health.routes.js';
+import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
+import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import {
   registerTripRoutes,
   type TripRouteDependencies,
@@ -24,6 +27,7 @@ export interface BuildAppOptions {
   health?: Partial<HealthRouteDependencies>;
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
+  profiles?: Partial<ProfileRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -62,10 +66,12 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(swaggerUi, { routePrefix: '/docs' });
   app.register(
     async (api) => {
+      const authDependencies = resolveAuthDependencies(options.auth);
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
-      await registerAuthRoutes(api, options.auth);
+      await registerAuthRoutes(api, authDependencies);
+      await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerTripRoutes(api, options.trips);
     },
     { prefix: '/api/v1' },

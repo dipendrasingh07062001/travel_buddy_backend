@@ -8,11 +8,24 @@ import type {
   VerifiedIdentity,
 } from './auth.types.js';
 
-const publicUserSelect = {
+export const authenticatedUserSelect = {
   id: true,
   displayName: true,
+  birthDate: true,
   status: true,
   createdAt: true,
+  profile: {
+    select: {
+      profilePhotoStorageKey: true,
+      homeCity: true,
+      homeRegion: true,
+      biography: true,
+      languages: true,
+      travelInterests: true,
+      pastTripsVisibility: true,
+      communityActivityVisibility: true,
+    },
+  },
 } satisfies Prisma.UserSelect;
 
 function verifiedContacts(identity: VerifiedIdentity) {
@@ -50,7 +63,7 @@ async function findFirebaseUser(
         providerSubject: subject,
       },
     },
-    select: { user: { select: publicUserSelect } },
+    select: { user: { select: authenticatedUserSelect } },
   });
   return account?.user ?? null;
 }
@@ -74,7 +87,7 @@ export const prismaAuthRepository: AuthRepository = {
           },
           identities: { create: verifiedContacts(identity) },
         },
-        select: publicUserSelect,
+        select: authenticatedUserSelect,
       });
       return { user, created: true };
     } catch (error) {
