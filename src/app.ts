@@ -7,6 +7,9 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 
 import { env } from './config/env.js';
 import { checkDatabase } from './database/client.js';
+import { AppError } from './errors/app-error.js';
+import { registerAuthRoutes } from './modules/auth/auth.routes.js';
+import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import {
   registerHealthRoutes,
   type HealthRouteDependencies,
@@ -20,6 +23,7 @@ export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
   health?: Partial<HealthRouteDependencies>;
   trips?: Partial<TripRouteDependencies>;
+  auth?: Partial<AuthRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -48,6 +52,11 @@ export function buildApp(options: BuildAppOptions = {}) {
         description: 'HTTP API for the Travel Buddy platform',
         version: '0.1.0',
       },
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
     },
   });
   app.register(swaggerUi, { routePrefix: '/docs' });
@@ -56,6 +65,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
+      await registerAuthRoutes(api, options.auth);
       await registerTripRoutes(api, options.trips);
     },
     { prefix: '/api/v1' },
@@ -74,13 +84,15 @@ export function buildApp(options: BuildAppOptions = {}) {
     request.log.error({ error }, 'Request failed');
 
     const statusCode =
-      typeof error === 'object' &&
-      error !== null &&
-      'statusCode' in error &&
-      typeof error.statusCode === 'number' &&
-      error.statusCode >= 400
+      error instanceof AppError
         ? error.statusCode
-        : 500;
+        : typeof error === 'object' &&
+            error !== null &&
+            'statusCode' in error &&
+            typeof error.statusCode === 'number' &&
+            error.statusCode >= 400
+          ? error.statusCode
+          : 500;
     const message =
       statusCode >= 500
         ? 'An unexpected error occurred.'
@@ -88,9 +100,18 @@ export function buildApp(options: BuildAppOptions = {}) {
           ? error.message
           : 'The request could not be processed.';
 
+    if (statusCode === 401) {
+      reply.header('WWW-Authenticate', 'Bearer');
+    }
+
     return reply.code(statusCode).send({
       error: {
-        code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_ERROR',
+        code:
+          error instanceof AppError
+            ? error.code
+            : statusCode >= 500
+              ? 'INTERNAL_SERVER_ERROR'
+              : 'REQUEST_ERROR',
         message,
         requestId: request.id,
       },

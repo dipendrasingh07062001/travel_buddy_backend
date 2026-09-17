@@ -18,6 +18,10 @@ enum IdentityType {
   PHONE
 }
 
+enum AuthProvider {
+  FIREBASE
+}
+
 enum PolicyType {
   TERMS
   PRIVACY
@@ -53,8 +57,8 @@ model User {
   status            UserStatus         @default(ACTIVE)
   displayName       String?            @map("display_name") @db.VarChar(100)
   birthDate         DateTime?          @map("birth_date") @db.Date
+  authAccounts      AuthAccount[]
   identities        AuthIdentity[]
-  sessions          Session[]
   policyAcceptances PolicyAcceptance[]
   trips             Trip[]
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -63,6 +67,20 @@ model User {
 
   @@index([status])
   @@map("users")
+}
+
+model AuthAccount {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  provider        AuthProvider
+  providerSubject String       @map("provider_subject") @db.VarChar(128)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@map("auth_accounts")
 }
 
 model Community {
@@ -124,23 +142,6 @@ model AuthIdentity {
   @@unique([type, normalizedValue])
   @@index([userId])
   @@map("auth_identities")
-}
-
-model Session {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @map("user_id") @db.Uuid
-  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(255)
-  userAgent        String?   @map("user_agent") @db.VarChar(500)
-  ipHash           String?   @map("ip_hash") @db.VarChar(128)
-  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
-  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
-  lastUsedAt       DateTime? @map("last_used_at") @db.Timestamptz(6)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, revokedAt])
-  @@index([expiresAt])
-  @@map("sessions")
 }
 
 model PolicyAcceptance {
