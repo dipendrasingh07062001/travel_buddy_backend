@@ -36,6 +36,8 @@ The API runs at `http://localhost:3000` by default.
 - Current user: `GET http://localhost:3000/api/v1/me`
 - Update current profile: `PATCH http://localhost:3000/api/v1/me/profile`
 - Public user profile: `GET http://localhost:3000/api/v1/users/:userId`
+- Create a private trip draft: `POST http://localhost:3000/api/v1/trips`
+- List the current user's trips: `GET http://localhost:3000/api/v1/me/trips`
 
 The health endpoint reports whether the Node.js process is running. The
 readiness endpoint also checks whether PostgreSQL is reachable.
@@ -96,6 +98,27 @@ settings are returned only to the authenticated account through `/me`.
 age range and account-creation month. It never returns exact birth date, email,
 phone number, Firebase UID, internal photo storage key, or privacy settings.
 Profile-photo upload is deferred until an object-storage provider is selected.
+
+## Trip management
+
+Authenticated users create trips as private drafts with `POST /api/v1/trips`.
+They can list all of their own trips with `GET /api/v1/me/trips` and edit a
+draft, published, or paused trip with `PATCH /api/v1/trips/:tripId`.
+
+Trip status is not directly editable. Use the explicit lifecycle endpoints:
+
+- `POST /api/v1/trips/:tripId/publish`
+- `POST /api/v1/trips/:tripId/pause`
+- `POST /api/v1/trips/:tripId/mark-full`
+- `POST /api/v1/trips/:tripId/cancel`
+- `POST /api/v1/trips/:tripId/complete`
+
+Every edit or lifecycle request must include the latest version returned by the
+API, for example `{ "expectedVersion": 2 }`. A stale version returns
+`409 TRIP_VERSION_CONFLICT`; refresh the trip before retrying. This prevents one
+device from silently overwriting a newer change from another device. Only the
+owner may mutate a trip. The server derives `durationDays` from the dates and
+validates date, budget, group-size, community, ownership, and lifecycle rules.
 
 ## Database workflow
 
