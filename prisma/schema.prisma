@@ -141,6 +141,7 @@ model Trip {
   transport        TripTransport @default(UNDECIDED)
   description      String
   status           TripStatus    @default(DRAFT)
+  version          Int           @default(1)
   publishedAt      DateTime?     @map("published_at") @db.Timestamptz(6)
   owner            User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   community        Community     @relation(fields: [communityId], references: [id], onDelete: Restrict)

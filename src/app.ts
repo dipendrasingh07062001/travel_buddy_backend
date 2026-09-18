@@ -72,7 +72,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       });
       await registerAuthRoutes(api, authDependencies);
       await registerProfileRoutes(api, authDependencies, options.profiles);
-      await registerTripRoutes(api, options.trips);
+      await registerTripRoutes(api, authDependencies, options.trips);
     },
     { prefix: '/api/v1' },
   );

@@ -33,3 +33,12 @@ export function presentTrip(trip: PublicTripRecord) {
     publishedAt: trip.publishedAt?.toISOString() ?? null,
   };
 }
+
+export function presentOwnedTrip(trip: PublicTripRecord) {
+  return {
+    ...presentTrip(trip),
+    version: trip.version,
+    createdAt: trip.createdAt.toISOString(),
+    updatedAt: trip.updatedAt.toISOString(),
+  };
+}
