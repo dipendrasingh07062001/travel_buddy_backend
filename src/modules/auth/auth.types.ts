@@ -1,4 +1,4 @@
-import type { UserStatus } from '@prisma/client';
+import type { ProfileVisibility, UserStatus } from '@prisma/client';
 
 export interface VerifiedIdentity {
   subject: string;
@@ -15,8 +15,19 @@ export interface TokenVerifier {
 export interface AuthenticatedUser {
   id: string;
   displayName: string | null;
+  birthDate: Date | null;
   status: UserStatus;
   createdAt: Date;
+  profile: {
+    profilePhotoStorageKey: string | null;
+    homeCity: string | null;
+    homeRegion: string | null;
+    biography: string | null;
+    languages: string[];
+    travelInterests: string[];
+    pastTripsVisibility: ProfileVisibility;
+    communityActivityVisibility: ProfileVisibility;
+  } | null;
 }
 
 export interface BootstrapResult {

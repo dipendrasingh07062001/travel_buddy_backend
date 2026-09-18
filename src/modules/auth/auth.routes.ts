@@ -1,37 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 
-import { firebaseTokenVerifier } from './firebase-token-verifier.js';
 import { presentAuthenticatedUser } from './auth.presenter.js';
-import { prismaAuthRepository } from './auth.repository.js';
 import {
   authenticateRequest,
   requireActiveUser,
   verifyRequestIdentity,
 } from './auth.service.js';
 import type { AuthRouteDependencies } from './auth.types.js';
-
-const userSchema = {
-  type: 'object',
-  required: ['id', 'displayName', 'status', 'createdAt'],
-  properties: {
-    id: { type: 'string', format: 'uuid' },
-    displayName: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-    status: { type: 'string', enum: ['ACTIVE'] },
-    createdAt: { type: 'string', format: 'date-time' },
-  },
-} as const;
+import { privateUserSchema } from '../profiles/profile.schemas.js';
 
 const bearerSecurity = [{ bearerAuth: [] }];
 
 export async function registerAuthRoutes(
   app: FastifyInstance,
-  overrides: Partial<AuthRouteDependencies> = {},
+  dependencies: AuthRouteDependencies,
 ): Promise<void> {
-  const dependencies: AuthRouteDependencies = {
-    tokenVerifier: overrides.tokenVerifier ?? firebaseTokenVerifier,
-    repository: overrides.repository ?? prismaAuthRepository,
-  };
-
   app.post(
     '/auth/bootstrap',
     {
@@ -44,12 +27,18 @@ export async function registerAuthRoutes(
           200: {
             type: 'object',
             required: ['data', 'created'],
-            properties: { data: userSchema, created: { type: 'boolean' } },
+            properties: {
+              data: privateUserSchema,
+              created: { type: 'boolean' },
+            },
           },
           201: {
             type: 'object',
             required: ['data', 'created'],
-            properties: { data: userSchema, created: { type: 'boolean' } },
+            properties: {
+              data: privateUserSchema,
+              created: { type: 'boolean' },
+            },
           },
         },
       },
@@ -80,7 +69,7 @@ export async function registerAuthRoutes(
           200: {
             type: 'object',
             required: ['data'],
-            properties: { data: userSchema },
+            properties: { data: privateUserSchema },
           },
         },
       },

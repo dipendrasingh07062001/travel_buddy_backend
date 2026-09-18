@@ -22,6 +22,12 @@ enum AuthProvider {
   FIREBASE
 }
 
+enum ProfileVisibility {
+  PUBLIC
+  MEMBERS_ONLY
+  PRIVATE
+}
+
 enum PolicyType {
   TERMS
   PRIVACY
@@ -57,6 +63,7 @@ model User {
   status            UserStatus         @default(ACTIVE)
   displayName       String?            @map("display_name") @db.VarChar(100)
   birthDate         DateTime?          @map("birth_date") @db.Date
+  profile           UserProfile?
   authAccounts      AuthAccount[]
   identities        AuthIdentity[]
   policyAcceptances PolicyAcceptance[]
@@ -67,6 +74,24 @@ model User {
 
   @@index([status])
   @@map("users")
+}
+
+model UserProfile {
+  userId                      String            @id @map("user_id") @db.Uuid
+  profilePhotoStorageKey      String?           @map("profile_photo_storage_key") @db.VarChar(500)
+  homeCity                    String?           @map("home_city") @db.VarChar(120)
+  homeRegion                  String?           @map("home_region") @db.VarChar(120)
+  biography                   String?           @db.VarChar(500)
+  languages                   String[]          @default([])
+  travelInterests             String[]          @default([]) @map("travel_interests")
+  pastTripsVisibility         ProfileVisibility @default(MEMBERS_ONLY) @map("past_trips_visibility")
+  communityActivityVisibility ProfileVisibility @default(PUBLIC) @map("community_activity_visibility")
+  createdAt                   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([homeCity])
+  @@map("user_profiles")
 }
 
 model AuthAccount {

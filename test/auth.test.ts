@@ -17,8 +17,10 @@ const users = new Map<string, AuthenticatedUser>([
     {
       id: suspendedUserId,
       displayName: 'Suspended User',
+      birthDate: null,
       status: 'SUSPENDED',
       createdAt: new Date('2026-09-17T00:00:00.000Z'),
+      profile: null,
     },
   ],
 ]);
@@ -65,8 +67,10 @@ const repository: AuthRepository = {
     const user: AuthenticatedUser = {
       id: activeUserId,
       displayName: identity.displayName ?? null,
+      birthDate: null,
       status: 'ACTIVE',
       createdAt: new Date('2026-09-17T00:00:00.000Z'),
+      profile: null,
     };
     users.set(identity.subject, user);
     return { user, created: true };
@@ -145,8 +149,10 @@ describe('Firebase authentication HTTP contract', () => {
     expect(response.json().data).toEqual({
       id: activeUserId,
       displayName: 'Firebase User',
+      birthDate: null,
       status: 'ACTIVE',
       createdAt: '2026-09-17T00:00:00.000Z',
+      profile: null,
     });
     expect(response.json().data.email).toBeUndefined();
   });
