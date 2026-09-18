@@ -58,19 +58,42 @@ enum TripTransport {
   UNDECIDED
 }
 
+enum ConnectionRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  BLOCKED
+}
+
+enum TripMembershipRole {
+  OWNER
+  MEMBER
+}
+
+enum TripMembershipStatus {
+  ACTIVE
+  LEFT
+  REMOVED
+}
+
 model User {
-  id                String             @id @default(uuid()) @db.Uuid
-  status            UserStatus         @default(ACTIVE)
-  displayName       String?            @map("display_name") @db.VarChar(100)
-  birthDate         DateTime?          @map("birth_date") @db.Date
-  profile           UserProfile?
-  authAccounts      AuthAccount[]
-  identities        AuthIdentity[]
-  policyAcceptances PolicyAcceptance[]
-  trips             Trip[]
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  id                         String              @id @default(uuid()) @db.Uuid
+  status                     UserStatus          @default(ACTIVE)
+  displayName                String?             @map("display_name") @db.VarChar(100)
+  birthDate                  DateTime?           @map("birth_date") @db.Date
+  profile                    UserProfile?
+  authAccounts               AuthAccount[]
+  identities                 AuthIdentity[]
+  policyAcceptances          PolicyAcceptance[]
+  trips                      Trip[]
+  sentConnectionRequests     ConnectionRequest[] @relation("ConnectionRequester")
+  receivedConnectionRequests ConnectionRequest[] @relation("ConnectionRecipient")
+  decidedConnectionRequests  ConnectionRequest[] @relation("ConnectionDecider")
+  tripMemberships            TripMembership[]
+  createdAt                  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                  DateTime?           @map("deleted_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("users")
@@ -125,34 +148,85 @@ model Community {
 }
 
 model Trip {
-  id               String        @id @default(uuid()) @db.Uuid
-  ownerId          String        @map("owner_id") @db.Uuid
-  communityId      String        @map("community_id") @db.Uuid
-  originCity       String        @map("origin_city") @db.VarChar(120)
-  startDate        DateTime      @map("start_date") @db.Date
-  endDate          DateTime      @map("end_date") @db.Date
-  flexibilityDays  Int           @default(0) @map("flexibility_days")
-  durationDays     Int           @map("duration_days")
-  budgetMin        Decimal?      @map("budget_min") @db.Decimal(12, 2)
-  budgetMax        Decimal?      @map("budget_max") @db.Decimal(12, 2)
-  currency         String        @default("INR") @db.Char(3)
-  currentGroupSize Int           @default(1) @map("current_group_size")
-  desiredGroupSize Int           @map("desired_group_size")
-  transport        TripTransport @default(UNDECIDED)
-  description      String
-  status           TripStatus    @default(DRAFT)
-  version          Int           @default(1)
-  publishedAt      DateTime?     @map("published_at") @db.Timestamptz(6)
-  owner            User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  community        Community     @relation(fields: [communityId], references: [id], onDelete: Restrict)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                        String              @id @default(uuid()) @db.Uuid
+  ownerId                   String              @map("owner_id") @db.Uuid
+  communityId               String              @map("community_id") @db.Uuid
+  originCity                String              @map("origin_city") @db.VarChar(120)
+  startDate                 DateTime            @map("start_date") @db.Date
+  endDate                   DateTime            @map("end_date") @db.Date
+  flexibilityDays           Int                 @default(0) @map("flexibility_days")
+  durationDays              Int                 @map("duration_days")
+  budgetMin                 Decimal?            @map("budget_min") @db.Decimal(12, 2)
+  budgetMax                 Decimal?            @map("budget_max") @db.Decimal(12, 2)
+  currency                  String              @default("INR") @db.Char(3)
+  currentGroupSize          Int                 @default(1) @map("current_group_size")
+  desiredGroupSize          Int                 @map("desired_group_size")
+  transport                 TripTransport       @default(UNDECIDED)
+  description               String
+  status                    TripStatus          @default(DRAFT)
+  version                   Int                 @default(1)
+  publishedAt               DateTime?           @map("published_at") @db.Timestamptz(6)
+  owner                     User                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  community                 Community           @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  connectionRequests        ConnectionRequest[] @relation("ConnectionTargetTrip")
+  relatedConnectionRequests ConnectionRequest[] @relation("ConnectionRelatedTrip")
+  memberships               TripMembership[]
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, startDate])
   @@index([communityId, status, startDate])
   @@index([ownerId])
   @@index([originCity])
   @@map("trips")
+}
+
+model ConnectionRequest {
+  id            String                  @id @default(uuid()) @db.Uuid
+  tripId        String                  @map("trip_id") @db.Uuid
+  requesterId   String                  @map("requester_id") @db.Uuid
+  recipientId   String                  @map("recipient_id") @db.Uuid
+  relatedTripId String?                 @map("related_trip_id") @db.Uuid
+  message       String                  @db.VarChar(500)
+  status        ConnectionRequestStatus @default(PENDING)
+  decidedById   String?                 @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?               @map("decided_at") @db.Timestamptz(6)
+  withdrawnAt   DateTime?               @map("withdrawn_at") @db.Timestamptz(6)
+  trip          Trip                    @relation("ConnectionTargetTrip", fields: [tripId], references: [id], onDelete: Cascade)
+  relatedTrip   Trip?                   @relation("ConnectionRelatedTrip", fields: [relatedTripId], references: [id], onDelete: SetNull)
+  requester     User                    @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  recipient     User                    @relation("ConnectionRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  decidedBy     User?                   @relation("ConnectionDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  membership    TripMembership?
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tripId, requesterId])
+  @@index([recipientId, status, createdAt])
+  @@index([requesterId, status, createdAt])
+  @@map("connection_requests")
+}
+
+model TripMembership {
+  id                  String               @id @default(uuid()) @db.Uuid
+  tripId              String               @map("trip_id") @db.Uuid
+  userId              String               @map("user_id") @db.Uuid
+  connectionRequestId String?              @unique @map("connection_request_id") @db.Uuid
+  role                TripMembershipRole
+  status              TripMembershipStatus @default(ACTIVE)
+  joinedAt            DateTime             @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt              DateTime?            @map("left_at") @db.Timestamptz(6)
+  removedAt           DateTime?            @map("removed_at") @db.Timestamptz(6)
+  trip                Trip                 @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  connectionRequest   ConnectionRequest?   @relation(fields: [connectionRequestId], references: [id], onDelete: SetNull)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tripId, userId])
+  @@index([userId, status])
+  @@index([tripId, status])
+  @@map("trip_memberships")
 }
 
 model AuthIdentity {

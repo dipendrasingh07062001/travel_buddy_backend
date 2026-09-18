@@ -13,7 +13,12 @@ export const prismaTripManagementRepository: TripManagementRepository = {
 
   create(input) {
     return database.trip.create({
-      data: input,
+      data: {
+        ...input,
+        memberships: {
+          create: { userId: input.ownerId, role: 'OWNER' },
+        },
+      },
       include: publicTripInclude,
     });
   },

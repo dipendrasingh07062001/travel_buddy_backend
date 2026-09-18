@@ -110,6 +110,17 @@ async function main(): Promise<void> {
       update: { ...trip, ownerId: demoUserId },
       create: { ...trip, ownerId: demoUserId },
     });
+    await prisma.tripMembership.upsert({
+      where: {
+        tripId_userId: { tripId: trip.id, userId: demoUserId },
+      },
+      update: { role: 'OWNER', status: 'ACTIVE' },
+      create: {
+        tripId: trip.id,
+        userId: demoUserId,
+        role: 'OWNER',
+      },
+    });
   }
 }
 

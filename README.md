@@ -120,6 +120,31 @@ device from silently overwriting a newer change from another device. Only the
 owner may mutate a trip. The server derives `durationDays` from the dates and
 validates date, budget, group-size, community, ownership, and lifecycle rules.
 
+## Connection requests and membership
+
+An authenticated user with a complete minimum profile can send a short,
+trip-specific request with `POST /api/v1/trips/:tripId/connection-requests`.
+Requests are accepted only for published trips with available group capacity.
+Self-requests, duplicate requests, and more than 20 new requests in a rolling
+24-hour period are rejected.
+
+Users list their received or sent requests with
+`GET /api/v1/me/connection-requests?box=received` or `box=sent`. The trip owner
+can accept or decline a pending request. The requester can withdraw it. A
+declined or otherwise resolved request cannot be repeatedly resubmitted for the
+same trip.
+
+- `POST /api/v1/connection-requests/:requestId/accept`
+- `POST /api/v1/connection-requests/:requestId/decline`
+- `POST /api/v1/connection-requests/:requestId/withdraw`
+- `GET /api/v1/trips/:tripId/members`
+
+Acceptance creates an active membership and updates trip capacity, version, and
+automatic `FULL` status in one serializable database transaction. Only active
+members can see the private member list. Private messaging, reporting,
+blocking, and notification delivery are separate milestones and must be in
+place before messaging is enabled.
+
 ## Database workflow
 
 The project uses PostgreSQL with Prisma ORM. Prisma keeps database changes in
