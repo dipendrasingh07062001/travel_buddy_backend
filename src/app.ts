@@ -11,6 +11,8 @@ import { AppError } from './errors/app-error.js';
 import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
+import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
+import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import {
   registerHealthRoutes,
   type HealthRouteDependencies,
@@ -28,6 +30,7 @@ export interface BuildAppOptions {
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
+  connections?: Partial<ConnectionRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -73,6 +76,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerAuthRoutes(api, authDependencies);
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerTripRoutes(api, authDependencies, options.trips);
+      await registerConnectionRoutes(
+        api,
+        authDependencies,
+        options.connections,
+      );
     },
     { prefix: '/api/v1' },
   );
