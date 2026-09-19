@@ -81,6 +81,7 @@ export type AcceptResult =
   | { kind: 'not_pending'; request: ConnectionRequestRecord }
   | { kind: 'trip_unavailable' }
   | { kind: 'trip_full' }
+  | { kind: 'blocked' }
   | { kind: 'conflict' };
 
 export interface ConnectionRepository {
@@ -97,6 +98,7 @@ export interface ConnectionRepository {
     requesterId: string,
   ): Promise<ConnectionRequestRecord | null>;
   countRecentByRequester(requesterId: string, since: Date): Promise<number>;
+  isBlockedEitherDirection(userAId: string, userBId: string): Promise<boolean>;
   create(input: CreateConnectionRequestInput): Promise<ConnectionRequestRecord>;
   list(
     userId: string,
