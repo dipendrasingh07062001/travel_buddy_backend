@@ -19,6 +19,8 @@ import {
 } from './modules/health/health.routes.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
+import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
+import type { SafetyRouteDependencies } from './modules/safety/safety.types.js';
 import {
   registerTripRoutes,
   type TripRouteDependencies,
@@ -31,6 +33,7 @@ export interface BuildAppOptions {
   auth?: Partial<AuthRouteDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
   connections?: Partial<ConnectionRouteDependencies>;
+  safety?: Partial<SafetyRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -81,6 +84,7 @@ export function buildApp(options: BuildAppOptions = {}) {
         authDependencies,
         options.connections,
       );
+      await registerSafetyRoutes(api, authDependencies, options.safety);
     },
     { prefix: '/api/v1' },
   );

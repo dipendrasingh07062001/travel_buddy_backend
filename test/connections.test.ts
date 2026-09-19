@@ -22,6 +22,8 @@ const targetTripIds = [
   '90000000-0000-4000-8000-000000000001',
   '90000000-0000-4000-8000-000000000002',
   '90000000-0000-4000-8000-000000000003',
+  '90000000-0000-4000-8000-000000000004',
+  '90000000-0000-4000-8000-000000000005',
 ];
 
 function completeUser(id: string, displayName: string): AuthenticatedUser {
@@ -71,6 +73,7 @@ const authRepository: AuthRepository = {
 };
 
 const requests = new Map<string, ConnectionRequestRecord>();
+const blockedPairs = new Set<string>();
 const memberships = new Map<string, MembershipRecord[]>();
 for (const tripId of targetTripIds) {
   memberships.set(tripId, [
@@ -157,6 +160,12 @@ const repository: ConnectionRepository = {
   async countRecentByRequester() {
     return 0;
   },
+  async isBlockedEitherDirection(userAId, userBId) {
+    return (
+      blockedPairs.has(`${userAId}:${userBId}`) ||
+      blockedPairs.has(`${userBId}:${userAId}`)
+    );
+  },
   async create(input) {
     const request = connectionRecord(input.tripId, input);
     requests.set(request.id, request);
@@ -202,6 +211,17 @@ const repository: ConnectionRepository = {
     }
     if (request.status !== 'PENDING') {
       return { kind: 'not_pending', request };
+    }
+    if (await this.isBlockedEitherDirection(request.requesterId, recipientId)) {
+      const blocked: ConnectionRequestRecord = {
+        ...request,
+        status: 'BLOCKED',
+        decidedById: recipientId,
+        decidedAt: now,
+        updatedAt: now,
+      };
+      requests.set(id, blocked);
+      return { kind: 'blocked' };
     }
     const updated: ConnectionRequestRecord = {
       ...request,
@@ -384,4 +404,34 @@ describe('connection request HTTP contract', () => {
       expect(acted.json().data.status).toBe(expectedStatus);
     },
   );
+
+  it('prevents requests and acceptance when either user has blocked the other', async () => {
+    blockedPairs.add(`${ownerId}:${requesterId}`);
+    const blockedSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${targetTripIds[3]}/connection-requests`,
+      headers: headers('requester-token'),
+      payload: { message: 'I would like to join this separate travel plan.' },
+    });
+    expect(blockedSend.statusCode).toBe(403);
+    expect(blockedSend.json().error.code).toBe('CONTACT_BLOCKED');
+
+    blockedPairs.clear();
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${targetTripIds[4]}/connection-requests`,
+      headers: headers('requester-token'),
+      payload: { message: 'I would like to join this other travel plan.' },
+    });
+    blockedPairs.add(`${requesterId}:${ownerId}`);
+    const blockedAccept = await app.inject({
+      method: 'POST',
+      url: `/api/v1/connection-requests/${created.json().data.id}/accept`,
+      headers: headers('owner-token'),
+    });
+    blockedPairs.clear();
+
+    expect(blockedAccept.statusCode).toBe(403);
+    expect(blockedAccept.json().error.code).toBe('CONTACT_BLOCKED');
+  });
 });

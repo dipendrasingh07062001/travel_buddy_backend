@@ -69,6 +69,14 @@ export async function sendConnectionRequest(
     );
   }
 
+  if (await repository.isBlockedEitherDirection(user.id, trip.ownerId)) {
+    throw new AppError(
+      403,
+      'CONTACT_BLOCKED',
+      'This connection action is unavailable.',
+    );
+  }
+
   const existing = await repository.findExisting(tripId, user.id);
   if (existing) {
     throw new AppError(
@@ -156,6 +164,13 @@ export async function acceptConnectionRequest(
     'recipient',
   );
   if (request.status === 'ACCEPTED') return request;
+  if (request.status === 'BLOCKED') {
+    throw new AppError(
+      403,
+      'CONTACT_BLOCKED',
+      'This connection action is unavailable.',
+    );
+  }
   if (request.status !== 'PENDING') {
     throw new AppError(
       409,
@@ -180,8 +195,21 @@ export async function acceptConnectionRequest(
         'TRIP_NOT_REQUESTABLE',
         'This trip is no longer accepting members.',
       );
+    case 'blocked':
+      throw new AppError(
+        403,
+        'CONTACT_BLOCKED',
+        'This connection action is unavailable.',
+      );
     case 'not_pending':
       if (result.request.status === 'ACCEPTED') return result.request;
+      if (result.request.status === 'BLOCKED') {
+        throw new AppError(
+          403,
+          'CONTACT_BLOCKED',
+          'This connection action is unavailable.',
+        );
+      }
       throw new AppError(
         409,
         'INVALID_CONNECTION_REQUEST_STATE',

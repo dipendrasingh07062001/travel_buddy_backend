@@ -28,6 +28,32 @@ async function acceptOnce(
         return { kind: 'not_pending', request };
       }
 
+      const blockCount = await transaction.userBlock.count({
+        where: {
+          OR: [
+            {
+              blockerId: request.requesterId,
+              blockedId: request.recipientId,
+            },
+            {
+              blockerId: request.recipientId,
+              blockedId: request.requesterId,
+            },
+          ],
+        },
+      });
+      if (blockCount > 0) {
+        await transaction.connectionRequest.updateMany({
+          where: { id, status: 'PENDING' },
+          data: {
+            status: 'BLOCKED',
+            decidedById: recipientId,
+            decidedAt: now,
+          },
+        });
+        return { kind: 'blocked' };
+      }
+
       const trip = await transaction.trip.findUnique({
         where: { id: request.tripId },
         select: {
@@ -131,6 +157,19 @@ export const prismaConnectionRepository: ConnectionRepository = {
     return database.connectionRequest.count({
       where: { requesterId, createdAt: { gte: since } },
     });
+  },
+
+  async isBlockedEitherDirection(userAId, userBId) {
+    return (
+      (await database.userBlock.count({
+        where: {
+          OR: [
+            { blockerId: userAId, blockedId: userBId },
+            { blockerId: userBId, blockedId: userAId },
+          ],
+        },
+      })) > 0
+    );
   },
 
   create(input) {
