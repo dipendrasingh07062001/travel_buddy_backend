@@ -18,6 +18,11 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         memberships: {
           create: { userId: input.ownerId, role: 'OWNER' },
         },
+        conversation: {
+          create: {
+            participants: { create: { userId: input.ownerId } },
+          },
+        },
       },
       include: publicTripInclude,
     });

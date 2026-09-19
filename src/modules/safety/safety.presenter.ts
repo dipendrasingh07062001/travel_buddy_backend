@@ -4,10 +4,13 @@ import type { BlockRecord, ReportRecord } from './safety.types.js';
 function reportTarget(report: ReportRecord) {
   if (report.reportedUserId) return { type: 'USER', id: report.reportedUserId };
   if (report.reportedTripId) return { type: 'TRIP', id: report.reportedTripId };
-  return {
-    type: 'CONNECTION_REQUEST',
-    id: report.reportedConnectionRequestId,
-  };
+  if (report.reportedConnectionRequestId) {
+    return {
+      type: 'CONNECTION_REQUEST',
+      id: report.reportedConnectionRequestId,
+    };
+  }
+  return { type: 'MESSAGE', id: report.reportedMessageId };
 }
 
 export function presentBlock(block: BlockRecord) {

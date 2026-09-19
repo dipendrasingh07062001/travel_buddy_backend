@@ -34,7 +34,12 @@ interface ReportListQuery extends PageQuery {
   status?: ReportStatus;
 }
 
-const reportTargetTypes = ['USER', 'TRIP', 'CONNECTION_REQUEST'] as const;
+const reportTargetTypes = [
+  'USER',
+  'TRIP',
+  'CONNECTION_REQUEST',
+  'MESSAGE',
+] as const;
 const reportReasons = [
   'HARASSMENT',
   'HATE_OR_THREATS',

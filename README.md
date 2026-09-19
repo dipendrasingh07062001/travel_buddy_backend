@@ -141,9 +141,32 @@ same trip.
 
 Acceptance creates an active membership and updates trip capacity, version, and
 automatic `FULL` status in one serializable database transaction. Only active
-members can see the private member list. Private messaging, reporting,
-blocking, and notification delivery are separate milestones and must be in
-place before messaging is enabled.
+members can see the private member list. Reporting and blocking are enforced
+across requests and private messaging.
+
+## Private trip-room messaging
+
+Every trip has one private group conversation. The owner joins when the trip is
+created, and accepted members join in the same transaction that grants trip
+membership. Active members use these endpoints:
+
+- `GET /api/v1/trips/:tripId/room`
+- `GET /api/v1/trips/:tripId/messages`
+- `POST /api/v1/trips/:tripId/messages`
+- `PATCH /api/v1/messages/:messageId`
+- `DELETE /api/v1/messages/:messageId`
+- `POST /api/v1/trips/:tripId/read`
+- `PATCH /api/v1/trips/:tripId/room/preferences`
+
+Message history uses cursor pagination. Edits and soft deletions preserve an
+internal revision trail, while deleted content is hidden from ordinary API
+responses. Completed and cancelled trip rooms are read-only. Messages from a
+blocked account are hidden from that user, and a two-person room cannot be used
+to bypass a block. A member can report another member's message through
+`POST /api/v1/reports` with `targetType` set to `MESSAGE`.
+
+This milestone provides persistent REST messaging. Real-time delivery and
+notification fan-out are separate milestones.
 
 ## Database workflow
 
