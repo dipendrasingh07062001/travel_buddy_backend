@@ -58,6 +58,7 @@ async function acceptOnce(
         where: { id: request.tripId },
         select: {
           id: true,
+          ownerId: true,
           version: true,
           status: true,
           currentGroupSize: true,
@@ -90,6 +91,25 @@ async function acceptOnce(
           joinedAt: now,
         },
       });
+
+      const conversation = await transaction.conversation.upsert({
+        where: { tripId: request.tripId },
+        create: { tripId: request.tripId },
+        update: {},
+        select: { id: true },
+      });
+      for (const userId of [trip.ownerId, request.requesterId]) {
+        await transaction.conversationParticipant.upsert({
+          where: {
+            conversationId_userId: {
+              conversationId: conversation.id,
+              userId,
+            },
+          },
+          create: { conversationId: conversation.id, userId, joinedAt: now },
+          update: {},
+        });
+      }
 
       const nextGroupSize = trip.currentGroupSize + 1;
       const tripUpdate = await transaction.trip.updateMany({

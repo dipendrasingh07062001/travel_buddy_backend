@@ -81,6 +81,7 @@ enum ReportTargetType {
   USER
   TRIP
   CONNECTION_REQUEST
+  MESSAGE
 }
 
 enum ReportReason {
@@ -101,27 +102,41 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum MessageStatus {
+  ACTIVE
+  EDITED
+  DELETED
+}
+
+enum MessageRevisionAction {
+  EDIT
+  DELETE
+}
+
 model User {
-  id                         String              @id @default(uuid()) @db.Uuid
-  status                     UserStatus          @default(ACTIVE)
-  displayName                String?             @map("display_name") @db.VarChar(100)
-  birthDate                  DateTime?           @map("birth_date") @db.Date
+  id                         String                    @id @default(uuid()) @db.Uuid
+  status                     UserStatus                @default(ACTIVE)
+  displayName                String?                   @map("display_name") @db.VarChar(100)
+  birthDate                  DateTime?                 @map("birth_date") @db.Date
   profile                    UserProfile?
   authAccounts               AuthAccount[]
   identities                 AuthIdentity[]
   policyAcceptances          PolicyAcceptance[]
   trips                      Trip[]
-  sentConnectionRequests     ConnectionRequest[] @relation("ConnectionRequester")
-  receivedConnectionRequests ConnectionRequest[] @relation("ConnectionRecipient")
-  decidedConnectionRequests  ConnectionRequest[] @relation("ConnectionDecider")
+  sentConnectionRequests     ConnectionRequest[]       @relation("ConnectionRequester")
+  receivedConnectionRequests ConnectionRequest[]       @relation("ConnectionRecipient")
+  decidedConnectionRequests  ConnectionRequest[]       @relation("ConnectionDecider")
   tripMemberships            TripMembership[]
-  blocksCreated              UserBlock[]         @relation("Blocker")
-  blocksReceived             UserBlock[]         @relation("Blocked")
-  reportsSubmitted           Report[]            @relation("ReportReporter")
-  reportsReceived            Report[]            @relation("ReportUserTarget")
-  createdAt                  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt                  DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  blocksCreated              UserBlock[]               @relation("Blocker")
+  blocksReceived             UserBlock[]               @relation("Blocked")
+  reportsSubmitted           Report[]                  @relation("ReportReporter")
+  reportsReceived            Report[]                  @relation("ReportUserTarget")
+  conversationStates         ConversationParticipant[]
+  messages                   Message[]
+  messageRevisions           MessageRevision[]         @relation("MessageRevisionEditor")
+  createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("users")
@@ -200,6 +215,7 @@ model Trip {
   relatedConnectionRequests ConnectionRequest[] @relation("ConnectionRelatedTrip")
   memberships               TripMembership[]
   reports                   Report[]
+  conversation              Conversation?
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -259,6 +275,66 @@ model TripMembership {
   @@map("trip_memberships")
 }
 
+model Conversation {
+  id           String                    @id @default(uuid()) @db.Uuid
+  tripId       String                    @unique @map("trip_id") @db.Uuid
+  trip         Trip                      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String       @map("conversation_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  lastReadAt     DateTime?    @map("last_read_at") @db.Timestamptz(6)
+  mutedAt        DateTime?    @map("muted_at") @db.Timestamptz(6)
+  joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String            @id @default(uuid()) @db.Uuid
+  conversationId String            @map("conversation_id") @db.Uuid
+  senderId       String            @map("sender_id") @db.Uuid
+  body           String            @db.VarChar(2000)
+  status         MessageStatus     @default(ACTIVE)
+  editedAt       DateTime?         @map("edited_at") @db.Timestamptz(6)
+  deletedAt      DateTime?         @map("deleted_at") @db.Timestamptz(6)
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User              @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  revisions      MessageRevision[]
+  reports        Report[]
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt, id])
+  @@index([senderId, createdAt])
+  @@map("messages")
+}
+
+model MessageRevision {
+  id           String                @id @default(uuid()) @db.Uuid
+  messageId    String                @map("message_id") @db.Uuid
+  editorId     String                @map("editor_id") @db.Uuid
+  action       MessageRevisionAction
+  previousBody String                @map("previous_body") @db.VarChar(2000)
+  message      Message               @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  editor       User                  @relation("MessageRevisionEditor", fields: [editorId], references: [id], onDelete: Restrict)
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([messageId, createdAt])
+  @@map("message_revisions")
+}
+
 model UserBlock {
   blockerId String   @map("blocker_id") @db.Uuid
   blockedId String   @map("blocked_id") @db.Uuid
@@ -278,6 +354,7 @@ model Report {
   reportedUserId              String?            @map("reported_user_id") @db.Uuid
   reportedTripId              String?            @map("reported_trip_id") @db.Uuid
   reportedConnectionRequestId String?            @map("reported_connection_request_id") @db.Uuid
+  reportedMessageId           String?            @map("reported_message_id") @db.Uuid
   reason                      ReportReason
   details                     String?            @db.VarChar(1000)
   status                      ReportStatus       @default(SUBMITTED)
@@ -285,6 +362,7 @@ model Report {
   reportedUser                User?              @relation("ReportUserTarget", fields: [reportedUserId], references: [id], onDelete: Restrict)
   reportedTrip                Trip?              @relation(fields: [reportedTripId], references: [id], onDelete: Restrict)
   reportedConnectionRequest   ConnectionRequest? @relation(fields: [reportedConnectionRequestId], references: [id], onDelete: Restrict)
+  reportedMessage             Message?           @relation(fields: [reportedMessageId], references: [id], onDelete: Restrict)
   createdAt                   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -292,6 +370,7 @@ model Report {
   @@index([reportedUserId])
   @@index([reportedTripId])
   @@index([reportedConnectionRequestId])
+  @@index([reportedMessageId])
   @@map("reports")
 }
 

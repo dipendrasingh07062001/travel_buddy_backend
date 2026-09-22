@@ -128,6 +128,7 @@ const repository: SafetyRepository = {
       reportedTripId: input.targetType === 'TRIP' ? input.targetId : null,
       reportedConnectionRequestId:
         input.targetType === 'CONNECTION_REQUEST' ? input.targetId : null,
+      reportedMessageId: input.targetType === 'MESSAGE' ? input.targetId : null,
       reason: input.reason,
       details: input.details,
       status: 'SUBMITTED',

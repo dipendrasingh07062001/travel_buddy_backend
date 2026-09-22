@@ -121,6 +121,21 @@ async function main(): Promise<void> {
         role: 'OWNER',
       },
     });
+    const conversation = await prisma.conversation.upsert({
+      where: { tripId: trip.id },
+      update: {},
+      create: { tripId: trip.id },
+    });
+    await prisma.conversationParticipant.upsert({
+      where: {
+        conversationId_userId: {
+          conversationId: conversation.id,
+          userId: demoUserId,
+        },
+      },
+      update: {},
+      create: { conversationId: conversation.id, userId: demoUserId },
+    });
   }
 }
 

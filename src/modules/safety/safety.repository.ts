@@ -18,6 +18,8 @@ function reportTargetWhere(
       return { reportedTripId: targetId };
     case 'CONNECTION_REQUEST':
       return { reportedConnectionRequestId: targetId };
+    case 'MESSAGE':
+      return { reportedMessageId: targetId };
   }
 }
 
@@ -33,6 +35,9 @@ function reportTargetData(
     ...(input.targetType === 'TRIP' && { reportedTripId: input.targetId }),
     ...(input.targetType === 'CONNECTION_REQUEST' && {
       reportedConnectionRequestId: input.targetId,
+    }),
+    ...(input.targetType === 'MESSAGE' && {
+      reportedMessageId: input.targetId,
     }),
   };
 }
@@ -126,6 +131,18 @@ export const prismaSafetyRepository: SafetyRepository = {
             where: {
               id: targetId,
               OR: [{ requesterId: reporterId }, { recipientId: reporterId }],
+            },
+          })) === 1
+        );
+      case 'MESSAGE':
+        return (
+          (await database.message.count({
+            where: {
+              id: targetId,
+              senderId: { not: reporterId },
+              conversation: {
+                trip: { memberships: { some: { userId: reporterId } } },
+              },
             },
           })) === 1
         );
