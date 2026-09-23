@@ -27,6 +27,8 @@ import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
 import type { SafetyRouteDependencies } from './modules/safety/safety.types.js';
+import { registerTripRoomRoutes } from './modules/trip-room/trip-room.routes.js';
+import type { TripRoomRouteDependencies } from './modules/trip-room/trip-room.types.js';
 import {
   registerTripRoutes,
   type TripRouteDependencies,
@@ -43,6 +45,7 @@ export interface BuildAppOptions {
   messaging?: Partial<MessagingRouteDependencies>;
   communities?: Partial<CommunityRouteDependencies>;
   communityContent?: Partial<CommunityContentRouteDependencies>;
+  tripRoom?: Partial<TripRoomRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -101,6 +104,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       );
       await registerSafetyRoutes(api, authDependencies, options.safety);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
+      await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
     },
     { prefix: '/api/v1' },
   );

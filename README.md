@@ -181,7 +181,7 @@ automatic `FULL` status in one serializable database transaction. Only active
 members can see the private member list. Reporting and blocking are enforced
 across requests and private messaging.
 
-## Private trip-room messaging
+## Private trip-room coordination
 
 Every trip has one private group conversation. The owner joins when the trip is
 created, and accepted members join in the same transaction that grants trip
@@ -194,6 +194,10 @@ membership. Active members use these endpoints:
 - `DELETE /api/v1/messages/:messageId`
 - `POST /api/v1/trips/:tripId/read`
 - `PATCH /api/v1/trips/:tripId/room/preferences`
+- `POST /api/v1/trips/:tripId/checklist-items`
+- `PATCH` or `DELETE /api/v1/checklist-items/:itemId`
+- `POST /api/v1/trips/:tripId/leave`
+- `POST /api/v1/trips/:tripId/members/:memberId/remove`
 
 Message history uses cursor pagination. Edits and soft deletions preserve an
 internal revision trail, while deleted content is hidden from ordinary API
@@ -202,8 +206,16 @@ blocked account are hidden from that user, and a two-person room cannot be used
 to bypass a block. A member can report another member's message through
 `POST /api/v1/reports` with `targetType` set to `MESSAGE`.
 
-This milestone provides persistent REST messaging. Real-time delivery and
-notification fan-out are separate milestones.
+The room response includes the current shared trip plan and active checklist
+items. Active members can create, edit, complete, and reopen checklist items;
+only the item creator or trip owner can remove one. Checklist removal is soft
+so internal history is retained.
+
+Non-owner members can leave, and the trip owner can remove a non-owner member.
+Both operations atomically retain membership history, revoke future room
+access, reduce group capacity, increment the trip version, and reopen a `FULL`
+trip as `PUBLISHED`. The owner cannot leave or be removed. Real-time delivery,
+notification fan-out, and the shared expense ledger are separate milestones.
 
 ## Database workflow
 

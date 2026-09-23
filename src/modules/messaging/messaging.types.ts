@@ -1,6 +1,7 @@
 import type { MessageStatus, Prisma } from '@prisma/client';
 
 import { authenticatedUserSelect } from '../auth/auth.repository.js';
+import { checklistItemInclude } from '../trip-room/trip-room.types.js';
 
 export const roomSelect = {
   id: true,
@@ -11,6 +12,23 @@ export const roomSelect = {
     select: {
       id: true,
       status: true,
+      originCity: true,
+      startDate: true,
+      endDate: true,
+      flexibilityDays: true,
+      durationDays: true,
+      transport: true,
+      description: true,
+      version: true,
+      community: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          region: true,
+          countryCode: true,
+        },
+      },
       memberships: {
         where: { status: 'ACTIVE' },
         orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
@@ -19,6 +37,11 @@ export const roomSelect = {
           joinedAt: true,
           user: { select: authenticatedUserSelect },
         },
+      },
+      checklistItems: {
+        where: { status: { not: 'REMOVED' } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        include: checklistItemInclude,
       },
     },
   },

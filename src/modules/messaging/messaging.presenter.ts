@@ -1,4 +1,5 @@
 import { presentPublicProfile } from '../profiles/profile.presenter.js';
+import { presentChecklistItem } from '../trip-room/trip-room.presenter.js';
 import type { MessageRecord, RoomRecord } from './messaging.types.js';
 
 export function presentRoom(room: RoomRecord, viewerId: string) {
@@ -10,6 +11,21 @@ export function presentRoom(room: RoomRecord, viewerId: string) {
     id: room.id,
     tripId: room.tripId,
     status: readOnly ? 'READ_ONLY' : 'ACTIVE',
+    plan: {
+      originCity: room.trip.originCity,
+      destination: {
+        ...room.trip.community,
+        countryCode: room.trip.community.countryCode.trim(),
+      },
+      startDate: room.trip.startDate.toISOString().slice(0, 10),
+      endDate: room.trip.endDate.toISOString().slice(0, 10),
+      flexibilityDays: room.trip.flexibilityDays,
+      durationDays: room.trip.durationDays,
+      transport: room.trip.transport,
+      description: room.trip.description,
+      status: room.trip.status,
+      version: room.trip.version,
+    },
     members: room.trip.memberships.map((membership) => ({
       role: membership.role,
       joinedAt: membership.joinedAt.toISOString(),
@@ -19,6 +35,7 @@ export function presentRoom(room: RoomRecord, viewerId: string) {
       muted: Boolean(viewerState?.mutedAt),
       lastReadAt: viewerState?.lastReadAt?.toISOString() ?? null,
     },
+    checklist: room.trip.checklistItems.map(presentChecklistItem),
     safetyNotice:
       'Do not share financial credentials, identity documents, or precise home addresses.',
     createdAt: room.createdAt.toISOString(),
