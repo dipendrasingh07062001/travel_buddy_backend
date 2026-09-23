@@ -39,6 +39,18 @@ enum CommunityStatus {
   ARCHIVED
 }
 
+enum CommunityPostType {
+  DISCUSSION
+  QUESTION
+  EXPERIENCE
+}
+
+enum CommunityPostStatus {
+  DRAFT
+  PUBLISHED
+  REMOVED
+}
+
 enum TripStatus {
   DRAFT
   PUBLISHED
@@ -134,6 +146,8 @@ model User {
   conversationStates         ConversationParticipant[]
   messages                   Message[]
   messageRevisions           MessageRevision[]         @relation("MessageRevisionEditor")
+  communityFollows           CommunityFollow[]
+  communityPosts             CommunityPost[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -175,19 +189,53 @@ model AuthAccount {
 }
 
 model Community {
-  id          String          @id @default(uuid()) @db.Uuid
-  slug        String          @unique @db.VarChar(120)
-  name        String          @db.VarChar(120)
-  region      String?         @db.VarChar(120)
-  countryCode String          @default("IN") @map("country_code") @db.Char(2)
+  id          String            @id @default(uuid()) @db.Uuid
+  slug        String            @unique @db.VarChar(120)
+  name        String            @db.VarChar(120)
+  region      String?           @db.VarChar(120)
+  countryCode String            @default("IN") @map("country_code") @db.Char(2)
   description String?
-  status      CommunityStatus @default(ACTIVE)
+  status      CommunityStatus   @default(ACTIVE)
   trips       Trip[]
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  followers   CommunityFollow[]
+  posts       CommunityPost[]
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, name])
   @@map("communities")
+}
+
+model CommunityFollow {
+  communityId String    @map("community_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  followedAt  DateTime  @default(now()) @map("followed_at") @db.Timestamptz(6)
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([communityId, userId])
+  @@index([userId, followedAt])
+  @@map("community_follows")
+}
+
+model CommunityPost {
+  id          String              @id @default(uuid()) @db.Uuid
+  communityId String              @map("community_id") @db.Uuid
+  authorId    String              @map("author_id") @db.Uuid
+  type        CommunityPostType
+  status      CommunityPostStatus @default(DRAFT)
+  title       String              @db.VarChar(160)
+  body        String              @db.VarChar(5000)
+  publishedAt DateTime?           @map("published_at") @db.Timestamptz(6)
+  removedAt   DateTime?           @map("removed_at") @db.Timestamptz(6)
+  community   Community           @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author      User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([communityId, status, publishedAt])
+  @@index([authorId, status, publishedAt])
+  @@map("community_posts")
 }
 
 model Trip {

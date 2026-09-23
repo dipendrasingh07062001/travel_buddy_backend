@@ -38,6 +38,7 @@ The API runs at `http://localhost:3000` by default.
 - Public user profile: `GET http://localhost:3000/api/v1/users/:userId`
 - Create a private trip draft: `POST http://localhost:3000/api/v1/trips`
 - List the current user's trips: `GET http://localhost:3000/api/v1/me/trips`
+- Browse destination communities: `GET http://localhost:3000/api/v1/communities`
 
 The health endpoint reports whether the Node.js process is running. The
 readiness endpoint also checks whether PostgreSQL is reachable.
@@ -119,6 +120,30 @@ API, for example `{ "expectedVersion": 2 }`. A stale version returns
 device from silently overwriting a newer change from another device. Only the
 owner may mutate a trip. The server derives `durationDays` from the dates and
 validates date, budget, group-size, community, ownership, and lifecycle rules.
+
+## Destination communities
+
+Guests can browse active destination hubs and their public activity:
+
+- `GET /api/v1/communities`
+- `GET /api/v1/communities/:slug`
+- `GET /api/v1/communities/:slug/trips`
+- `GET /api/v1/communities/:slug/posts`
+
+The list supports case-insensitive `search`, `page`, and `pageSize`. Community
+trip results reuse the objective public-trip filters. Community posts can be
+filtered by `DISCUSSION`, `QUESTION`, or `EXPERIENCE`; only published posts from
+active accounts whose community activity is public are returned.
+
+Authenticated users follow communities with these idempotent operations:
+
+- `POST /api/v1/communities/:communityId/follow`
+- `DELETE /api/v1/communities/:communityId/follow`
+- `GET /api/v1/me/followed-communities`
+
+Archived communities are excluded from discovery and cannot be followed.
+Creating posts and comments is intentionally reserved for the next community
+content milestone.
 
 ## Connection requests and membership
 
