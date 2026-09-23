@@ -14,6 +14,19 @@ async function main(): Promise<void> {
       status: 'ACTIVE',
     },
   });
+  await prisma.userProfile.upsert({
+    where: { userId: demoUserId },
+    update: { communityActivityVisibility: 'PUBLIC' },
+    create: {
+      userId: demoUserId,
+      homeCity: 'Delhi',
+      homeRegion: 'Delhi NCR',
+      biography: 'Weekend traveller interested in mountain trips and hiking.',
+      languages: ['English', 'Hindi'],
+      travelInterests: ['mountains', 'hiking', 'road trips'],
+      communityActivityVisibility: 'PUBLIC',
+    },
+  });
 
   const communities = [
     {
@@ -44,6 +57,52 @@ async function main(): Promise<void> {
       where: { slug: community.slug },
       update: community,
       create: community,
+    });
+  }
+
+  await prisma.communityFollow.upsert({
+    where: {
+      communityId_userId: {
+        communityId: communities[0].id,
+        userId: demoUserId,
+      },
+    },
+    update: {},
+    create: { communityId: communities[0].id, userId: demoUserId },
+  });
+
+  const communityPosts = [
+    {
+      id: '60000000-0000-4000-8000-000000000001',
+      communityId: communities[0].id,
+      type: 'QUESTION' as const,
+      title: 'Best local transport around Manali',
+      body: 'What are the practical local transport options for Solang Valley and nearby villages?',
+      publishedAt: new Date('2026-09-18T09:00:00.000Z'),
+    },
+    {
+      id: '60000000-0000-4000-8000-000000000002',
+      communityId: communities[1].id,
+      type: 'DISCUSSION' as const,
+      title: 'Preparing for the October road conditions',
+      body: 'Share factual route and weather preparation tips for an October self-drive trip.',
+      publishedAt: new Date('2026-09-17T09:00:00.000Z'),
+    },
+  ];
+
+  for (const post of communityPosts) {
+    await prisma.communityPost.upsert({
+      where: { id: post.id },
+      update: {
+        ...post,
+        authorId: demoUserId,
+        status: 'PUBLISHED',
+      },
+      create: {
+        ...post,
+        authorId: demoUserId,
+        status: 'PUBLISHED',
+      },
     });
   }
 

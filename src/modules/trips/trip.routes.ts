@@ -48,7 +48,7 @@ const tripStatusValues = [
   'CANCELLED',
 ] as const;
 
-const tripSchema = {
+export const publicTripSchema = {
   type: 'object',
   required: [
     'id',
@@ -120,10 +120,10 @@ const tripSchema = {
 } as const;
 
 const ownedTripSchema = {
-  ...tripSchema,
-  required: [...tripSchema.required, 'version', 'createdAt', 'updatedAt'],
+  ...publicTripSchema,
+  required: [...publicTripSchema.required, 'version', 'createdAt', 'updatedAt'],
   properties: {
-    ...tripSchema.properties,
+    ...publicTripSchema.properties,
     status: { type: 'string', enum: tripStatusValues },
     version: { type: 'integer', minimum: 1 },
     createdAt: { type: 'string', format: 'date-time' },
@@ -409,7 +409,7 @@ export async function registerTripRoutes(
             type: 'object',
             required: ['data', 'pagination'],
             properties: {
-              data: { type: 'array', items: tripSchema },
+              data: { type: 'array', items: publicTripSchema },
               pagination: {
                 type: 'object',
                 required: ['page', 'pageSize', 'totalItems', 'totalPages'],
@@ -461,7 +461,7 @@ export async function registerTripRoutes(
           200: {
             type: 'object',
             required: ['data'],
-            properties: { data: tripSchema },
+            properties: { data: publicTripSchema },
           },
         },
       },
