@@ -10,7 +10,16 @@ function reportTarget(report: ReportRecord) {
       id: report.reportedConnectionRequestId,
     };
   }
-  return { type: 'MESSAGE', id: report.reportedMessageId };
+  if (report.reportedMessageId) {
+    return { type: 'MESSAGE', id: report.reportedMessageId };
+  }
+  if (report.reportedCommunityPostId) {
+    return { type: 'COMMUNITY_POST', id: report.reportedCommunityPostId };
+  }
+  return {
+    type: 'COMMUNITY_COMMENT',
+    id: report.reportedCommunityCommentId,
+  };
 }
 
 export function presentBlock(block: BlockRecord) {

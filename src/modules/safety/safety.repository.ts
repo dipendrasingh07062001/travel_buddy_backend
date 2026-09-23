@@ -20,6 +20,10 @@ function reportTargetWhere(
       return { reportedConnectionRequestId: targetId };
     case 'MESSAGE':
       return { reportedMessageId: targetId };
+    case 'COMMUNITY_POST':
+      return { reportedCommunityPostId: targetId };
+    case 'COMMUNITY_COMMENT':
+      return { reportedCommunityCommentId: targetId };
   }
 }
 
@@ -38,6 +42,12 @@ function reportTargetData(
     }),
     ...(input.targetType === 'MESSAGE' && {
       reportedMessageId: input.targetId,
+    }),
+    ...(input.targetType === 'COMMUNITY_POST' && {
+      reportedCommunityPostId: input.targetId,
+    }),
+    ...(input.targetType === 'COMMUNITY_COMMENT' && {
+      reportedCommunityCommentId: input.targetId,
     }),
   };
 }
@@ -142,6 +152,34 @@ export const prismaSafetyRepository: SafetyRepository = {
               senderId: { not: reporterId },
               conversation: {
                 trip: { memberships: { some: { userId: reporterId } } },
+              },
+            },
+          })) === 1
+        );
+      case 'COMMUNITY_POST':
+        return (
+          (await database.communityPost.count({
+            where: {
+              id: targetId,
+              authorId: { not: reporterId },
+              status: 'PUBLISHED',
+              removedAt: null,
+              community: { status: 'ACTIVE' },
+            },
+          })) === 1
+        );
+      case 'COMMUNITY_COMMENT':
+        return (
+          (await database.communityComment.count({
+            where: {
+              id: targetId,
+              authorId: { not: reporterId },
+              status: { in: ['ACTIVE', 'EDITED'] },
+              removedAt: null,
+              post: {
+                status: 'PUBLISHED',
+                removedAt: null,
+                community: { status: 'ACTIVE' },
               },
             },
           })) === 1

@@ -47,6 +47,7 @@ export interface ListCommunitiesQuery {
 }
 
 export interface ListCommunityPostsQuery {
+  viewerId?: string;
   type?: CommunityPostType;
   page: number;
   pageSize: number;

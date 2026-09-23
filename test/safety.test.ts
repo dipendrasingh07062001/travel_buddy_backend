@@ -129,6 +129,10 @@ const repository: SafetyRepository = {
       reportedConnectionRequestId:
         input.targetType === 'CONNECTION_REQUEST' ? input.targetId : null,
       reportedMessageId: input.targetType === 'MESSAGE' ? input.targetId : null,
+      reportedCommunityPostId:
+        input.targetType === 'COMMUNITY_POST' ? input.targetId : null,
+      reportedCommunityCommentId:
+        input.targetType === 'COMMUNITY_COMMENT' ? input.targetId : null,
       reason: input.reason,
       details: input.details,
       status: 'SUBMITTED',

@@ -74,3 +74,11 @@ export async function authenticateRequest(
   }
   return requireActiveUser(user);
 }
+
+export async function authenticateRequestIfPresent(
+  request: FastifyRequest,
+  dependencies: AuthRouteDependencies,
+): Promise<AuthenticatedUser | null> {
+  if (!request.headers.authorization) return null;
+  return authenticateRequest(request, dependencies);
+}

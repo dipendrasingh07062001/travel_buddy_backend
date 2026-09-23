@@ -51,6 +51,12 @@ enum CommunityPostStatus {
   REMOVED
 }
 
+enum CommunityCommentStatus {
+  ACTIVE
+  EDITED
+  REMOVED
+}
+
 enum TripStatus {
   DRAFT
   PUBLISHED
@@ -94,6 +100,8 @@ enum ReportTargetType {
   TRIP
   CONNECTION_REQUEST
   MESSAGE
+  COMMUNITY_POST
+  COMMUNITY_COMMENT
 }
 
 enum ReportReason {
@@ -148,6 +156,7 @@ model User {
   messageRevisions           MessageRevision[]         @relation("MessageRevisionEditor")
   communityFollows           CommunityFollow[]
   communityPosts             CommunityPost[]
+  communityComments          CommunityComment[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -227,15 +236,37 @@ model CommunityPost {
   title       String              @db.VarChar(160)
   body        String              @db.VarChar(5000)
   publishedAt DateTime?           @map("published_at") @db.Timestamptz(6)
+  editedAt    DateTime?           @map("edited_at") @db.Timestamptz(6)
   removedAt   DateTime?           @map("removed_at") @db.Timestamptz(6)
   community   Community           @relation(fields: [communityId], references: [id], onDelete: Cascade)
   author      User                @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  comments    CommunityComment[]
+  reports     Report[]
   createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([communityId, status, publishedAt])
   @@index([authorId, status, publishedAt])
   @@map("community_posts")
+}
+
+model CommunityComment {
+  id        String                 @id @default(uuid()) @db.Uuid
+  postId    String                 @map("post_id") @db.Uuid
+  authorId  String                 @map("author_id") @db.Uuid
+  body      String                 @db.VarChar(2000)
+  status    CommunityCommentStatus @default(ACTIVE)
+  editedAt  DateTime?              @map("edited_at") @db.Timestamptz(6)
+  removedAt DateTime?              @map("removed_at") @db.Timestamptz(6)
+  post      CommunityPost          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User                   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  reports   Report[]
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([postId, status, createdAt])
+  @@index([authorId, status, createdAt])
+  @@map("community_comments")
 }
 
 model Trip {
@@ -403,6 +434,8 @@ model Report {
   reportedTripId              String?            @map("reported_trip_id") @db.Uuid
   reportedConnectionRequestId String?            @map("reported_connection_request_id") @db.Uuid
   reportedMessageId           String?            @map("reported_message_id") @db.Uuid
+  reportedCommunityPostId     String?            @map("reported_community_post_id") @db.Uuid
+  reportedCommunityCommentId  String?            @map("reported_community_comment_id") @db.Uuid
   reason                      ReportReason
   details                     String?            @db.VarChar(1000)
   status                      ReportStatus       @default(SUBMITTED)
@@ -411,6 +444,8 @@ model Report {
   reportedTrip                Trip?              @relation(fields: [reportedTripId], references: [id], onDelete: Restrict)
   reportedConnectionRequest   ConnectionRequest? @relation(fields: [reportedConnectionRequestId], references: [id], onDelete: Restrict)
   reportedMessage             Message?           @relation(fields: [reportedMessageId], references: [id], onDelete: Restrict)
+  reportedCommunityPost       CommunityPost?     @relation(fields: [reportedCommunityPostId], references: [id], onDelete: Restrict)
+  reportedCommunityComment    CommunityComment?  @relation(fields: [reportedCommunityCommentId], references: [id], onDelete: Restrict)
   createdAt                   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -419,6 +454,8 @@ model Report {
   @@index([reportedTripId])
   @@index([reportedConnectionRequestId])
   @@index([reportedMessageId])
+  @@index([reportedCommunityPostId])
+  @@index([reportedCommunityCommentId])
   @@map("reports")
 }
 

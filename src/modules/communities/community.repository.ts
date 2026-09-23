@@ -31,6 +31,21 @@ const publicPostSelect = {
   author: { select: { id: true, displayName: true } },
 } satisfies Prisma.CommunityPostSelect;
 
+function visiblePostAuthor(viewerId?: string): Prisma.UserWhereInput {
+  return {
+    status: 'ACTIVE',
+    deletedAt: null,
+    OR: [
+      { profile: null },
+      { profile: { communityActivityVisibility: 'PUBLIC' } },
+    ],
+    ...(viewerId && {
+      blocksCreated: { none: { blockedId: viewerId } },
+      blocksReceived: { none: { blockerId: viewerId } },
+    }),
+  };
+}
+
 function utcStartOfToday(now = new Date()): Date {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -67,14 +82,7 @@ async function addActivityCounts(
         communityId: { in: communityIds },
         status: 'PUBLISHED',
         removedAt: null,
-        author: {
-          status: 'ACTIVE',
-          deletedAt: null,
-          OR: [
-            { profile: null },
-            { profile: { communityActivityVisibility: 'PUBLIC' } },
-          ],
-        },
+        author: visiblePostAuthor(),
       },
       _count: { _all: true },
     }),
@@ -141,14 +149,7 @@ export const prismaCommunityRepository: CommunityRepository = {
       status: 'PUBLISHED',
       removedAt: null,
       ...(query.type && { type: query.type }),
-      author: {
-        status: 'ACTIVE',
-        deletedAt: null,
-        OR: [
-          { profile: null },
-          { profile: { communityActivityVisibility: 'PUBLIC' } },
-        ],
-      },
+      author: visiblePostAuthor(query.viewerId),
     };
     const [posts, totalItems] = await database.$transaction([
       database.communityPost.findMany({

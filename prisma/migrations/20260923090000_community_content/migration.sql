@@ -1,0 +1,2 @@
+-- Intentionally empty. The migration was split into the two following
+-- migrations so PostgreSQL can commit new enum values before using them.
