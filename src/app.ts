@@ -15,6 +15,8 @@ import { registerConnectionRoutes } from './modules/connections/connection.route
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerCommunityRoutes } from './modules/communities/community.routes.js';
 import type { CommunityRouteDependencies } from './modules/communities/community.types.js';
+import { registerCommunityContentRoutes } from './modules/communities/community-content.routes.js';
+import type { CommunityContentRouteDependencies } from './modules/communities/community-content.types.js';
 import {
   registerHealthRoutes,
   type HealthRouteDependencies,
@@ -40,6 +42,7 @@ export interface BuildAppOptions {
   safety?: Partial<SafetyRouteDependencies>;
   messaging?: Partial<MessagingRouteDependencies>;
   communities?: Partial<CommunityRouteDependencies>;
+  communityContent?: Partial<CommunityContentRouteDependencies>;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -86,6 +89,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerTripRoutes(api, authDependencies, options.trips);
       await registerCommunityRoutes(api, authDependencies, options.communities);
+      await registerCommunityContentRoutes(
+        api,
+        authDependencies,
+        options.communityContent,
+      );
       await registerConnectionRoutes(
         api,
         authDependencies,

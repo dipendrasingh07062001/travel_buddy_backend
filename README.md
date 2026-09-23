@@ -142,8 +142,20 @@ Authenticated users follow communities with these idempotent operations:
 - `GET /api/v1/me/followed-communities`
 
 Archived communities are excluded from discovery and cannot be followed.
-Creating posts and comments is intentionally reserved for the next community
-content milestone.
+
+Authenticated users with a complete profile and public community-activity
+visibility can participate through:
+
+- `POST /api/v1/communities/:communityId/posts`
+- `GET`, `PATCH`, or `DELETE /api/v1/community-posts/:postId`
+- `GET` or `POST /api/v1/community-posts/:postId/comments`
+- `PATCH` or `DELETE /api/v1/community-comments/:commentId`
+
+Only authors may edit or remove their content. Removal is soft so moderation
+evidence is retained. Public feeds exclude removed content, non-public account
+activity, disabled accounts, and blocked authors for authenticated viewers.
+Posts and comments can be reported through `POST /api/v1/reports` using
+`COMMUNITY_POST` or `COMMUNITY_COMMENT` as the target type.
 
 ## Connection requests and membership
 

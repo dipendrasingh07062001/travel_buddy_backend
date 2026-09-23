@@ -1,7 +1,10 @@
 import type { CommunityPostType, TripTransport } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
-import { authenticateRequest } from '../auth/auth.service.js';
+import {
+  authenticateRequest,
+  authenticateRequestIfPresent,
+} from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicTripSchema } from '../trips/trip.routes.js';
 import { presentTrip } from '../trips/trip.presenter.js';
@@ -360,7 +363,9 @@ export async function registerCommunityRoutes(
       },
     },
     async (request) => {
+      const viewer = await authenticateRequestIfPresent(request, auth);
       const query: ListCommunityPostsQuery = {
+        ...(viewer && { viewerId: viewer.id }),
         ...(request.query.type && { type: request.query.type }),
         page: request.query.page ?? 1,
         pageSize: request.query.pageSize ?? 20,

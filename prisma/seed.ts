@@ -106,6 +106,21 @@ async function main(): Promise<void> {
     });
   }
 
+  await prisma.communityComment.upsert({
+    where: { id: '70000000-0000-4000-8000-000000000001' },
+    update: {
+      body: 'Local buses and shared taxis are common; confirm current routes before travelling.',
+      status: 'ACTIVE',
+      removedAt: null,
+    },
+    create: {
+      id: '70000000-0000-4000-8000-000000000001',
+      postId: '60000000-0000-4000-8000-000000000001',
+      authorId: demoUserId,
+      body: 'Local buses and shared taxis are common; confirm current routes before travelling.',
+    },
+  });
+
   const trips = [
     {
       id: '30000000-0000-4000-8000-000000000001',

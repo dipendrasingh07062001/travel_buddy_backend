@@ -39,6 +39,8 @@ const reportTargetTypes = [
   'TRIP',
   'CONNECTION_REQUEST',
   'MESSAGE',
+  'COMMUNITY_POST',
+  'COMMUNITY_COMMENT',
 ] as const;
 const reportReasons = [
   'HARASSMENT',
@@ -229,7 +231,7 @@ export async function registerSafetyRoutes(
       config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
       schema: {
         tags: ['Safety'],
-        summary: 'Report a user, trip, or connection request',
+        summary: 'Report a user or platform content',
         security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
