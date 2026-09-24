@@ -69,6 +69,21 @@ const room: RoomRecord = {
   trip: {
     id: tripId,
     status: 'PUBLISHED',
+    originCity: 'Delhi',
+    startDate: new Date('2026-10-10T00:00:00.000Z'),
+    endDate: new Date('2026-10-15T00:00:00.000Z'),
+    flexibilityDays: 2,
+    durationDays: 6,
+    transport: 'BUS',
+    description: 'A shared Manali trip plan for room contract tests.',
+    version: 1,
+    community: {
+      id: '20000000-0000-4000-8000-000000000001',
+      slug: 'manali',
+      name: 'Manali',
+      region: 'Himachal Pradesh',
+      countryCode: 'IN',
+    },
     memberships: [
       {
         role: 'OWNER',
@@ -81,6 +96,7 @@ const room: RoomRecord = {
         user: users['member-token']!,
       },
     ],
+    checklistItems: [],
   },
   participants: [
     {
@@ -226,6 +242,8 @@ describe('private trip-room messaging HTTP contract', () => {
     });
     expect(member.statusCode).toBe(200);
     expect(member.json().data.members).toHaveLength(2);
+    expect(member.json().data.plan.destination.slug).toBe('manali');
+    expect(member.json().data.checklist).toEqual([]);
     expect(member.json().data.safetyNotice).toContain('financial credentials');
     expect(outsider.statusCode).toBe(404);
     expect(outsider.json().error.code).toBe('TRIP_ROOM_NOT_FOUND');

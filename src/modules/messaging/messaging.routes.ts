@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicUserSchema } from '../profiles/profile.schemas.js';
+import { checklistItemSchema } from '../trip-room/trip-room.routes.js';
 import { presentMessage, presentRoom } from './messaging.presenter.js';
 import { prismaMessagingRepository } from './messaging.repository.js';
 import {
@@ -54,8 +55,10 @@ const roomSchema = {
     'id',
     'tripId',
     'status',
+    'plan',
     'members',
     'preferences',
+    'checklist',
     'safetyNotice',
     'createdAt',
     'updatedAt',
@@ -64,6 +67,43 @@ const roomSchema = {
     id: { type: 'string', format: 'uuid' },
     tripId: { type: 'string', format: 'uuid' },
     status: { type: 'string', enum: ['ACTIVE', 'READ_ONLY'] },
+    plan: {
+      type: 'object',
+      required: [
+        'originCity',
+        'destination',
+        'startDate',
+        'endDate',
+        'flexibilityDays',
+        'durationDays',
+        'transport',
+        'description',
+        'status',
+        'version',
+      ],
+      properties: {
+        originCity: { type: 'string' },
+        destination: {
+          type: 'object',
+          required: ['id', 'slug', 'name', 'region', 'countryCode'],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            slug: { type: 'string' },
+            name: { type: 'string' },
+            region: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+            countryCode: { type: 'string' },
+          },
+        },
+        startDate: { type: 'string', format: 'date' },
+        endDate: { type: 'string', format: 'date' },
+        flexibilityDays: { type: 'integer' },
+        durationDays: { type: 'integer' },
+        transport: { type: 'string' },
+        description: { type: 'string' },
+        status: { type: 'string' },
+        version: { type: 'integer' },
+      },
+    },
     members: { type: 'array', items: memberSchema },
     preferences: {
       type: 'object',
@@ -75,6 +115,7 @@ const roomSchema = {
         },
       },
     },
+    checklist: { type: 'array', items: checklistItemSchema },
     safetyNotice: { type: 'string' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
