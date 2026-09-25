@@ -101,6 +101,32 @@ enum TripChecklistItemStatus {
   REMOVED
 }
 
+enum ExpenseStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum ExpenseSplitMethod {
+  EQUAL
+  CUSTOM
+}
+
+enum ExpenseCategory {
+  ACCOMMODATION
+  TRANSPORT
+  FOOD
+  FUEL
+  ACTIVITY
+  SHOPPING
+  OTHER
+}
+
+enum ExpenseRevisionAction {
+  CREATE
+  EDIT
+  VOID
+}
+
 enum ReportTargetType {
   USER
   TRIP
@@ -165,6 +191,10 @@ model User {
   communityComments          CommunityComment[]
   checklistItemsCreated      TripChecklistItem[]       @relation("ChecklistItemCreator")
   checklistItemsCompleted    TripChecklistItem[]       @relation("ChecklistItemCompleter")
+  expensesCreated            Expense[]                 @relation("ExpenseCreator")
+  expensesPaid               Expense[]                 @relation("ExpensePayer")
+  expenseShares              ExpenseShare[]
+  expenseRevisions           ExpenseRevision[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -304,6 +334,7 @@ model Trip {
   reports                   Report[]
   conversation              Conversation?
   checklistItems            TripChecklistItem[]
+  expenses                  Expense[]
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -381,6 +412,61 @@ model TripChecklistItem {
   @@index([tripId, status, createdAt])
   @@index([createdById, createdAt])
   @@map("trip_checklist_items")
+}
+
+model Expense {
+  id          String             @id @default(uuid()) @db.Uuid
+  tripId      String             @map("trip_id") @db.Uuid
+  createdById String             @map("created_by_id") @db.Uuid
+  paidById    String             @map("paid_by_id") @db.Uuid
+  description String             @db.VarChar(200)
+  category    ExpenseCategory
+  amountPaise Int                @map("amount_paise")
+  currency    String             @default("INR") @db.Char(3)
+  splitMethod ExpenseSplitMethod @map("split_method")
+  expenseDate DateTime           @map("expense_date") @db.Date
+  status      ExpenseStatus      @default(ACTIVE)
+  version     Int                @default(1)
+  voidedAt    DateTime?          @map("voided_at") @db.Timestamptz(6)
+  trip        Trip               @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  paidBy      User               @relation("ExpensePayer", fields: [paidById], references: [id], onDelete: Restrict)
+  shares      ExpenseShare[]
+  revisions   ExpenseRevision[]
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tripId, status, createdAt])
+  @@index([createdById, createdAt])
+  @@map("expenses")
+}
+
+model ExpenseShare {
+  expenseId   String  @map("expense_id") @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  amountPaise Int     @map("amount_paise")
+  expense     Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([expenseId, userId])
+  @@index([userId])
+  @@map("expense_shares")
+}
+
+model ExpenseRevision {
+  id        String                @id @default(uuid()) @db.Uuid
+  expenseId String                @map("expense_id") @db.Uuid
+  actorId   String                @map("actor_id") @db.Uuid
+  action    ExpenseRevisionAction
+  version   Int
+  snapshot  Json
+  expense   Expense               @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  actor     User                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([expenseId, version])
+  @@index([actorId, createdAt])
+  @@map("expense_revisions")
 }
 
 model Conversation {

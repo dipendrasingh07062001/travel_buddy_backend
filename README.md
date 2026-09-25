@@ -214,8 +214,56 @@ so internal history is retained.
 Non-owner members can leave, and the trip owner can remove a non-owner member.
 Both operations atomically retain membership history, revoke future room
 access, reduce group capacity, increment the trip version, and reopen a `FULL`
-trip as `PUBLISHED`. The owner cannot leave or be removed. Real-time delivery,
-notification fan-out, and the shared expense ledger are separate milestones.
+trip as `PUBLISHED`. The owner cannot leave or be removed. Real-time delivery
+and notification fan-out are separate milestones.
+
+## Shared expense ledger
+
+Active trip members can record and review private INR expenses. Amounts are
+integer **paise**: `1001` means ₹10.01. The payer and every split participant
+must be an active trip member when a new expense is recorded. Existing shares
+remain in the ledger after a member leaves. Former members lose ledger access,
+while current members can still see their historical balances. Completed and
+cancelled trips retain a readable ledger but accept no changes.
+
+- `POST /api/v1/trips/:tripId/expenses` records an expense.
+- `GET /api/v1/trips/:tripId/expenses?page=1&pageSize=20` lists expenses,
+  including voided records, newest first.
+- `GET /api/v1/trips/:tripId/expenses/balances` calculates paid, owed and net
+  paise from active expenses.
+- `GET /api/v1/expenses/:expenseId` returns one expense and its revision history.
+- `PUT /api/v1/expenses/:expenseId` replaces an expense as its creator. Send the
+  full expense body and `expectedVersion` from the latest response.
+- `DELETE /api/v1/expenses/:expenseId` voids an expense as its creator. Send
+  `{ "expectedVersion": 1 }`; the record and its shares remain available for
+  audit, while balances exclude it.
+
+Example equal split request:
+
+```json
+{
+  "description": "Hotel",
+  "category": "ACCOMMODATION",
+  "amountPaise": 1001,
+  "paidByUserId": "<owner-user-uuid>",
+  "splitMethod": "EQUAL",
+  "participants": [
+    { "userId": "<owner-user-uuid>" },
+    { "userId": "<member-a-uuid>" },
+    { "userId": "<member-b-uuid>" }
+  ]
+}
+```
+
+For `CUSTOM`, supply a positive `amountPaise` for each participant; the shares
+must sum exactly to the expense total. Equal split remainders go to members in
+ascending UUID order, which makes the calculation repeatable. You may also set
+`expenseDate` as a `YYYY-MM-DD` date no later than today; omission uses today's
+UTC date. A stale `expectedVersion` returns `409 EXPENSE_VERSION_CONFLICT`.
+
+The API explains that entries are member-provided and payments happen outside
+the platform. Receipts, disputes, notifications and recipient-confirmed external
+settlement records are later milestones. The backend never processes money.
 
 ## Database workflow
 
