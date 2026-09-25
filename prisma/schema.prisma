@@ -127,6 +127,18 @@ enum ExpenseRevisionAction {
   VOID
 }
 
+enum ExpenseDisputeStatus {
+  OPEN
+  WITHDRAWN
+}
+
+enum SettlementStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
 enum ReportTargetType {
   USER
   TRIP
@@ -195,6 +207,9 @@ model User {
   expensesPaid               Expense[]                 @relation("ExpensePayer")
   expenseShares              ExpenseShare[]
   expenseRevisions           ExpenseRevision[]
+  expenseDisputes            ExpenseDispute[]
+  settlementsSent            Settlement[]              @relation("SettlementPayer")
+  settlementsReceived        Settlement[]              @relation("SettlementReceiver")
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -335,6 +350,7 @@ model Trip {
   conversation              Conversation?
   checklistItems            TripChecklistItem[]
   expenses                  Expense[]
+  settlements               Settlement[]
   createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -433,6 +449,7 @@ model Expense {
   paidBy      User               @relation("ExpensePayer", fields: [paidById], references: [id], onDelete: Restrict)
   shares      ExpenseShare[]
   revisions   ExpenseRevision[]
+  disputes    ExpenseDispute[]
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -467,6 +484,45 @@ model ExpenseRevision {
   @@unique([expenseId, version])
   @@index([actorId, createdAt])
   @@map("expense_revisions")
+}
+
+model ExpenseDispute {
+  id          String               @id @default(uuid()) @db.Uuid
+  expenseId   String               @map("expense_id") @db.Uuid
+  reporterId  String               @map("reporter_id") @db.Uuid
+  reason      String               @db.VarChar(500)
+  status      ExpenseDisputeStatus @default(OPEN)
+  withdrawnAt DateTime?            @map("withdrawn_at") @db.Timestamptz(6)
+  expense     Expense              @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  reporter    User                 @relation(fields: [reporterId], references: [id], onDelete: Restrict)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([expenseId, status, createdAt])
+  @@index([reporterId, status, createdAt])
+  @@map("expense_disputes")
+}
+
+model Settlement {
+  id          String           @id @default(uuid()) @db.Uuid
+  tripId      String           @map("trip_id") @db.Uuid
+  payerId     String           @map("payer_id") @db.Uuid
+  receiverId  String           @map("receiver_id") @db.Uuid
+  amountPaise Int              @map("amount_paise")
+  currency    String           @default("INR") @db.Char(3)
+  status      SettlementStatus @default(PENDING)
+  decidedAt   DateTime?        @map("decided_at") @db.Timestamptz(6)
+  cancelledAt DateTime?        @map("cancelled_at") @db.Timestamptz(6)
+  trip        Trip             @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  payer       User             @relation("SettlementPayer", fields: [payerId], references: [id], onDelete: Restrict)
+  receiver    User             @relation("SettlementReceiver", fields: [receiverId], references: [id], onDelete: Restrict)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tripId, status, createdAt])
+  @@index([payerId, status, createdAt])
+  @@index([receiverId, status, createdAt])
+  @@map("settlements")
 }
 
 model Conversation {

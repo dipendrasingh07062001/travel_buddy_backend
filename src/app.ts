@@ -14,6 +14,7 @@ import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
+import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
 import { registerCommunityRoutes } from './modules/communities/community.routes.js';
 import type { CommunityRouteDependencies } from './modules/communities/community.types.js';
 import { registerCommunityContentRoutes } from './modules/communities/community-content.routes.js';
@@ -107,6 +108,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);
+      await registerFinancialRoutes(api, authDependencies);
     },
     { prefix: '/api/v1' },
   );

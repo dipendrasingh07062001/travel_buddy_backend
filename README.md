@@ -262,8 +262,45 @@ ascending UUID order, which makes the calculation repeatable. You may also set
 UTC date. A stale `expectedVersion` returns `409 EXPENSE_VERSION_CONFLICT`.
 
 The API explains that entries are member-provided and payments happen outside
-the platform. Receipts, disputes, notifications and recipient-confirmed external
-settlement records are later milestones. The backend never processes money.
+the platform. The backend never processes money.
+
+### Disputes and external settlements
+
+Members affected by an expense can flag it with a reason. The flag is visible
+to active trip members; a former member sees only their own flags. The reporter
+may withdraw a flag, but the platform does not adjudicate it.
+
+- `POST /api/v1/expenses/:expenseId/disputes` with `{ "reason": "..." }`
+- `GET /api/v1/expenses/:expenseId/disputes`
+- `POST /api/v1/expense-disputes/:disputeId/withdraw`
+
+A member who owes money can record an external payment to a member with a
+positive balance. The payer can cancel a pending record. Only the named receiver
+can confirm or reject it. A pending or rejected record never changes balances;
+confirmation rechecks the latest outstanding balance before applying it.
+
+- `POST /api/v1/trips/:tripId/settlements` with
+  `{ "receiverId": "<member-uuid>", "amountPaise": 500 }`
+- `GET /api/v1/trips/:tripId/settlements` for active members
+- `GET /api/v1/trips/:tripId/settlements/me` for a member's own records
+- `POST /api/v1/settlements/:settlementId/confirm`
+- `POST /api/v1/settlements/:settlementId/reject`
+- `POST /api/v1/settlements/:settlementId/cancel`
+
+`GET /api/v1/trips/:tripId/expenses/balances` keeps `netPaise` as the balance
+from expenses alone and adds `remainingNetPaise`, `settlementsSentPaise` and
+`settlementsReceivedPaise`. Confirmed payments reduce the outstanding amount;
+they do not change the original expense history.
+
+After leaving or removal, a member cannot access the full ledger or trip room.
+`GET /api/v1/trips/:tripId/expenses/me` shows only their own balance and expense
+lines, with no other participant shares. They can see their own settlements,
+confirm or reject one addressed to them, record their own payment against an
+outstanding balance, and flag an expense affecting them. These narrow actions
+remain available after a trip is completed or cancelled so past obligations can
+be reconciled; expense entries themselves remain read-only. A block prevents
+new settlement records between the two accounts. Receipt uploads and
+notification delivery remain separate milestones.
 
 ## Database workflow
 
