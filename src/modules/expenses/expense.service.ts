@@ -139,6 +139,11 @@ export function calculateBalances(
     amountPaise: number;
     shares: { userId: string; amountPaise: number }[];
   }[],
+  confirmedSettlements: {
+    payerId: string;
+    receiverId: string;
+    amountPaise: number;
+  }[] = [],
 ) {
   const balances = new Map(
     members.map((member) => [
@@ -150,6 +155,9 @@ export function calculateBalances(
         paidPaise: 0,
         owedPaise: 0,
         netPaise: 0,
+        settlementsSentPaise: 0,
+        settlementsReceivedPaise: 0,
+        remainingNetPaise: 0,
       },
     ]),
   );
@@ -161,10 +169,21 @@ export function calculateBalances(
       if (participant) participant.owedPaise += share.amountPaise;
     }
   }
+  for (const settlement of confirmedSettlements) {
+    const payer = balances.get(settlement.payerId);
+    const receiver = balances.get(settlement.receiverId);
+    if (payer) payer.settlementsSentPaise += settlement.amountPaise;
+    if (receiver) receiver.settlementsReceivedPaise += settlement.amountPaise;
+  }
   return [...balances.values()]
     .map((balance) => ({
       ...balance,
       netPaise: balance.paidPaise - balance.owedPaise,
+      remainingNetPaise:
+        balance.paidPaise -
+        balance.owedPaise +
+        balance.settlementsSentPaise -
+        balance.settlementsReceivedPaise,
     }))
     .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
 }

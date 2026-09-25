@@ -376,6 +376,10 @@ export async function getBalances(tripId: string, actorId: string) {
           shares: { select: { userId: true, amountPaise: true } },
         },
       });
+      const confirmedSettlements = await transaction.settlement.findMany({
+        where: { tripId, status: 'CONFIRMED' },
+        select: { payerId: true, receiverId: true, amountPaise: true },
+      });
       return {
         tripId,
         currency: 'INR',
@@ -383,7 +387,15 @@ export async function getBalances(tripId: string, actorId: string) {
           (sum, expense) => sum + expense.amountPaise,
           0,
         ),
-        balances: calculateBalances(trip.memberships, expenses),
+        totalConfirmedSettlementPaise: confirmedSettlements.reduce(
+          (sum, settlement) => sum + settlement.amountPaise,
+          0,
+        ),
+        balances: calculateBalances(
+          trip.memberships,
+          expenses,
+          confirmedSettlements,
+        ),
       };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
