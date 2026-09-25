@@ -2,6 +2,7 @@ import { Prisma, type SettlementStatus } from '@prisma/client';
 
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { createNotifications } from '../notifications/notification.repository.js';
 import { calculateBalances } from './expense.service.js';
 
 const person = { select: { id: true, displayName: true } } as const;
@@ -234,7 +235,7 @@ export async function recordSettlement(
             'Settlement exceeds the current outstanding balance between these members.',
           );
         }
-        return tx.settlement.create({
+        const settlement = await tx.settlement.create({
           data: {
             tripId,
             payerId: actorId,
@@ -244,6 +245,16 @@ export async function recordSettlement(
           },
           include: settlementInclude,
         });
+        await createNotifications(tx, {
+          recipientIds: [receiverId],
+          type: 'SETTLEMENT_PENDING',
+          eventKey: `settlement:${settlement.id}:pending`,
+          sourceId: settlement.id,
+          tripId,
+          actorId,
+          createdAt: now,
+        });
+        return settlement;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
@@ -294,7 +305,7 @@ export async function decideSettlement(
             );
           }
         }
-        return tx.settlement.update({
+        const settlement = await tx.settlement.update({
           where: { id: settlementId },
           data: {
             status: decision,
@@ -304,6 +315,23 @@ export async function decideSettlement(
           },
           include: settlementInclude,
         });
+        await createNotifications(tx, {
+          recipientIds: [
+            decision === 'CANCELLED' ? current.receiverId : current.payerId,
+          ],
+          type:
+            decision === 'CONFIRMED'
+              ? 'SETTLEMENT_CONFIRMED'
+              : decision === 'REJECTED'
+                ? 'SETTLEMENT_REJECTED'
+                : 'SETTLEMENT_CANCELLED',
+          eventKey: `settlement:${settlementId}:${decision.toLowerCase()}`,
+          sourceId: settlementId,
+          tripId: current.tripId,
+          actorId,
+          createdAt: now,
+        });
+        return settlement;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

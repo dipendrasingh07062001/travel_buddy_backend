@@ -25,6 +25,7 @@ import {
 } from './modules/health/health.routes.js';
 import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js';
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
+import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
@@ -106,6 +107,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       );
       await registerSafetyRoutes(api, authDependencies, options.safety);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
+      await registerNotificationRoutes(api, authDependencies);
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);
       await registerFinancialRoutes(api, authDependencies);

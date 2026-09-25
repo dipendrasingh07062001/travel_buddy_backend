@@ -1,6 +1,7 @@
 import type { TripStatus } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { createNotifications } from '../notifications/notification.repository.js';
 import {
   messageInclude,
   roomSelect,
@@ -142,6 +143,25 @@ export const prismaMessagingRepository: MessagingRepository = {
       await transaction.conversation.update({
         where: { id: room.id },
         data: { updatedAt: now },
+      });
+      const unmuted = await transaction.conversationParticipant.findMany({
+        where: {
+          conversationId: room.id,
+          userId: {
+            in: recipientIds.filter((id) => !blockedIds.has(id)),
+          },
+          mutedAt: null,
+        },
+        select: { userId: true },
+      });
+      await createNotifications(transaction, {
+        recipientIds: unmuted.map((participant) => participant.userId),
+        type: 'MESSAGE_RECEIVED',
+        eventKey: `message:${message.id}:received`,
+        sourceId: message.id,
+        tripId,
+        actorId: senderId,
+        createdAt: now,
       });
       return { kind: 'created', message } as const;
     });

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { createNotifications } from '../notifications/notification.repository.js';
 import {
   connectionRequestInclude,
   membershipInclude,
@@ -130,6 +131,15 @@ async function acceptOnce(
         where: { id },
         include: connectionRequestInclude,
       });
+      await createNotifications(transaction, {
+        recipientIds: [request.requesterId],
+        type: 'CONNECTION_REQUEST_ACCEPTED',
+        eventKey: `connection-request:${id}:accepted`,
+        sourceId: id,
+        tripId: request.tripId,
+        actorId: recipientId,
+        createdAt: now,
+      });
       return { kind: 'accepted', request: accepted };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -193,9 +203,20 @@ export const prismaConnectionRepository: ConnectionRepository = {
   },
 
   create(input) {
-    return database.connectionRequest.create({
-      data: input,
-      include: connectionRequestInclude,
+    return database.$transaction(async (transaction) => {
+      const request = await transaction.connectionRequest.create({
+        data: input,
+        include: connectionRequestInclude,
+      });
+      await createNotifications(transaction, {
+        recipientIds: [request.recipientId],
+        type: 'CONNECTION_REQUEST_RECEIVED',
+        eventKey: `connection-request:${request.id}:received`,
+        sourceId: request.id,
+        tripId: request.tripId,
+        actorId: request.requesterId,
+      });
+      return request;
     });
   },
 
@@ -225,19 +246,36 @@ export const prismaConnectionRepository: ConnectionRepository = {
   },
 
   async setPendingStatus(id, actorId, actorField, status, now) {
-    const result = await database.connectionRequest.updateMany({
-      where: { id, [actorField]: actorId, status: 'PENDING' },
-      data: {
-        status,
-        ...(status === 'DECLINED'
-          ? { decidedById: actorId, decidedAt: now }
-          : { withdrawnAt: now }),
-      },
-    });
-    if (result.count !== 1) return null;
-    return database.connectionRequest.findUnique({
-      where: { id },
-      include: connectionRequestInclude,
+    return database.$transaction(async (transaction) => {
+      const result = await transaction.connectionRequest.updateMany({
+        where: { id, [actorField]: actorId, status: 'PENDING' },
+        data: {
+          status,
+          ...(status === 'DECLINED'
+            ? { decidedById: actorId, decidedAt: now }
+            : { withdrawnAt: now }),
+        },
+      });
+      if (result.count !== 1) return null;
+      const request = await transaction.connectionRequest.findUniqueOrThrow({
+        where: { id },
+        include: connectionRequestInclude,
+      });
+      await createNotifications(transaction, {
+        recipientIds: [
+          status === 'DECLINED' ? request.requesterId : request.recipientId,
+        ],
+        type:
+          status === 'DECLINED'
+            ? 'CONNECTION_REQUEST_DECLINED'
+            : 'CONNECTION_REQUEST_WITHDRAWN',
+        eventKey: `connection-request:${id}:${status.toLowerCase()}`,
+        sourceId: id,
+        tripId: request.tripId,
+        actorId,
+        createdAt: now,
+      });
+      return request;
     });
   },
 

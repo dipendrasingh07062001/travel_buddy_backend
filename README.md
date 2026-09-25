@@ -302,6 +302,31 @@ be reconciled; expense entries themselves remain read-only. A block prevents
 new settlement records between the two accounts. Receipt uploads and
 notification delivery remain separate milestones.
 
+## In-app notifications
+
+Important activity creates a durable notification in PostgreSQL in the same
+transaction as the activity itself. The API provides an inbox and unread count
+for the signed-in account:
+
+- `GET /api/v1/me/notifications?page=1&pageSize=20&unreadOnly=false`
+- `GET /api/v1/me/notifications/unread-count`
+- `POST /api/v1/me/notifications/:notificationId/read`
+- `POST /api/v1/me/notifications/read-all`
+
+The inbox covers connection requests and decisions, trip plan/status changes,
+new group messages, expense creation/edits/voiding, and external settlement
+requests/decisions. Notification titles are generic; message text, financial
+amounts and private profile details are not copied into notifications. A user
+can read or mark only their own records. Muted trip rooms and blocked senders do
+not produce new message notifications for that recipient. The Flutter or web
+client can poll the inbox and unread-count endpoints; polling frequency should
+be modest and stop when the app is in the background.
+
+This milestone does not send email or phone push notifications. Firebase Cloud
+Messaging can later deliver push alerts to opted-in devices, but PostgreSQL
+remains the authoritative in-app inbox. Do not collect or store device push
+identifiers until that delivery channel is explicitly implemented.
+
 ## Database workflow
 
 The project uses PostgreSQL with Prisma ORM. Prisma keeps database changes in
