@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { createNotifications } from '../notifications/notification.repository.js';
 import { calculateBalances } from './expense.service.js';
 import {
   expenseInclude,
@@ -38,6 +39,10 @@ function snapshot(expense: ExpenseRecord): Prisma.InputJsonObject {
       amountPaise: share.amountPaise,
     })),
   };
+}
+
+function affectedUserIds(expense: ExpenseRecord): string[] {
+  return [expense.paidById, ...expense.shares.map((share) => share.userId)];
 }
 
 async function lockTrip(transaction: Prisma.TransactionClient, tripId: string) {
@@ -145,6 +150,15 @@ export async function createExpense(
             snapshot: snapshot(expense),
             createdAt: now,
           },
+        });
+        await createNotifications(transaction, {
+          recipientIds: affectedUserIds(expense),
+          type: 'EXPENSE_CREATED',
+          eventKey: `expense:${expense.id}:version:${expense.version}`,
+          sourceId: expense.id,
+          tripId,
+          actorId,
+          createdAt: now,
         });
         return expense;
       },
@@ -280,6 +294,18 @@ export async function updateExpense(
             createdAt: now,
           },
         });
+        await createNotifications(transaction, {
+          recipientIds: [
+            ...affectedUserIds(current),
+            ...affectedUserIds(expense),
+          ],
+          type: 'EXPENSE_UPDATED',
+          eventKey: `expense:${expenseId}:version:${expense.version}`,
+          sourceId: expenseId,
+          tripId: first.tripId,
+          actorId,
+          createdAt: now,
+        });
         return expense;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -338,6 +364,15 @@ export async function voidExpense(
             snapshot: snapshot(expense),
             createdAt: now,
           },
+        });
+        await createNotifications(transaction, {
+          recipientIds: affectedUserIds(expense),
+          type: 'EXPENSE_VOIDED',
+          eventKey: `expense:${expenseId}:version:${expense.version}`,
+          sourceId: expenseId,
+          tripId: first.tripId,
+          actorId,
+          createdAt: now,
         });
         return expense;
       },

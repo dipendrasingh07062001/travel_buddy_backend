@@ -139,6 +139,23 @@ enum SettlementStatus {
   CANCELLED
 }
 
+enum NotificationType {
+  CONNECTION_REQUEST_RECEIVED
+  CONNECTION_REQUEST_ACCEPTED
+  CONNECTION_REQUEST_DECLINED
+  CONNECTION_REQUEST_WITHDRAWN
+  TRIP_UPDATED
+  TRIP_STATUS_CHANGED
+  MESSAGE_RECEIVED
+  EXPENSE_CREATED
+  EXPENSE_UPDATED
+  EXPENSE_VOIDED
+  SETTLEMENT_PENDING
+  SETTLEMENT_CONFIRMED
+  SETTLEMENT_REJECTED
+  SETTLEMENT_CANCELLED
+}
+
 enum ReportTargetType {
   USER
   TRIP
@@ -210,6 +227,7 @@ model User {
   expenseDisputes            ExpenseDispute[]
   settlementsSent            Settlement[]              @relation("SettlementPayer")
   settlementsReceived        Settlement[]              @relation("SettlementReceiver")
+  notifications              Notification[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -523,6 +541,24 @@ model Settlement {
   @@index([payerId, status, createdAt])
   @@index([receiverId, status, createdAt])
   @@map("settlements")
+}
+
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  eventKey    String           @map("event_key") @db.VarChar(150)
+  sourceId    String           @map("source_id") @db.Uuid
+  tripId      String?          @map("trip_id") @db.Uuid
+  actorId     String?          @map("actor_id") @db.Uuid
+  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  readAt      DateTime?        @map("read_at") @db.Timestamptz(6)
+
+  @@unique([recipientId, eventKey])
+  @@index([recipientId, createdAt, id])
+  @@index([recipientId, readAt])
+  @@map("notifications")
 }
 
 model Conversation {
