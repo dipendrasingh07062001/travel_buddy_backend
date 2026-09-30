@@ -72,6 +72,8 @@ async function addActivityCounts(
       where: {
         communityId: { in: communityIds },
         status: { in: ['PUBLISHED', 'FULL'] },
+        moderationRemovedAt: null,
+        owner: { status: 'ACTIVE', deletedAt: null },
         endDate: { gte: utcStartOfToday() },
       },
       _count: { _all: true },

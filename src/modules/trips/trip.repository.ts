@@ -15,6 +15,8 @@ export const prismaTripRepository: TripRepository = {
   async listPublic(query) {
     const where: Prisma.TripWhereInput = {
       status: { in: [...publicTripStatuses] },
+      moderationRemovedAt: null,
+      owner: { status: 'ACTIVE', deletedAt: null },
       community: { status: 'ACTIVE' },
       ...(query.origin && {
         originCity: { contains: query.origin, mode: 'insensitive' },
@@ -60,6 +62,8 @@ export const prismaTripRepository: TripRepository = {
       where: {
         id,
         status: { in: [...publicTripStatuses] },
+        moderationRemovedAt: null,
+        owner: { status: 'ACTIVE', deletedAt: null },
         community: { status: 'ACTIVE' },
       },
       include: publicTripInclude,

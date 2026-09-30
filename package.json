@@ -26,6 +26,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "staff:grant": "node scripts/grant-staff.mjs",
+    "staff:revoke": "node scripts/revoke-staff.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

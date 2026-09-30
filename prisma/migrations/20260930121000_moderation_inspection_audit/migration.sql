@@ -1,0 +1,1 @@
+ALTER TYPE "ModerationActionType" ADD VALUE 'REPORT_INSPECTED';

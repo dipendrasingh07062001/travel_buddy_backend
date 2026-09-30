@@ -195,6 +195,12 @@ export async function acceptConnectionRequest(
         'TRIP_NOT_REQUESTABLE',
         'This trip is no longer accepting members.',
       );
+    case 'requester_unavailable':
+      throw new AppError(
+        409,
+        'REQUESTER_UNAVAILABLE',
+        'This requester account is not available for connection.',
+      );
     case 'blocked':
       throw new AppError(
         403,

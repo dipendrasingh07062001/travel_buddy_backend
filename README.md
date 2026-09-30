@@ -327,6 +327,54 @@ Messaging can later deliver push alerts to opted-in devices, but PostgreSQL
 remains the authoritative in-app inbox. Do not collect or store device push
 identifiers until that delivery channel is explicitly implemented.
 
+## Staff moderation
+
+Reports submitted through `POST /api/v1/reports` now have a staff-only review
+workflow. A normal account cannot grant itself staff access, and staff routes
+check the account's current database role and active status on every request.
+
+- `GET /api/v1/admin/reports?status=SUBMITTED&page=1&pageSize=20` lists reports.
+- `GET /api/v1/admin/reports/:reportId` shows the reported target; this private
+  inspection is recorded in the moderation audit trail.
+- `POST /api/v1/admin/reports/:reportId/start-review` claims a submitted report.
+- `POST /api/v1/admin/reports/:reportId/resolve` accepts a `resolution` of
+  `DISMISS`, `SUSPEND_USER`, or `REMOVE_CONTENT`, and a required `reason` of at
+  least 10 non-space characters. Only the assigned reviewer or an administrator
+  may resolve a claimed report.
+- `POST /api/v1/admin/users/:userId/suspend` suspends an active account with a
+  reason; `POST /api/v1/admin/users/:userId/restore` restores one and is
+  administrator-only.
+- `GET /api/v1/admin/moderation-actions` is an administrator-only audit view.
+
+Content removal supports trips, messages, community posts, and community
+comments. It retains the records for review instead of hard-deleting them.
+Removed trips disappear from public discovery and cannot be republished by the
+owner; existing private room and financial records remain available to their
+eligible members. Connection requests and user accounts are not removable
+content; use account suspension or dismiss those reports. Suspending an account
+blocks its authenticated API access and hides its public profile, trips, and
+community content. Administrator accounts cannot be suspended through the API.
+
+Staff roles are provisioned **only by a database operator**, never through a
+public API. After the target account has signed in and exists in PostgreSQL,
+apply migrations and run this in PowerShell with a database URL scoped to the
+intended environment:
+
+```powershell
+$env:STAFF_GRANT_OPERATOR = 'Your operator name'
+npm run staff:grant -- <user-uuid> ADMIN
+```
+
+Use `MODERATOR` instead of `ADMIN` for report reviewers. The command requires
+direct database credentials, accepts only an active ordinary account, and
+records an operator-labelled audit entry. Revoke access with
+`npm run staff:revoke -- <user-uuid>` using the same operator variable. The last
+active administrator cannot be revoked. Protect database credentials and
+review staff grants separately; the operator label is not an identity proof.
+
+For local Postman testing, use disposable accounts and sample content. Review
+actions intentionally persist and must not be run on real user records.
+
 ## Database workflow
 
 The project uses PostgreSQL with Prisma ORM. Prisma keeps database changes in

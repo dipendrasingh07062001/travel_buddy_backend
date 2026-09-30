@@ -62,6 +62,7 @@ export const prismaTripManagementRepository: TripManagementRepository = {
           ownerId,
           version: expectedVersion,
           status: { in: allowedStatuses },
+          moderationRemovedAt: null,
         },
         data: { ...data, version: { increment: 1 } },
       });

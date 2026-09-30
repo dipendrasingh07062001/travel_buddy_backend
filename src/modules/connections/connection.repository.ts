@@ -29,6 +29,11 @@ async function acceptOnce(
         return { kind: 'not_pending', request };
       }
 
+      const requesterActive = await transaction.user.count({
+        where: { id: request.requesterId, status: 'ACTIVE', deletedAt: null },
+      });
+      if (requesterActive !== 1) return { kind: 'requester_unavailable' };
+
       const blockCount = await transaction.userBlock.count({
         where: {
           OR: [
@@ -62,11 +67,12 @@ async function acceptOnce(
           ownerId: true,
           version: true,
           status: true,
+          moderationRemovedAt: true,
           currentGroupSize: true,
           desiredGroupSize: true,
         },
       });
-      if (!trip || trip.status !== 'PUBLISHED') {
+      if (!trip || trip.status !== 'PUBLISHED' || trip.moderationRemovedAt) {
         return { kind: 'trip_unavailable' };
       }
       if (trip.currentGroupSize >= trip.desiredGroupSize) {
@@ -118,6 +124,7 @@ async function acceptOnce(
           id: trip.id,
           version: trip.version,
           status: 'PUBLISHED',
+          moderationRemovedAt: null,
         },
         data: {
           currentGroupSize: nextGroupSize,
@@ -152,6 +159,7 @@ export const prismaConnectionRepository: ConnectionRepository = {
       where: {
         id: tripId,
         status: 'PUBLISHED',
+        moderationRemovedAt: null,
         owner: { status: 'ACTIVE' },
       },
       select: {
@@ -171,6 +179,7 @@ export const prismaConnectionRepository: ConnectionRepository = {
           id: tripId,
           ownerId,
           status: { in: ['PUBLISHED', 'FULL'] },
+          moderationRemovedAt: null,
         },
       })) === 1
     );

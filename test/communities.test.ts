@@ -76,6 +76,7 @@ const publicTrip: PublicTripRecord = {
   status: 'PUBLISHED',
   version: 1,
   publishedAt: new Date('2026-09-20T08:00:00.000Z'),
+  moderationRemovedAt: null,
   createdAt: new Date('2026-09-20T07:00:00.000Z'),
   updatedAt: new Date('2026-09-20T08:00:00.000Z'),
   owner: { id: userId, displayName: currentUser.displayName },
