@@ -45,6 +45,14 @@ enum CommunityStatus {
   ARCHIVED
 }
 
+enum CommunityAdminActionType {
+  CREATED
+  UPDATED
+  ARCHIVED
+  REACTIVATED
+  MERGED
+}
+
 enum CommunityPostType {
   DISCUSSION
   QUESTION
@@ -238,6 +246,7 @@ model User {
   communityFollows           CommunityFollow[]
   communityPosts             CommunityPost[]
   communityComments          CommunityComment[]
+  communityAdminActions      CommunityAdminAction[]    @relation("CommunityAdminActor")
   checklistItemsCreated      TripChecklistItem[]       @relation("ChecklistItemCreator")
   checklistItemsCompleted    TripChecklistItem[]       @relation("ChecklistItemCompleter")
   expensesCreated            Expense[]                 @relation("ExpenseCreator")
@@ -289,21 +298,46 @@ model AuthAccount {
 }
 
 model Community {
-  id          String            @id @default(uuid()) @db.Uuid
-  slug        String            @unique @db.VarChar(120)
-  name        String            @db.VarChar(120)
-  region      String?           @db.VarChar(120)
-  countryCode String            @default("IN") @map("country_code") @db.Char(2)
-  description String?
-  status      CommunityStatus   @default(ACTIVE)
-  trips       Trip[]
-  followers   CommunityFollow[]
-  posts       CommunityPost[]
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String                 @id @default(uuid()) @db.Uuid
+  slug               String                 @unique @db.VarChar(120)
+  name               String                 @db.VarChar(120)
+  region             String?                @db.VarChar(120)
+  countryCode        String                 @default("IN") @map("country_code") @db.Char(2)
+  description        String?
+  status             CommunityStatus        @default(ACTIVE)
+  version            Int                    @default(1)
+  mergedIntoId       String?                @map("merged_into_id") @db.Uuid
+  mergedInto         Community?             @relation("CommunityMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom         Community[]            @relation("CommunityMerge")
+  trips              Trip[]
+  followers          CommunityFollow[]
+  posts              CommunityPost[]
+  adminActions       CommunityAdminAction[] @relation("CommunityAdminSource")
+  targetAdminActions CommunityAdminAction[] @relation("CommunityAdminTarget")
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, name])
+  @@index([mergedIntoId])
   @@map("communities")
+}
+
+model CommunityAdminAction {
+  id                String                   @id @default(uuid()) @db.Uuid
+  actorId           String                   @map("actor_id") @db.Uuid
+  communityId       String                   @map("community_id") @db.Uuid
+  targetCommunityId String?                  @map("target_community_id") @db.Uuid
+  action            CommunityAdminActionType
+  reason            String                   @db.VarChar(1000)
+  details           Json?
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor             User                     @relation("CommunityAdminActor", fields: [actorId], references: [id], onDelete: Restrict)
+  community         Community                @relation("CommunityAdminSource", fields: [communityId], references: [id], onDelete: Restrict)
+  targetCommunity   Community?               @relation("CommunityAdminTarget", fields: [targetCommunityId], references: [id], onDelete: Restrict)
+
+  @@index([communityId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("community_admin_actions")
 }
 
 model CommunityFollow {

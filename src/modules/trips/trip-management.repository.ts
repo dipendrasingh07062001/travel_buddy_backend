@@ -1,5 +1,7 @@
 import { database } from '../../database/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
+import { lockActiveCommunity } from '../communities/community-lock.js';
+import { AppError } from '../../errors/app-error.js';
 import { publicTripInclude } from './trip.types.js';
 import type { TripManagementRepository } from './trip-management.types.js';
 
@@ -13,19 +15,24 @@ export const prismaTripManagementRepository: TripManagementRepository = {
   },
 
   create(input) {
-    return database.trip.create({
-      data: {
-        ...input,
-        memberships: {
-          create: { userId: input.ownerId, role: 'OWNER' },
-        },
-        conversation: {
-          create: {
-            participants: { create: { userId: input.ownerId } },
+    return database.$transaction(async (transaction) => {
+      if (!(await lockActiveCommunity(transaction, input.communityId))) {
+        throw new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not found.');
+      }
+      return transaction.trip.create({
+        data: {
+          ...input,
+          memberships: {
+            create: { userId: input.ownerId, role: 'OWNER' },
+          },
+          conversation: {
+            create: {
+              participants: { create: { userId: input.ownerId } },
+            },
           },
         },
-      },
-      include: publicTripInclude,
+        include: publicTripInclude,
+      });
     });
   },
 
@@ -56,6 +63,12 @@ export const prismaTripManagementRepository: TripManagementRepository = {
 
   async updateOwned(id, ownerId, expectedVersion, allowedStatuses, data) {
     return database.$transaction(async (transaction) => {
+      if (
+        typeof data.communityId === 'string' &&
+        !(await lockActiveCommunity(transaction, data.communityId))
+      ) {
+        throw new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not found.');
+      }
       const result = await transaction.trip.updateMany({
         where: {
           id,

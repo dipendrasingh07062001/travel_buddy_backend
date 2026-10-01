@@ -16,6 +16,7 @@ import type { ConnectionRouteDependencies } from './modules/connections/connecti
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
 import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
 import { registerCommunityRoutes } from './modules/communities/community.routes.js';
+import { registerCommunityAdminRoutes } from './modules/communities/community-admin.routes.js';
 import type { CommunityRouteDependencies } from './modules/communities/community.types.js';
 import { registerCommunityContentRoutes } from './modules/communities/community-content.routes.js';
 import type { CommunityContentRouteDependencies } from './modules/communities/community-content.types.js';
@@ -96,6 +97,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerTripRoutes(api, authDependencies, options.trips);
       await registerCommunityRoutes(api, authDependencies, options.communities);
+      await registerCommunityAdminRoutes(api, authDependencies);
       await registerCommunityContentRoutes(
         api,
         authDependencies,

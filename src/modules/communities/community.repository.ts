@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { lockActiveCommunity } from './community-lock.js';
 import type {
   CommunityRepository,
   CommunitySummaryRecord,
@@ -137,12 +138,27 @@ export const prismaCommunityRepository: CommunityRepository = {
   },
 
   async findActiveBySlug(slug) {
-    const community = await database.community.findFirst({
-      where: { slug, status: 'ACTIVE' },
-      select: communitySelect,
+    const community = await database.community.findUnique({
+      where: { slug },
+      select: {
+        ...communitySelect,
+        status: true,
+        mergedIntoId: true,
+      },
     });
     if (!community) return null;
-    return (await addActivityCounts([community]))[0] ?? null;
+    const canonical =
+      community.status === 'ACTIVE'
+        ? community
+        : community.mergedIntoId
+          ? await database.community.findFirst({
+              where: { id: community.mergedIntoId, status: 'ACTIVE' },
+              select: communitySelect,
+            })
+          : null;
+    return canonical
+      ? ((await addActivityCounts([canonical]))[0] ?? null)
+      : null;
   },
 
   async listPublishedPosts(communityId, query) {
@@ -173,11 +189,7 @@ export const prismaCommunityRepository: CommunityRepository = {
 
   follow(userId, communityId) {
     return database.$transaction(async (transaction) => {
-      const community = await transaction.community.findFirst({
-        where: { id: communityId, status: 'ACTIVE' },
-        select: { id: true },
-      });
-      if (!community) return null;
+      if (!(await lockActiveCommunity(transaction, communityId))) return null;
       return transaction.communityFollow.upsert({
         where: { communityId_userId: { communityId, userId } },
         create: { communityId, userId },
@@ -188,11 +200,7 @@ export const prismaCommunityRepository: CommunityRepository = {
 
   unfollow(userId, communityId) {
     return database.$transaction(async (transaction) => {
-      const community = await transaction.community.findFirst({
-        where: { id: communityId, status: 'ACTIVE' },
-        select: { id: true },
-      });
-      if (!community) return null;
+      if (!(await lockActiveCommunity(transaction, communityId))) return null;
       const result = await transaction.communityFollow.deleteMany({
         where: { communityId, userId },
       });
