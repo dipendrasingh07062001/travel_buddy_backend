@@ -13,6 +13,12 @@ enum UserStatus {
   DELETED
 }
 
+enum StaffRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
 enum IdentityType {
   EMAIL
   PHONE
@@ -183,6 +189,17 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum ModerationActionType {
+  REPORT_CLAIMED
+  REPORT_INSPECTED
+  REPORT_DISMISSED
+  USER_SUSPENDED
+  USER_RESTORED
+  CONTENT_REMOVED
+  STAFF_ROLE_GRANTED
+  STAFF_ROLE_REVOKED
+}
+
 enum MessageStatus {
   ACTIVE
   EDITED
@@ -197,6 +214,7 @@ enum MessageRevisionAction {
 model User {
   id                         String                    @id @default(uuid()) @db.Uuid
   status                     UserStatus                @default(ACTIVE)
+  staffRole                  StaffRole                 @default(USER) @map("staff_role")
   displayName                String?                   @map("display_name") @db.VarChar(100)
   birthDate                  DateTime?                 @map("birth_date") @db.Date
   profile                    UserProfile?
@@ -212,6 +230,8 @@ model User {
   blocksReceived             UserBlock[]               @relation("Blocked")
   reportsSubmitted           Report[]                  @relation("ReportReporter")
   reportsReceived            Report[]                  @relation("ReportUserTarget")
+  reportsReviewed            Report[]                  @relation("ReportReviewer")
+  moderationActions          ModerationAction[]        @relation("ModerationActor")
   conversationStates         ConversationParticipant[]
   messages                   Message[]
   messageRevisions           MessageRevision[]         @relation("MessageRevisionEditor")
@@ -359,6 +379,7 @@ model Trip {
   status                    TripStatus          @default(DRAFT)
   version                   Int                 @default(1)
   publishedAt               DateTime?           @map("published_at") @db.Timestamptz(6)
+  moderationRemovedAt       DateTime?           @map("moderation_removed_at") @db.Timestamptz(6)
   owner                     User                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   community                 Community           @relation(fields: [communityId], references: [id], onDelete: Restrict)
   connectionRequests        ConnectionRequest[] @relation("ConnectionTargetTrip")
@@ -646,7 +667,12 @@ model Report {
   reason                      ReportReason
   details                     String?            @db.VarChar(1000)
   status                      ReportStatus       @default(SUBMITTED)
+  reviewerId                  String?            @map("reviewer_id") @db.Uuid
+  reviewedAt                  DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  resolvedAt                  DateTime?          @map("resolved_at") @db.Timestamptz(6)
   reporter                    User               @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewer                    User?              @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  moderationActions           ModerationAction[]
   reportedUser                User?              @relation("ReportUserTarget", fields: [reportedUserId], references: [id], onDelete: Restrict)
   reportedTrip                Trip?              @relation(fields: [reportedTripId], references: [id], onDelete: Restrict)
   reportedConnectionRequest   ConnectionRequest? @relation(fields: [reportedConnectionRequestId], references: [id], onDelete: Restrict)
@@ -657,6 +683,8 @@ model Report {
   updatedAt                   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([reporterId, status, createdAt])
+  @@index([status, createdAt, id])
+  @@index([reviewerId, status])
   @@index([reportedUserId])
   @@index([reportedTripId])
   @@index([reportedConnectionRequestId])
@@ -664,6 +692,24 @@ model Report {
   @@index([reportedCommunityPostId])
   @@index([reportedCommunityCommentId])
   @@map("reports")
+}
+
+model ModerationAction {
+  id         String               @id @default(uuid()) @db.Uuid
+  actorId    String?              @map("actor_id") @db.Uuid
+  reportId   String?              @map("report_id") @db.Uuid
+  action     ModerationActionType
+  targetType ReportTargetType     @map("target_type")
+  targetId   String               @map("target_id") @db.Uuid
+  reason     String               @db.VarChar(1000)
+  actor      User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  report     Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([reportId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("moderation_actions")
 }
 
 model AuthIdentity {

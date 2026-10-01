@@ -62,6 +62,7 @@ const managementRepository: TripManagementRepository = {
       status: 'DRAFT',
       version: 1,
       publishedAt: null,
+      moderationRemovedAt: null,
       createdAt: now,
       updatedAt: now,
       owner: { id: input.ownerId, displayName: 'Trip Owner' },

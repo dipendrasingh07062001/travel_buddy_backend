@@ -80,6 +80,7 @@ export type AcceptResult =
   | { kind: 'not_found' }
   | { kind: 'not_pending'; request: ConnectionRequestRecord }
   | { kind: 'trip_unavailable' }
+  | { kind: 'requester_unavailable' }
   | { kind: 'trip_full' }
   | { kind: 'blocked' }
   | { kind: 'conflict' };

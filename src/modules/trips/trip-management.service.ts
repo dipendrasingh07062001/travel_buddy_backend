@@ -115,6 +115,13 @@ function requireOwner(
       'Only the trip owner can perform this action.',
     );
   }
+  if (trip.moderationRemovedAt) {
+    throw new AppError(
+      403,
+      'TRIP_REMOVED_BY_MODERATION',
+      'This trip was removed by moderation.',
+    );
+  }
   return trip;
 }
 

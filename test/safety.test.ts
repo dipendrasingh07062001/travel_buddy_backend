@@ -136,6 +136,9 @@ const repository: SafetyRepository = {
       reason: input.reason,
       details: input.details,
       status: 'SUBMITTED',
+      reviewerId: null,
+      reviewedAt: null,
+      resolvedAt: null,
       createdAt: now,
       updatedAt: now,
     };

@@ -121,11 +121,20 @@ export const publicTripSchema = {
 
 const ownedTripSchema = {
   ...publicTripSchema,
-  required: [...publicTripSchema.required, 'version', 'createdAt', 'updatedAt'],
+  required: [
+    ...publicTripSchema.required,
+    'version',
+    'moderationRemovedAt',
+    'createdAt',
+    'updatedAt',
+  ],
   properties: {
     ...publicTripSchema.properties,
     status: { type: 'string', enum: tripStatusValues },
     version: { type: 'integer', minimum: 1 },
+    moderationRemovedAt: {
+      anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+    },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },
