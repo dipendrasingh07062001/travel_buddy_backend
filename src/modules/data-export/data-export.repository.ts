@@ -45,6 +45,16 @@ export async function createAccountDataExport(userId: string) {
             select: { policyType: true, version: true, acceptedAt: true },
             orderBy: { acceptedAt: 'asc' },
           },
+          dataRequests: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              createdAt: true,
+              cancelledAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       });
       if (!account || account.status === 'DELETED') {
