@@ -2,34 +2,78 @@ import 'dotenv/config';
 
 import { z } from 'zod';
 
+const policyVersion = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,49}$/)
+    .optional(),
+);
+
+const policyUrl = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .url()
+    .max(2048)
+    .refine((value) => new URL(value).protocol === 'https:', {
+      message: 'Policy document links must use HTTPS.',
+    })
+    .optional(),
+);
+
 if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
   console.error('DATABASE_URL is required when NODE_ENV=production');
   process.exit(1);
 }
 
-const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
-  HOST: z.string().min(1).default('0.0.0.0'),
-  PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
-  CORS_ORIGINS: z
-    .string()
-    .min(1)
-    .default('http://localhost:3000,http://localhost:8080'),
-  DATABASE_URL: z
-    .url()
-    .default(
-      'postgresql://travel_buddy:travel_buddy@localhost:5432/travel_buddy',
+const envSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(['development', 'test', 'production'])
+      .default('development'),
+    HOST: z.string().min(1).default('0.0.0.0'),
+    PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
+    CORS_ORIGINS: z
+      .string()
+      .min(1)
+      .default('http://localhost:3000,http://localhost:8080'),
+    DATABASE_URL: z
+      .url()
+      .default(
+        'postgresql://travel_buddy:travel_buddy@localhost:5432/travel_buddy',
+      ),
+    FIREBASE_PROJECT_ID: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().trim().min(1).optional(),
     ),
-  FIREBASE_PROJECT_ID: z.preprocess(
-    (value) => (value === '' ? undefined : value),
-    z.string().trim().min(1).optional(),
-  ),
-});
+    POLICY_TERMS_VERSION: policyVersion,
+    POLICY_TERMS_URL: policyUrl,
+    POLICY_PRIVACY_VERSION: policyVersion,
+    POLICY_PRIVACY_URL: policyUrl,
+    POLICY_COMMUNITY_STANDARDS_VERSION: policyVersion,
+    POLICY_COMMUNITY_STANDARDS_URL: policyUrl,
+  })
+  .superRefine((configuration, context) => {
+    const values = [
+      configuration.POLICY_TERMS_VERSION,
+      configuration.POLICY_TERMS_URL,
+      configuration.POLICY_PRIVACY_VERSION,
+      configuration.POLICY_PRIVACY_URL,
+      configuration.POLICY_COMMUNITY_STANDARDS_VERSION,
+      configuration.POLICY_COMMUNITY_STANDARDS_URL,
+    ];
+    if (values.some(Boolean) && values.some((value) => !value)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Configure all three policy versions and HTTPS URLs together.',
+        path: ['POLICY_TERMS_VERSION'],
+      });
+    }
+  });
 
 const result = envSchema.safeParse(process.env);
 

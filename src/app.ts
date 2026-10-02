@@ -28,6 +28,11 @@ import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
+import { registerPolicyRoutes } from './modules/policies/policy.routes.js';
+import {
+  configuredPolicyCatalog,
+  type PolicyCatalog,
+} from './modules/policies/policy.service.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
@@ -51,6 +56,7 @@ export interface BuildAppOptions {
   communities?: Partial<CommunityRouteDependencies>;
   communityContent?: Partial<CommunityContentRouteDependencies>;
   tripRoom?: Partial<TripRoomRouteDependencies>;
+  policyCatalog?: PolicyCatalog;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -94,6 +100,13 @@ export function buildApp(options: BuildAppOptions = {}) {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
       await registerAuthRoutes(api, authDependencies);
+      await registerPolicyRoutes(
+        api,
+        authDependencies,
+        options.policyCatalog === undefined
+          ? configuredPolicyCatalog()
+          : options.policyCatalog,
+      );
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerTripRoutes(api, authDependencies, options.trips);
       await registerCommunityRoutes(api, authDependencies, options.communities);
