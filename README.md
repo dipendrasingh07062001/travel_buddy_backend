@@ -429,6 +429,26 @@ review staff grants separately; the operator label is not an identity proof.
 For local Postman testing, use disposable accounts and sample content. Review
 actions intentionally persist and must not be run on real user records.
 
+## Account data export
+
+`POST /api/v1/me/data-export` returns a downloadable JSON snapshot for the
+Firebase-authenticated account. The caller supplies only a Bearer ID token;
+the API derives the local user ID from that token. Active and suspended users
+can export; deleted accounts cannot. The response uses `Content-Disposition:
+attachment` and `Cache-Control: private, no-store`; the API does not retain a
+copy. Limit: five exports per token per hour.
+
+The JSON includes the local account, profile, linked sign-in identity, verified
+contacts, policy acceptance history, and account-linked trips, memberships,
+requests, community activity, checklist items, expenses, settlements, sent
+messages, notifications, blocks, and submitted reports. It excludes other
+members' profiles and messages, moderation review notes, IP hashes, and
+Firebase-managed data that is not stored in this database. The export is
+sensitive: the Flutter client must save it only where the user chooses and
+must not log or upload its contents. This is an in-app self-service snapshot,
+not the complete operator-assisted data-request or account-deletion process;
+those require separate retention and policy decisions.
+
 ## Database workflow
 
 The project uses PostgreSQL with Prisma ORM. Prisma keeps database changes in
