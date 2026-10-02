@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { lockActiveCommunity } from './community-lock.js';
 import type { CommunityContentRepository } from './community-content.types.js';
 
 const authorSelect = { id: true, displayName: true } as const;
@@ -66,11 +67,8 @@ function withPublishedAt<T extends { publishedAt: Date | null }>(
 export const prismaCommunityContentRepository: CommunityContentRepository = {
   createPost(input) {
     return database.$transaction(async (transaction) => {
-      const community = await transaction.community.findFirst({
-        where: { id: input.communityId, status: 'ACTIVE' },
-        select: { id: true },
-      });
-      if (!community) return null;
+      if (!(await lockActiveCommunity(transaction, input.communityId)))
+        return null;
       const post = await transaction.communityPost.create({
         data: {
           communityId: input.communityId,

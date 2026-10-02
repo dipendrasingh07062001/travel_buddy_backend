@@ -157,6 +157,33 @@ activity, disabled accounts, and blocked authors for authenticated viewers.
 Posts and comments can be reported through `POST /api/v1/reports` using
 `COMMUNITY_POST` or `COMMUNITY_COMMENT` as the target type.
 
+### Destination administration
+
+Only an active `ADMIN` account can manage destination hubs; moderators cannot.
+The backend provides these routes for an eventual admin interface:
+
+- `GET /api/v1/admin/communities` and `GET /api/v1/admin/communities/:communityId`
+  list or inspect active and archived hubs, including content/follower counts.
+- `POST /api/v1/admin/communities` creates an active hub with a permanent slug.
+- `PATCH /api/v1/admin/communities/:communityId` edits its name, region,
+  country code, or description. The slug is immutable so shared links remain
+  stable.
+- `POST /api/v1/admin/communities/:communityId/archive` archives an **empty**
+  hub; `/reactivate` restores an archived, non-merged hub.
+- `POST /api/v1/admin/communities/:communityId/merge` moves trips, posts, and
+  follows to another active hub. Duplicate follows are consolidated, keeping
+  the earliest follow date. The old slug resolves to the canonical destination.
+- `GET /api/v1/admin/community-actions` reads the audit trail; optionally
+  filter by `communityId`.
+
+Changes require an explanatory `reason` of at least 10 characters and the
+latest `expectedVersion` from the detail/list response. Merge also requires
+`targetCommunityId` and `expectedTargetVersion`. A stale version returns
+`409 COMMUNITY_VERSION_CONFLICT`; refresh both hubs and retry deliberately.
+Merge is a transaction and cannot be undone through the API. Review both hub
+IDs and their content counts before submitting it. These routes are backend
+capabilities only; the Flutter developer can choose how to expose them later.
+
 ## Connection requests and membership
 
 An authenticated user with a complete minimum profile can send a short,
