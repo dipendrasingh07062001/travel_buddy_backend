@@ -439,15 +439,34 @@ attachment` and `Cache-Control: private, no-store`; the API does not retain a
 copy. Limit: five exports per token per hour.
 
 The JSON includes the local account, profile, linked sign-in identity, verified
-contacts, policy acceptance history, and account-linked trips, memberships,
-requests, community activity, checklist items, expenses, settlements, sent
-messages, notifications, blocks, and submitted reports. It excludes other
-members' profiles and messages, moderation review notes, IP hashes, and
-Firebase-managed data that is not stored in this database. The export is
-sensitive: the Flutter client must save it only where the user chooses and
-must not log or upload its contents. This is an in-app self-service snapshot,
-not the complete operator-assisted data-request or account-deletion process;
+contacts, policy acceptance and data-request history, and account-linked trips,
+memberships, requests, community activity, checklist items, expenses,
+settlements, sent messages, notifications, blocks, and submitted reports. It
+excludes other members' profiles and messages, moderation review notes, IP
+hashes, and Firebase-managed data that is not stored in this database. The
+export is sensitive: the Flutter client must save it only where the user
+chooses and must not log or upload its contents. This is an in-app self-service
+snapshot, not the complete operator-assisted data-request or account-deletion process;
 those require separate retention and policy decisions.
+
+### Account data request intake
+
+Users can submit `{ "type": "ACCESS" }` or
+`{ "type": "ACCOUNT_DELETION" }` to `POST /api/v1/me/data-requests` with a
+Firebase Bearer token. `GET /api/v1/me/data-requests` lists only their own
+requests. `POST /api/v1/me/data-requests/:requestId/cancel` cancels one of their
+open requests. These routes also work for suspended accounts, but not deleted
+accounts. Repeating an open request of the same type returns its existing ID;
+the database prevents concurrent duplicate open requests.
+
+`GET /api/v1/admin/data-requests?status=OPEN` gives administrators (not ordinary
+users or moderators) a paginated queue of request IDs, account IDs, type and
+timestamps. This is an intake and visibility workflow for the two founders.
+It does **not** send email, perform an export beyond the self-service endpoint,
+delete or anonymize data, or mark requests fulfilled. Do not promise an
+automatic deletion in the client UI. Agree and document retention, identity
+verification, response handling and deletion rules before implementing the
+fulfilment workflow; the PRD calls for qualified review before public beta.
 
 ## Database workflow
 

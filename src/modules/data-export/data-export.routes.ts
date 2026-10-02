@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-import { AppError } from '../../errors/app-error.js';
-import { verifyRequestIdentity } from '../auth/auth.service.js';
+import { authenticateRequestIncludingSuspended } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { createAccountDataExport } from './data-export.repository.js';
 
@@ -36,22 +35,7 @@ export async function registerDataExportRoutes(
       },
     },
     async (request, reply) => {
-      const identity = await verifyRequestIdentity(request, auth.tokenVerifier);
-      const user = await auth.repository.findFirebaseUser(identity.subject);
-      if (!user) {
-        throw new AppError(
-          403,
-          'ACCOUNT_NOT_PROVISIONED',
-          'Create the local account before accessing this resource.',
-        );
-      }
-      if (user.status === 'DELETED') {
-        throw new AppError(
-          403,
-          'ACCOUNT_DISABLED',
-          'This account cannot be exported.',
-        );
-      }
+      const user = await authenticateRequestIncludingSuspended(request, auth);
 
       const exportData = await createAccountDataExport(user.id);
       request.log.info({ userId: user.id }, 'Account data export generated');

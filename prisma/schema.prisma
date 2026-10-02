@@ -40,6 +40,16 @@ enum PolicyType {
   COMMUNITY_STANDARDS
 }
 
+enum AccountDataRequestType {
+  ACCESS
+  ACCOUNT_DELETION
+}
+
+enum AccountDataRequestStatus {
+  OPEN
+  CANCELLED
+}
+
 enum CommunityStatus {
   ACTIVE
   ARCHIVED
@@ -229,6 +239,7 @@ model User {
   authAccounts               AuthAccount[]
   identities                 AuthIdentity[]
   policyAcceptances          PolicyAcceptance[]
+  dataRequests               AccountDataRequest[]
   trips                      Trip[]
   sentConnectionRequests     ConnectionRequest[]       @relation("ConnectionRequester")
   receivedConnectionRequests ConnectionRequest[]       @relation("ConnectionRecipient")
@@ -773,4 +784,18 @@ model PolicyAcceptance {
   @@unique([userId, policyType, version])
   @@index([policyType, version])
   @@map("policy_acceptances")
+}
+
+model AccountDataRequest {
+  id          String                   @id @default(uuid()) @db.Uuid
+  userId      String                   @map("user_id") @db.Uuid
+  type        AccountDataRequestType
+  status      AccountDataRequestStatus @default(OPEN)
+  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  cancelledAt DateTime?                @map("cancelled_at") @db.Timestamptz(6)
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt, id])
+  @@index([status, createdAt, id])
+  @@map("account_data_requests")
 }

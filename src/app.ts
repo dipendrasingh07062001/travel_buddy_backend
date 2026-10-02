@@ -13,6 +13,7 @@ import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
 import { registerDataExportRoutes } from './modules/data-export/data-export.routes.js';
+import { registerDataRequestRoutes } from './modules/data-requests/data-request.routes.js';
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
 import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
@@ -110,6 +111,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       );
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerDataExportRoutes(api, authDependencies);
+      await registerDataRequestRoutes(api, authDependencies);
       await registerTripRoutes(api, authDependencies, options.trips);
       await registerCommunityRoutes(api, authDependencies, options.communities);
       await registerCommunityAdminRoutes(api, authDependencies);

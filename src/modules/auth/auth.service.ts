@@ -60,6 +60,15 @@ export async function authenticateRequest(
   request: FastifyRequest,
   dependencies: AuthRouteDependencies,
 ): Promise<AuthenticatedUser> {
+  return requireActiveUser(
+    await authenticateRequestIncludingSuspended(request, dependencies),
+  );
+}
+
+export async function authenticateRequestIncludingSuspended(
+  request: FastifyRequest,
+  dependencies: AuthRouteDependencies,
+): Promise<AuthenticatedUser> {
   const identity = await verifyRequestIdentity(
     request,
     dependencies.tokenVerifier,
@@ -72,7 +81,14 @@ export async function authenticateRequest(
       'Create the local account before accessing this resource.',
     );
   }
-  return requireActiveUser(user);
+  if (user.status === 'DELETED') {
+    throw new AppError(
+      403,
+      'ACCOUNT_DISABLED',
+      'This account is not permitted to access this resource.',
+    );
+  }
+  return user;
 }
 
 export async function authenticateRequestIfPresent(
