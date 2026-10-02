@@ -266,9 +266,11 @@ describe('versioned policy acceptance', () => {
       headers: headers('alice'),
     });
     expect(
-      allCurrent.json().data.every(
-        (policy: { needsAcceptance: boolean }) => !policy.needsAcceptance,
-      ),
+      allCurrent
+        .json()
+        .data.every(
+          (policy: { needsAcceptance: boolean }) => !policy.needsAcceptance,
+        ),
     ).toBe(true);
 
     const upgraded = await upgradedApp.inject({
