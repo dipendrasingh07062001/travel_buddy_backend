@@ -88,6 +88,33 @@ Never commit service-account credentials.
 Automated HTTP tests inject a fake token verifier and therefore do not need
 Firebase credentials. Real Firebase requests require the project configuration.
 
+## Policy acceptance foundation
+
+Policy text is not stored or invented by this API. Once approved Terms, Privacy
+Notice, and Community Standards are published, configure all six
+`POLICY_*_VERSION` and `POLICY_*_URL` settings shown in `.env.example`. Document
+links must use HTTPS. Until then, the public catalog reports
+`configured: false`, and an acceptance attempt returns
+`503 POLICIES_UNAVAILABLE`.
+Keep each published document immutable at its version; publish a new version
+when the text changes.
+
+- `GET /api/v1/policies` lists the current approved document versions and links.
+- `GET /api/v1/me/policy-acceptances` shows which current versions the signed-in
+  account has accepted.
+- `POST /api/v1/me/policy-acceptances` records one explicit acceptance using
+  `{ "policyType": "TERMS", "version": "<current-version>", "accepted": true }`.
+
+`PRIVACY` and `COMMUNITY_STANDARDS` use the same request shape. The backend
+accepts only the server-configured current version, records its timestamp, and
+makes a repeated request idempotent. A stale version returns
+`409 POLICY_VERSION_CHANGED`; old acceptance records remain as history when a
+new document version is published. The Flutter or web client must show the
+actual linked document before asking for acceptance. **This foundation does not
+yet gate trip publishing or other actions.** Enable such enforcement only after
+the policy documents, versions, and onboarding flow have been approved and
+tested together.
+
 ## User profiles
 
 Authenticated adults can update their display name, birth date, general city or
