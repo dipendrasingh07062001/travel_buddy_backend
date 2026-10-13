@@ -1,6 +1,5 @@
-import { Prisma } from '@prisma/client';
-
 import { AppError } from '../../errors/app-error.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { requireCompleteProfile } from '../profiles/profile-completeness.js';
 import type {

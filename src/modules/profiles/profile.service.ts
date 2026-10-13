@@ -1,6 +1,5 @@
-import type { ProfileVisibility } from '@prisma/client';
-
 import { AppError } from '../../errors/app-error.js';
+import type { ProfileVisibility } from '../../generated/prisma/client.js';
 import type { UpdateProfileInput } from './profile.types.js';
 
 export interface UpdateProfileBody {

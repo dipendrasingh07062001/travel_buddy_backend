@@ -1,6 +1,5 @@
-import type { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { authenticatedUserSelect } from '../auth/auth.repository.js';
 import type { ProfileRepository } from './profile.types.js';
 

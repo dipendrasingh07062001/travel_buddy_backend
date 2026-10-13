@@ -1,9 +1,9 @@
+import type { FastifyInstance } from 'fastify';
+
 import type {
   AccountDataRequestStatus,
   AccountDataRequestType,
-} from '@prisma/client';
-import type { FastifyInstance } from 'fastify';
-
+} from '../../generated/prisma/client.js';
 import {
   authenticateRequest,
   authenticateRequestIncludingSuspended,

@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import pg from 'pg';
 
+import { postgresConnectionString } from '../database/connection-settings.js';
 import {
   parseRealtimeEvent,
   realtimeChannel,
@@ -20,25 +21,6 @@ export interface RealtimeListenerOptions {
   maximumRetryMs?: number;
 }
 
-// Prisma-only connection settings that node-postgres does not understand.
-const prismaOnlyParameters = [
-  'connection_limit',
-  'pool_timeout',
-  'pgbouncer',
-  'schema',
-  'socket_timeout',
-  'statement_cache_size',
-  'connect_timeout',
-];
-
-function listenerConnectionString(databaseUrl: string): string {
-  const url = new URL(databaseUrl);
-  for (const parameter of prismaOnlyParameters) {
-    url.searchParams.delete(parameter);
-  }
-  return url.toString();
-}
-
 // Holds one dedicated connection that LISTENs for realtime events, so every
 // API instance hears every committed change. LISTEN needs a direct database
 // connection; it does not work through a transaction-mode pooler (PgBouncer).
@@ -48,7 +30,7 @@ export function startRealtimeListener(
 ): RealtimeListener {
   const initialRetryMs = options.initialRetryMs ?? 1_000;
   const maximumRetryMs = options.maximumRetryMs ?? 30_000;
-  const connectionString = listenerConnectionString(databaseUrl);
+  const connectionString = postgresConnectionString(databaseUrl);
   if (new URL(databaseUrl).searchParams.get('pgbouncer') === 'true') {
     options.logger.warn(
       'DATABASE_URL points at PgBouncer; realtime events need a direct connection',

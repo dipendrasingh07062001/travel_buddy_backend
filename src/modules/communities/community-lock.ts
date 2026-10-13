@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../../generated/prisma/client.js';
 
 // A shared row lock keeps a concurrent admin merge/archive from moving or
 // disabling the community between validation and the new content write.

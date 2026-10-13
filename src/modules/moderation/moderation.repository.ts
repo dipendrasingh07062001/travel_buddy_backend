@@ -1,7 +1,11 @@
-import type { Prisma, Report, ReportStatus, StaffRole } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import type {
+  Prisma,
+  Report,
+  ReportStatus,
+  StaffRole,
+} from '../../generated/prisma/client.js';
 import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
 import {
   publicObjectUrl,

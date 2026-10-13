@@ -1,6 +1,5 @@
-import { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
 import {

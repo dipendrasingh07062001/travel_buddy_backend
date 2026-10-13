@@ -1,4 +1,7 @@
-import type { Prisma, TripChecklistItemStatus } from '@prisma/client';
+import type {
+  Prisma,
+  TripChecklistItemStatus,
+} from '../../generated/prisma/client.js';
 
 export const checklistItemInclude = {
   createdBy: { select: { id: true, displayName: true } },

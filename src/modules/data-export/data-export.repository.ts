@@ -1,7 +1,6 @@
-import { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 /** Only records belonging to this account are selected. Never export joined users or internal review notes. */
 export async function createAccountDataExport(userId: string) {

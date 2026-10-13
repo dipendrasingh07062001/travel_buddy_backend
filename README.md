@@ -693,6 +693,44 @@ The Docker image runs this automatically each time the container starts.
 Never run development migrations or destructive reset commands against staging
 or production databases.
 
+Prisma 7 generates its client into `src/generated/prisma`, which is not
+committed. `npm install` and `npm run build` regenerate it. After changing the
+schema, run `npm run db:generate` yourself: `db:migrate:dev` no longer
+generates the client or runs the seed.
+
+### Connection settings
+
+The API talks to PostgreSQL through node-postgres (`@prisma/adapter-pg`).
+These Prisma-style `DATABASE_URL` parameters are still honoured:
+
+| Parameter          | Effect                                                |
+| ------------------ | ----------------------------------------------------- |
+| `connection_limit` | Maximum pool size (default 10 per process)            |
+| `connect_timeout`  | Seconds to wait for a connection (default 5)          |
+| `schema`           | PostgreSQL schema for Prisma queries (default public) |
+
+Other Prisma-only parameters such as `pool_timeout` and `pgbouncer` are
+ignored. Encryption settings now behave like other Node.js tools:
+`sslmode=require` checks the server certificate, so prefer
+`sslmode=verify-full` for managed databases with a public certificate. A
+database with a self-signed certificate needs its CA in `NODE_EXTRA_CA_CERTS`;
+`uselibpqcompat=true&sslmode=require` encrypts without checking it. A database
+on the same server as the API needs no SSL parameters.
+
+Inside a transaction, Prisma 7 loads related records in parallel on one
+connection. node-postgres queues those queries and prints a one-time
+`DeprecationWarning` about it; the results are correct. pg 9 removes that
+queue, so Dependabot holds pg at major version 8 until Prisma changes this.
+
+### Dependency notes
+
+- `package.json` overrides `mysql2` and `deepmerge-ts`, which the Prisma CLI
+  pins to versions with published security advisories. The API never loads
+  either one. Remove the overrides once a Prisma release ships fixed versions.
+- TypeScript stays on 6.x until `typescript-eslint` supports TypeScript 7, and
+  `@types/node` follows the Node.js 24 runtime. Dependabot ignores those major
+  updates, together with Prisma 8.
+
 ## Quality checks
 
 ```bash
@@ -718,10 +756,12 @@ src/
   modules/      Product modules and HTTP routes
   realtime/     Live event stream and PostgreSQL LISTEN/NOTIFY bus
   storage/      Cloudflare R2 client and upload processing
+  generated/    Prisma client (generated, not committed)
   app.ts        Fastify application composition
   server.ts     Process startup and graceful shutdown
 test/           Automated tests
 prisma/         Database schema and committed migrations
+scripts/        Staff-role commands and the Docker entrypoint
 ```
 
 ## Git workflow

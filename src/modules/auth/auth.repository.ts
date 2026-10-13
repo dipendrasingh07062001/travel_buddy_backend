@@ -1,7 +1,6 @@
-import { Prisma, type IdentityType } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { Prisma, type IdentityType } from '../../generated/prisma/client.js';
 import type {
   AuthenticatedUser,
   AuthRepository,

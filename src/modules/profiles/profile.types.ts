@@ -1,5 +1,4 @@
-import type { ProfileVisibility } from '@prisma/client';
-
+import type { ProfileVisibility } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 
 export interface UpdateProfileInput {

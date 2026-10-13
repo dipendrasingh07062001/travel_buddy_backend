@@ -1,7 +1,6 @@
-import type { PolicyType } from '@prisma/client';
-
 import { env } from '../../config/env.js';
 import { AppError } from '../../errors/app-error.js';
+import type { PolicyType } from '../../generated/prisma/client.js';
 
 export const policyTypes = [
   'TERMS',

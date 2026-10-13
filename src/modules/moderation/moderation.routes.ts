@@ -1,7 +1,7 @@
-import type { ReportStatus } from '@prisma/client';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { AppError } from '../../errors/app-error.js';
+import type { ReportStatus } from '../../generated/prisma/client.js';
 import {
   deleteObjectQuietly,
   requireStorage,

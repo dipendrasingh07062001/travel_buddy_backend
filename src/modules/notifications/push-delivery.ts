@@ -1,7 +1,7 @@
-import type { NotificationType } from '@prisma/client';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { database } from '../../database/client.js';
+import type { NotificationType } from '../../generated/prisma/client.js';
 import { notificationTitles } from './notification-titles.js';
 
 export interface PushMessage {

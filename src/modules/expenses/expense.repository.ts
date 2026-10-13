@@ -1,7 +1,6 @@
-import { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { calculateBalances } from './expense.service.js';
 import {

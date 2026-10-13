@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { database as prisma } from '../src/database/client.js';
 
 const demoUserId = '10000000-0000-4000-8000-000000000001';
 

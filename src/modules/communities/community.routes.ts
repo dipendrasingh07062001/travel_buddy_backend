@@ -1,6 +1,9 @@
-import type { CommunityPostType, TripTransport } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import type {
+  CommunityPostType,
+  TripTransport,
+} from '../../generated/prisma/client.js';
 import {
   authenticateRequest,
   authenticateRequestIfPresent,

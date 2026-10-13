@@ -1,7 +1,6 @@
-import type { Prisma, PushPlatform } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import type { Prisma, PushPlatform } from '../../generated/prisma/client.js';
 
 // Older registrations beyond this are usually reinstalled apps or cleared
 // browsers whose tokens no longer work.

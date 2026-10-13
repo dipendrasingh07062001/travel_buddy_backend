@@ -1,6 +1,6 @@
-import type { PushPlatform } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import type { PushPlatform } from '../../generated/prisma/client.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import {

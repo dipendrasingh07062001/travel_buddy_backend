@@ -1,6 +1,5 @@
-import type { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
 import { lockActiveCommunity } from './community-lock.js';
 import type {

@@ -1,6 +1,5 @@
-import type { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { lockActiveCommunity } from './community-lock.js';
 import type { CommunityContentRepository } from './community-content.types.js';
 

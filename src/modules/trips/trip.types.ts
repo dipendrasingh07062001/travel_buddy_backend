@@ -1,4 +1,4 @@
-import type { Prisma, TripTransport } from '@prisma/client';
+import type { Prisma, TripTransport } from '../../generated/prisma/client.js';
 
 export const publicTripStatuses = ['PUBLISHED', 'FULL'] as const;
 

@@ -1,6 +1,8 @@
-import { Prisma, type TripMembershipStatus } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import {
+  Prisma,
+  type TripMembershipStatus,
+} from '../../generated/prisma/client.js';
 import {
   checklistItemInclude,
   type MembershipMutationResult,

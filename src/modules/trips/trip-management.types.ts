@@ -1,5 +1,8 @@
-import type { Prisma, TripStatus, TripTransport } from '@prisma/client';
-
+import type {
+  Prisma,
+  TripStatus,
+  TripTransport,
+} from '../../generated/prisma/client.js';
 import type { PublicTripRecord } from './trip.types.js';
 
 export interface CreateTripInput {

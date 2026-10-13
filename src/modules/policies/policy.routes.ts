@@ -1,6 +1,6 @@
-import type { PolicyType } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import type { PolicyType } from '../../generated/prisma/client.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import {

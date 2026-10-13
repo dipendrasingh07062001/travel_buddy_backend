@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import type { NotificationType } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { database } from '../src/database/client.js';
+import type { NotificationType } from '../src/generated/prisma/client.js';
 import type { TokenVerifier } from '../src/modules/auth/auth.types.js';
 import { createNotifications } from '../src/modules/notifications/notification.repository.js';
 import {

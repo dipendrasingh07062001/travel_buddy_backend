@@ -1,6 +1,6 @@
-import type { Notification } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import type { Notification } from '../../generated/prisma/client.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import {

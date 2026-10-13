@@ -1,7 +1,6 @@
-import { Prisma, type CommunityStatus } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { Prisma, type CommunityStatus } from '../../generated/prisma/client.js';
 
 export interface CommunityMetadata {
   name: string;

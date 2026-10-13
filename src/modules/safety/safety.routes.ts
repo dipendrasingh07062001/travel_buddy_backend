@@ -1,10 +1,10 @@
+import type { FastifyInstance } from 'fastify';
+
 import type {
   ReportReason,
   ReportStatus,
   ReportTargetType,
-} from '@prisma/client';
-import type { FastifyInstance } from 'fastify';
-
+} from '../../generated/prisma/client.js';
 import type { ObjectStorage } from '../../storage/object-storage.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';

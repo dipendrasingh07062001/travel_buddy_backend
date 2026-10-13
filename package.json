@@ -26,8 +26,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "staff:grant": "node scripts/grant-staff.mjs",
-    "staff:revoke": "node scripts/revoke-staff.mjs",
+    "staff:grant": "tsx scripts/grant-staff.ts",
+    "staff:revoke": "tsx scripts/revoke-staff.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -35,28 +35,33 @@
     "@fastify/helmet": "^13.1.1",
     "@fastify/multipart": "^10.1.2",
     "@fastify/rate-limit": "^11.2.0",
-    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger": "^9.9.0",
     "@fastify/swagger-ui": "^6.1.1",
-    "@prisma/client": "6.12.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "aws4fetch": "^1.0.20",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.4",
-    "firebase-admin": "^14.4.0",
+    "firebase-admin": "^14.5.0",
     "pg": "^8.23.0",
-    "prisma": "6.12.0",
+    "prisma": "7.10.0",
     "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^22.20.3",
+    "@types/node": "^24.19.0",
     "@types/pg": "^8.23.1",
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "globals": "^17.12.0",
-    "prettier": "^3.9.6",
-    "tsx": "^4.23.13",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0",
-    "vitest": "^5.0.1"
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.4"
   }
 }

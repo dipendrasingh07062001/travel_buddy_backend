@@ -1,4 +1,7 @@
-import type { ConnectionRequestStatus, Prisma } from '@prisma/client';
+import type {
+  ConnectionRequestStatus,
+  Prisma,
+} from '../../generated/prisma/client.js';
 
 export const connectionRequestInclude = {
   requester: {

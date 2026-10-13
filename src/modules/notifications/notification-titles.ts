@@ -1,4 +1,4 @@
-import type { NotificationType } from '@prisma/client';
+import type { NotificationType } from '../../generated/prisma/client.js';
 
 // Titles stay generic on purpose: inbox entries and push alerts never include
 // message text, amounts, or private profile details.

@@ -1,7 +1,5 @@
-import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { database } from '../src/database/client.js';
 
-const database = new PrismaClient();
 const [userId] = process.argv.slice(2);
 const operator = process.env.STAFF_GRANT_OPERATOR?.trim();
 

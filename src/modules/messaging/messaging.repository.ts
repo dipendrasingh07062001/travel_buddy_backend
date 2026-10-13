@@ -1,6 +1,5 @@
-import type { TripStatus } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import type { TripStatus } from '../../generated/prisma/client.js';
 import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import {

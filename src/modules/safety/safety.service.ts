@@ -1,10 +1,9 @@
+import { AppError } from '../../errors/app-error.js';
 import {
   Prisma,
   type ReportReason,
   type ReportTargetType,
-} from '@prisma/client';
-
-import { AppError } from '../../errors/app-error.js';
+} from '../../generated/prisma/client.js';
 import type {
   BlockRecord,
   CreateReportInput,
