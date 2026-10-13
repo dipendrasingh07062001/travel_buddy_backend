@@ -79,6 +79,7 @@ export async function createAccountDataExport(userId: string) {
         expenseShares,
         expenseRevisions,
         expenseDisputes,
+        expenseReceipts,
         settlements,
         messages,
         messageRevisions,
@@ -272,6 +273,18 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: { createdAt: 'asc' },
         }),
+        tx.expenseReceipt.findMany({
+          where: { uploadedById: userId },
+          select: {
+            id: true,
+            expenseId: true,
+            contentType: true,
+            sizeBytes: true,
+            createdAt: true,
+            removedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
         tx.settlement.findMany({
           where: { OR: [{ payerId: userId }, { receiverId: userId }] },
           select: {
@@ -380,6 +393,7 @@ export async function createAccountDataExport(userId: string) {
           expenseShares,
           expenseRevisions,
           expenseDisputes,
+          expenseReceipts,
           settlements,
           messages,
           messageRevisions,

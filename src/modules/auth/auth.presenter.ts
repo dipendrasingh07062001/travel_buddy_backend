@@ -1,3 +1,4 @@
+import { publicObjectUrl } from '../../storage/object-storage.js';
 import type { AuthenticatedUser } from './auth.types.js';
 
 export function presentAuthenticatedUser(user: AuthenticatedUser) {
@@ -10,6 +11,7 @@ export function presentAuthenticatedUser(user: AuthenticatedUser) {
     profile: user.profile
       ? {
           profilePhotoAvailable: Boolean(user.profile.profilePhotoStorageKey),
+          profilePhotoUrl: publicObjectUrl(user.profile.profilePhotoStorageKey),
           homeCity: user.profile.homeCity,
           homeRegion: user.profile.homeRegion,
           biography: user.profile.biography,

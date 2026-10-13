@@ -128,7 +128,23 @@ settings are returned only to the authenticated account through `/me`.
 `GET /api/v1/users/:userId` is public and deliberately returns an approximate
 age range and account-creation month. It never returns exact birth date, email,
 phone number, Firebase UID, internal photo storage key, or privacy settings.
-Profile-photo upload is deferred until an object-storage provider is selected.
+
+### Profile photos
+
+- `PUT /api/v1/me/profile-photo` uploads or replaces the photo. Send
+  `multipart/form-data` with one file in the `photo` field: JPEG, PNG, or WebP,
+  up to 5 MB.
+- `DELETE /api/v1/me/profile-photo` removes it.
+
+The API decodes and re-encodes every photo: it is rotated upright, cropped to
+512x512, converted to WebP, and stripped of all metadata, including the GPS
+location phones embed. Each upload gets a new random file name, and the
+previous file is deleted. Both endpoints return the private user from `/me`.
+
+Profile responses include `profilePhotoUrl`, a public URL on the R2 custom
+domain, and `profilePhotoAvailable`. The URL never changes for a given photo,
+so clients can cache it indefinitely. File storage is described under
+[File storage (Cloudflare R2)](#file-storage-cloudflare-r2).
 
 ## Trip management
 
@@ -281,8 +297,9 @@ so internal history is retained.
 Non-owner members can leave, and the trip owner can remove a non-owner member.
 Both operations atomically retain membership history, revoke future room
 access, reduce group capacity, increment the trip version, and reopen a `FULL`
-trip as `PUBLISHED`. The owner cannot leave or be removed. Real-time delivery
-and notification fan-out are separate milestones.
+trip as `PUBLISHED`. The owner cannot leave or be removed. New messages reach
+other members through the notification inbox and push notifications; real-time
+delivery inside an open room is a separate milestone.
 
 ## Shared expense ledger
 
@@ -366,8 +383,26 @@ confirm or reject one addressed to them, record their own payment against an
 outstanding balance, and flag an expense affecting them. These narrow actions
 remain available after a trip is completed or cancelled so past obligations can
 be reconciled; expense entries themselves remain read-only. A block prevents
-new settlement records between the two accounts. Receipt uploads and
-notification delivery remain separate milestones.
+new settlement records between the two accounts.
+
+### Receipts
+
+- `POST /api/v1/expenses/:expenseId/receipts` attaches a receipt. Send
+  `multipart/form-data` with one file in the `receipt` field: a JPEG, PNG, or
+  WebP image, or a PDF, up to 10 MB.
+- `GET /api/v1/expenses/:expenseId/receipts` lists an expense's receipts.
+- `DELETE /api/v1/expense-receipts/:receiptId` removes one.
+
+Only the member who recorded or paid an expense can attach receipts, at most 5
+per expense, and not to a voided expense or a read-only ledger. Any active
+trip member can list them. The uploader or the expense's recorder can remove
+one; the file is deleted, and a record that it existed stays in the ledger
+history. Images are re-encoded like profile photos (WebP, at most 2000 px,
+metadata stripped); PDFs are stored as uploaded.
+
+Receipts are private. Each listed receipt has a `url` that is signed for that
+request and stops working after 15 minutes (`urlExpiresAt`); list the receipts
+again to get fresh links.
 
 ## In-app notifications
 
@@ -489,8 +524,9 @@ copy. Limit: five exports per account per hour.
 The JSON includes the local account, profile, linked sign-in identity, verified
 contacts, policy acceptance and data-request history, and account-linked trips,
 memberships, requests, community activity, checklist items, expenses,
-settlements, sent messages, notifications, push device registrations (platform
-and dates, not tokens), blocks, and submitted reports. It
+settlements, receipts the account uploaded (file type, size, and dates, not
+links), sent messages, notifications, push device registrations (platform and
+dates, not tokens), blocks, and submitted reports. It
 excludes other members' profiles and messages, moderation review notes, IP
 hashes, and Firebase-managed data that is not stored in this database. The
 export is sensitive: the Flutter client must save it only where the user
@@ -516,6 +552,36 @@ delete or anonymize data, or mark requests fulfilled. Do not promise an
 automatic deletion in the client UI. Agree and document retention, identity
 verification, response handling and deletion rules before implementing the
 fulfilment workflow; the PRD calls for qualified review before public beta.
+
+## File storage (Cloudflare R2)
+
+Profile photos and receipts are stored in Cloudflare R2, which has a free tier
+of 10 GB of storage per month and no charge for downloads. Files go through the
+API, which validates and re-encodes them, so clients never upload to R2
+directly and buckets need no CORS rules.
+
+Set up R2 once:
+
+1. Create two buckets. The public bucket holds profile photos; the private
+   bucket holds receipts and must never be made public.
+2. Connect a custom domain to the public bucket, such as
+   `media.your-domain.example`. The `r2.dev` address works for development but
+   is rate limited and not meant for production.
+3. Create an R2 API token with **Object Read & Write** permission for those two
+   buckets only.
+4. Configure all six settings together:
+
+   | Variable               | Value                                              |
+   | ---------------------- | -------------------------------------------------- |
+   | `R2_ACCOUNT_ID`        | Cloudflare account ID (32 characters)              |
+   | `R2_ACCESS_KEY_ID`     | API token access key ID                            |
+   | `R2_SECRET_ACCESS_KEY` | API token secret access key                        |
+   | `R2_PUBLIC_BUCKET`     | Public bucket name                                 |
+   | `R2_PRIVATE_BUCKET`    | Private bucket name                                |
+   | `R2_PUBLIC_BASE_URL`   | HTTPS address of the public bucket's custom domain |
+
+Without these settings the API still runs: upload and receipt endpoints return
+`503 STORAGE_UNAVAILABLE`, and `profilePhotoUrl` is `null`.
 
 ## Rate limiting and proxies
 
@@ -580,6 +646,7 @@ src/
   config/       Environment parsing and validation
   database/     Database connection infrastructure
   modules/      Product modules and HTTP routes
+  storage/      Cloudflare R2 client and upload processing
   app.ts        Fastify application composition
   server.ts     Process startup and graceful shutdown
 test/           Automated tests

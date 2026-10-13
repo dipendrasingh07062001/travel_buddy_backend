@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -18,6 +19,7 @@ import { registerDataRequestRoutes } from './modules/data-requests/data-request.
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
 import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
+import { registerReceiptRoutes } from './modules/expenses/receipt.routes.js';
 import { registerCommunityRoutes } from './modules/communities/community.routes.js';
 import { registerCommunityAdminRoutes } from './modules/communities/community-admin.routes.js';
 import type { CommunityRouteDependencies } from './modules/communities/community.types.js';
@@ -37,6 +39,7 @@ import {
   configuredPolicyCatalog,
   type PolicyCatalog,
 } from './modules/policies/policy.service.js';
+import { registerProfilePhotoRoutes } from './modules/profiles/profile-photo.routes.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
@@ -47,6 +50,10 @@ import {
   registerTripRoutes,
   type TripRouteDependencies,
 } from './modules/trips/trip.routes.js';
+import {
+  configuredObjectStorage,
+  type ObjectStorage,
+} from './storage/object-storage.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
@@ -62,6 +69,7 @@ export interface BuildAppOptions {
   communityContent?: Partial<CommunityContentRouteDependencies>;
   tripRoom?: Partial<TripRoomRouteDependencies>;
   policyCatalog?: PolicyCatalog;
+  storage?: ObjectStorage | null;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -73,6 +81,8 @@ export function buildApp(options: BuildAppOptions = {}) {
     },
   });
   const authDependencies = resolveAuthDependencies(options.auth);
+  const storage =
+    options.storage === undefined ? configuredObjectStorage() : options.storage;
 
   app.register(helmet);
   app.register(cors, {
@@ -104,6 +114,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(swaggerUi, { routePrefix: '/docs' });
   app.register(
     async (api) => {
+      // Uploads are single files; each route sets its own size limit.
+      await api.register(multipart, {
+        limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
+      });
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
@@ -116,6 +130,7 @@ export function buildApp(options: BuildAppOptions = {}) {
           : options.policyCatalog,
       );
       await registerProfileRoutes(api, authDependencies, options.profiles);
+      await registerProfilePhotoRoutes(api, authDependencies, storage);
       await registerDataExportRoutes(api, authDependencies);
       await registerDataRequestRoutes(api, authDependencies);
       await registerTripRoutes(api, authDependencies, options.trips);
@@ -139,6 +154,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);
       await registerFinancialRoutes(api, authDependencies);
+      await registerReceiptRoutes(api, authDependencies, storage);
     },
     { prefix: '/api/v1' },
   );

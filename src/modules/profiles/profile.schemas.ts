@@ -24,6 +24,7 @@ export const privateUserSchema = {
           type: 'object',
           required: [
             'profilePhotoAvailable',
+            'profilePhotoUrl',
             'homeCity',
             'homeRegion',
             'biography',
@@ -34,6 +35,9 @@ export const privateUserSchema = {
           ],
           properties: {
             profilePhotoAvailable: { type: 'boolean' },
+            profilePhotoUrl: {
+              anyOf: [{ type: 'string', format: 'uri' }, { type: 'null' }],
+            },
             homeCity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
             homeRegion: { anyOf: [{ type: 'string' }, { type: 'null' }] },
             biography: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -60,6 +64,7 @@ export const publicUserSchema = {
     'ageRange',
     'accountCreatedMonth',
     'profilePhotoAvailable',
+    'profilePhotoUrl',
     'homeCity',
     'homeRegion',
     'biography',
@@ -77,6 +82,9 @@ export const publicUserSchema = {
     },
     accountCreatedMonth: { type: 'string', pattern: '^\\d{4}-\\d{2}$' },
     profilePhotoAvailable: { type: 'boolean' },
+    profilePhotoUrl: {
+      anyOf: [{ type: 'string', format: 'uri' }, { type: 'null' }],
+    },
     homeCity: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     homeRegion: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     biography: { anyOf: [{ type: 'string' }, { type: 'null' }] },

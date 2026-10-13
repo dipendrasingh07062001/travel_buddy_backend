@@ -279,6 +279,8 @@ model User {
   expenseShares              ExpenseShare[]
   expenseRevisions           ExpenseRevision[]
   expenseDisputes            ExpenseDispute[]
+  expenseReceiptsUploaded    ExpenseReceipt[]          @relation("ExpenseReceiptUploader")
+  expenseReceiptsRemoved     ExpenseReceipt[]          @relation("ExpenseReceiptRemover")
   settlementsSent            Settlement[]              @relation("SettlementPayer")
   settlementsReceived        Settlement[]              @relation("SettlementReceiver")
   notifications              Notification[]
@@ -549,6 +551,7 @@ model Expense {
   shares      ExpenseShare[]
   revisions   ExpenseRevision[]
   disputes    ExpenseDispute[]
+  receipts    ExpenseReceipt[]
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -583,6 +586,25 @@ model ExpenseRevision {
   @@unique([expenseId, version])
   @@index([actorId, createdAt])
   @@map("expense_revisions")
+}
+
+model ExpenseReceipt {
+  id           String    @id @default(uuid()) @db.Uuid
+  expenseId    String    @map("expense_id") @db.Uuid
+  uploadedById String    @map("uploaded_by_id") @db.Uuid
+  storageKey   String    @unique @map("storage_key") @db.VarChar(500)
+  contentType  String    @map("content_type") @db.VarChar(100)
+  sizeBytes    Int       @map("size_bytes")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  removedAt    DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedById  String?   @map("removed_by_id") @db.Uuid
+  expense      Expense   @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedBy   User      @relation("ExpenseReceiptUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  removedBy    User?     @relation("ExpenseReceiptRemover", fields: [removedById], references: [id], onDelete: Restrict)
+
+  @@index([expenseId, createdAt])
+  @@index([uploadedById, createdAt])
+  @@map("expense_receipts")
 }
 
 model ExpenseDispute {
