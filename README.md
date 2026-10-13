@@ -416,8 +416,9 @@ for the signed-in account:
 - `POST /api/v1/me/notifications/read-all`
 
 The inbox covers connection requests and decisions, trip plan/status changes,
-new group messages, expense creation/edits/voiding, and external settlement
-requests/decisions. Notification titles are generic; message text, financial
+new group messages, expense creation/edits/voiding, external settlement
+requests/decisions, and profile photos removed by moderation. Notification
+titles are generic; message text, financial
 amounts and private profile details are not copied into notifications. A user
 can read or mark only their own records. Muted trip rooms and blocked senders do
 not produce new message notifications for that recipient. While a
@@ -526,16 +527,40 @@ check the account's current database role and active status on every request.
 - `POST /api/v1/admin/users/:userId/suspend` suspends an active account with a
   reason; `POST /api/v1/admin/users/:userId/restore` restores one and is
   administrator-only.
+- `POST /api/v1/admin/users/:userId/remove-profile-photo` removes an
+  inappropriate profile photo without a report, with a reason. The same staff
+  protections as suspension apply.
 - `GET /api/v1/admin/moderation-actions` is an administrator-only audit view.
 
-Content removal supports trips, messages, community posts, and community
-comments. It retains the records for review instead of hard-deleting them.
+Content removal supports trips, messages, community posts, community
+comments, and profile photos. It retains the records for review instead of hard-deleting them.
 Removed trips disappear from public discovery and cannot be republished by the
 owner; existing private room and financial records remain available to their
 eligible members. Connection requests and user accounts are not removable
 content; use account suspension or dismiss those reports. Suspending an account
 blocks its authenticated API access and hides its public profile, trips, and
 community content. Administrator accounts cannot be suspended through the API.
+
+### Profile photo moderation
+
+Anyone can report a profile photo with `POST /api/v1/reports`, using
+`targetType` `PROFILE_PHOTO` and the photo owner's user ID as `targetId`. This
+is separate from reporting the person (`USER`), and both can be open at once.
+The report records which photo was reported and stores a private copy of it as
+evidence, because the owner may replace the photo before staff review it.
+
+- Inspecting the report shows the owner, whether the reported photo is still
+  their current one, and a 15-minute link to the evidence copy.
+- Resolving with `REMOVE_CONTENT` removes the reported photo only. If the owner
+  has already replaced it, the request returns `409 CONTENT_ALREADY_REMOVED`
+  and the new photo stays; review it with a new report or remove it directly.
+- Every removal deletes the public file, keeps the evidence copy in the private
+  bucket, records a `CONTENT_REMOVED` action with target type `PROFILE_PHOTO`,
+  and sends the owner a `PROFILE_PHOTO_REMOVED` notification. The owner can
+  upload a new photo afterwards.
+
+Evidence copies have no automatic expiry yet; their retention belongs to the
+data-retention rules still to be agreed.
 
 Staff roles are provisioned **only by a database operator**, never through a
 public API. After the target account has signed in and exists in PostgreSQL,

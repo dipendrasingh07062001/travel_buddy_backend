@@ -43,7 +43,10 @@ export async function createReport(
   now = new Date(),
 ): Promise<ReportRecord> {
   const details = body.details?.trim() || null;
-  if (body.targetType === 'USER' && body.targetId === reporterId) {
+  if (
+    (body.targetType === 'USER' || body.targetType === 'PROFILE_PHOTO') &&
+    body.targetId === reporterId
+  ) {
     throw new AppError(
       409,
       'SELF_REPORT',

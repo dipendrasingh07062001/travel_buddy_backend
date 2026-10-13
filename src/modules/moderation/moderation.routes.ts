@@ -2,12 +2,19 @@ import type { ReportStatus } from '@prisma/client';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { AppError } from '../../errors/app-error.js';
+import {
+  deleteObjectQuietly,
+  requireStorage,
+  type ObjectStorage,
+} from '../../storage/object-storage.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import {
   findStaffReportDetail,
   listModerationActions,
   listStaffReports,
+  profilePhotoRemovalTarget,
+  removeProfilePhotoDirect,
   requireAdmin,
   requireStaff,
   resolveReport,
@@ -15,6 +22,7 @@ import {
   startReportReview,
   suspendAccountDirect,
 } from './moderation.repository.js';
+import { preservePhotoEvidence } from './photo-evidence.js';
 
 interface PageQuery {
   page?: number;
@@ -102,6 +110,7 @@ function cleanReason(reason: string): string {
 export async function registerModerationRoutes(
   app: FastifyInstance,
   auth: AuthRouteDependencies,
+  storage: ObjectStorage | null = null,
 ) {
   app.get<{ Querystring: ReportQuery }>(
     '/admin/reports',
@@ -146,7 +155,11 @@ export async function registerModerationRoutes(
     async (request) => {
       const { userId } = await staffIdentity(request, auth);
       return {
-        data: await findStaffReportDetail(request.params.reportId, userId),
+        data: await findStaffReportDetail(
+          request.params.reportId,
+          userId,
+          storage,
+        ),
       };
     },
   );
@@ -190,15 +203,70 @@ export async function registerModerationRoutes(
     },
     async (request) => {
       const { userId, role } = await staffIdentity(request, auth);
-      return {
-        data: await resolveReport(
-          request.params.reportId,
-          userId,
-          role,
-          request.body.resolution,
-          cleanReason(request.body.reason),
-        ),
-      };
+      const { report, removedPhotoKey } = await resolveReport(
+        request.params.reportId,
+        userId,
+        role,
+        request.body.resolution,
+        cleanReason(request.body.reason),
+      );
+      if (removedPhotoKey && storage) {
+        await deleteObjectQuietly(
+          storage,
+          'public',
+          removedPhotoKey,
+          request.log,
+        );
+      }
+      return { data: report };
+    },
+  );
+
+  app.post<{ Params: UserParams; Body: ReasonBody }>(
+    '/admin/users/:userId/remove-profile-photo',
+    {
+      schema: {
+        tags: ['Moderation'],
+        summary: 'Remove an inappropriate profile photo with an audit reason',
+        description:
+          'Removes the photo without a report. A private copy is kept as evidence in the moderation audit trail, and the user is notified.',
+        security: [{ bearerAuth: [] }],
+        params: userParams,
+        body: reasonSchema,
+      },
+    },
+    async (request) => {
+      const { userId, role } = await staffIdentity(request, auth);
+      const store = requireStorage(storage);
+      const reason = cleanReason(request.body.reason);
+      const targetUserId = request.params.userId;
+      const photoKey = await profilePhotoRemovalTarget(
+        targetUserId,
+        userId,
+        role,
+      );
+      const evidenceKey = await preservePhotoEvidence(
+        store,
+        photoKey,
+        request.log,
+      );
+      let result;
+      try {
+        result = await removeProfilePhotoDirect({
+          userId: targetUserId,
+          actorId: userId,
+          photoKey,
+          evidenceKey,
+          reason,
+        });
+      } catch (error) {
+        if (evidenceKey) {
+          await deleteObjectQuietly(store, 'private', evidenceKey, request.log);
+        }
+        throw error;
+      }
+      await deleteObjectQuietly(store, 'public', photoKey, request.log);
+      return { data: result };
     },
   );
 

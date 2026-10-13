@@ -178,6 +178,7 @@ enum NotificationType {
   SETTLEMENT_CONFIRMED
   SETTLEMENT_REJECTED
   SETTLEMENT_CANCELLED
+  PROFILE_PHOTO_REMOVED
 }
 
 enum PushPlatform {
@@ -201,6 +202,7 @@ enum ReportTargetType {
   MESSAGE
   COMMUNITY_POST
   COMMUNITY_COMMENT
+  PROFILE_PHOTO
 }
 
 enum ReportReason {
@@ -761,6 +763,8 @@ model Report {
   reportedMessageId           String?            @map("reported_message_id") @db.Uuid
   reportedCommunityPostId     String?            @map("reported_community_post_id") @db.Uuid
   reportedCommunityCommentId  String?            @map("reported_community_comment_id") @db.Uuid
+  reportedPhotoKey            String?            @map("reported_photo_key") @db.VarChar(500)
+  evidenceStorageKey          String?            @map("evidence_storage_key") @db.VarChar(500)
   reason                      ReportReason
   details                     String?            @db.VarChar(1000)
   status                      ReportStatus       @default(SUBMITTED)
@@ -792,16 +796,17 @@ model Report {
 }
 
 model ModerationAction {
-  id         String               @id @default(uuid()) @db.Uuid
-  actorId    String?              @map("actor_id") @db.Uuid
-  reportId   String?              @map("report_id") @db.Uuid
-  action     ModerationActionType
-  targetType ReportTargetType     @map("target_type")
-  targetId   String               @map("target_id") @db.Uuid
-  reason     String               @db.VarChar(1000)
-  actor      User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
-  report     Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
-  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                 String               @id @default(uuid()) @db.Uuid
+  actorId            String?              @map("actor_id") @db.Uuid
+  reportId           String?              @map("report_id") @db.Uuid
+  action             ModerationActionType
+  targetType         ReportTargetType     @map("target_type")
+  targetId           String               @map("target_id") @db.Uuid
+  reason             String               @db.VarChar(1000)
+  evidenceStorageKey String?              @map("evidence_storage_key") @db.VarChar(500)
+  actor              User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  report             Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([reportId, createdAt])
   @@index([targetType, targetId, createdAt])

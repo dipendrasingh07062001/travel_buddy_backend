@@ -18,6 +18,10 @@ export class MemoryStorage implements ObjectStorage {
     });
   }
 
+  async getObject(bucket: StorageBucket, key: string) {
+    return this.objects.get(`${bucket}:${key}`)?.body ?? null;
+  }
+
   async deleteObject(bucket: StorageBucket, key: string): Promise<void> {
     this.objects.delete(`${bucket}:${key}`);
   }

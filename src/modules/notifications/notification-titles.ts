@@ -17,4 +17,5 @@ export const notificationTitles: Record<NotificationType, string> = {
   SETTLEMENT_CONFIRMED: 'Settlement confirmed',
   SETTLEMENT_REJECTED: 'Settlement rejected',
   SETTLEMENT_CANCELLED: 'Settlement cancelled',
+  PROFILE_PHOTO_REMOVED: 'Your profile photo was removed',
 };

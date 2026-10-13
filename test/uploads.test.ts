@@ -96,6 +96,24 @@ describe('R2 storage client', () => {
     ).rejects.toThrow('HTTP 500');
   });
 
+  it('downloads objects, returning null for missing ones', async () => {
+    const found = createR2Storage(
+      settings,
+      (async () =>
+        new Response('photo bytes', { status: 200 })) as typeof fetch,
+    );
+    const missing = createR2Storage(settings, recordingFetch(404).send);
+    const failing = createR2Storage(settings, recordingFetch(500).send);
+
+    expect(
+      Buffer.from((await found.getObject('public', 'a.webp')) ?? []).toString(),
+    ).toBe('photo bytes');
+    await expect(missing.getObject('public', 'a.webp')).resolves.toBeNull();
+    await expect(failing.getObject('public', 'a.webp')).rejects.toThrow(
+      'HTTP 500',
+    );
+  });
+
   it('creates expiring signed URLs for the private bucket only', async () => {
     const storage = createR2Storage(settings, recordingFetch().send);
     const url = new URL(

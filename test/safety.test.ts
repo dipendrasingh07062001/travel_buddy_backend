@@ -133,6 +133,8 @@ const repository: SafetyRepository = {
         input.targetType === 'COMMUNITY_POST' ? input.targetId : null,
       reportedCommunityCommentId:
         input.targetType === 'COMMUNITY_COMMENT' ? input.targetId : null,
+      reportedPhotoKey: null,
+      evidenceStorageKey: null,
       reason: input.reason,
       details: input.details,
       status: 'SUBMITTED',

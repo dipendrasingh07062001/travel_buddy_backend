@@ -157,8 +157,13 @@ export function buildApp(options: BuildAppOptions = {}) {
         authDependencies,
         options.connections,
       );
-      await registerSafetyRoutes(api, authDependencies, options.safety);
-      await registerModerationRoutes(api, authDependencies);
+      await registerSafetyRoutes(
+        api,
+        authDependencies,
+        options.safety,
+        storage,
+      );
+      await registerModerationRoutes(api, authDependencies, storage);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerNotificationRoutes(api, authDependencies);
       await registerPushDeviceRoutes(api, authDependencies);

@@ -20,6 +20,8 @@ export interface PutObjectInput {
 
 export interface ObjectStorage {
   putObject(input: PutObjectInput): Promise<void>;
+  // Resolves to null when the object does not exist.
+  getObject(bucket: StorageBucket, key: string): Promise<Uint8Array | null>;
   deleteObject(bucket: StorageBucket, key: string): Promise<void>;
   signedPrivateUrl(key: string, expiresInSeconds: number): Promise<string>;
 }
@@ -31,6 +33,10 @@ export interface R2Settings {
   publicBucket: string;
   privateBucket: string;
 }
+
+// SHA-256 of an empty body, signed on requests without one (GET, DELETE).
+const emptyPayloadHash =
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
 function encodeKey(key: string): string {
   return key.split('/').map(encodeURIComponent).join('/');
@@ -73,9 +79,23 @@ export function createR2Storage(
       }
     },
 
+    async getObject(bucket, key) {
+      const request = await client.sign(objectUrl(bucket, key), {
+        method: 'GET',
+        headers: { 'x-amz-content-sha256': emptyPayloadHash },
+      });
+      const response = await send(request);
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        throw new Error(`R2 download failed with HTTP ${response.status}.`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    },
+
     async deleteObject(bucket, key) {
       const request = await client.sign(objectUrl(bucket, key), {
         method: 'DELETE',
+        headers: { 'x-amz-content-sha256': emptyPayloadHash },
       });
       const response = await send(request);
       if (!response.ok && response.status !== 404) {

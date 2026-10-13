@@ -5,8 +5,13 @@ import type {
 } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import type { ObjectStorage } from '../../storage/object-storage.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
+import {
+  attachReportEvidence,
+  preservePhotoEvidence,
+} from '../moderation/photo-evidence.js';
 import { publicUserSchema } from '../profiles/profile.schemas.js';
 import { presentBlock, presentReport } from './safety.presenter.js';
 import { prismaSafetyRepository } from './safety.repository.js';
@@ -41,6 +46,7 @@ const reportTargetTypes = [
   'MESSAGE',
   'COMMUNITY_POST',
   'COMMUNITY_COMMENT',
+  'PROFILE_PHOTO',
 ] as const;
 const reportReasons = [
   'HARASSMENT',
@@ -126,6 +132,7 @@ export async function registerSafetyRoutes(
   app: FastifyInstance,
   auth: AuthRouteDependencies,
   overrides: Partial<SafetyRouteDependencies> = {},
+  storage: ObjectStorage | null = null,
 ): Promise<void> {
   const repository = overrides.repository ?? prismaSafetyRepository;
 
@@ -260,6 +267,14 @@ export async function registerSafetyRoutes(
         request.body as CreateReportBody,
         repository,
       );
+      if (report.reportedPhotoKey && storage) {
+        const evidenceKey = await preservePhotoEvidence(
+          storage,
+          report.reportedPhotoKey,
+          request.log,
+        );
+        if (evidenceKey) await attachReportEvidence(report.id, evidenceKey);
+      }
       return reply.code(201).send({ data: presentReport(report) });
     },
   );
