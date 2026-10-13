@@ -516,6 +516,8 @@ committed migrations with:
 npm run db:migrate:deploy
 ```
 
+The Docker image runs this automatically each time the container starts.
+
 Never run development migrations or destructive reset commands against staging
 or production databases.
 
