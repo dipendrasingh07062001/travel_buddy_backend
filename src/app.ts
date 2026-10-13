@@ -50,6 +50,11 @@ import {
   registerTripRoutes,
   type TripRouteDependencies,
 } from './modules/trips/trip.routes.js';
+import { RealtimeHub } from './realtime/realtime-hub.js';
+import {
+  registerRealtimeRoutes,
+  type RealtimeStreamSettings,
+} from './realtime/realtime.routes.js';
 import {
   configuredObjectStorage,
   type ObjectStorage,
@@ -70,6 +75,8 @@ export interface BuildAppOptions {
   tripRoom?: Partial<TripRoomRouteDependencies>;
   policyCatalog?: PolicyCatalog;
   storage?: ObjectStorage | null;
+  realtime?: RealtimeHub;
+  realtimeStreams?: RealtimeStreamSettings;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -83,6 +90,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   const authDependencies = resolveAuthDependencies(options.auth);
   const storage =
     options.storage === undefined ? configuredObjectStorage() : options.storage;
+  const realtime = options.realtime ?? new RealtimeHub();
+  realtime.logger ??= app.log;
+  // Open event streams would otherwise keep the server from closing.
+  app.addHook('preClose', async () => realtime.closeAll());
 
   app.register(helmet);
   app.register(cors, {
@@ -155,6 +166,12 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerExpenseRoutes(api, authDependencies);
       await registerFinancialRoutes(api, authDependencies);
       await registerReceiptRoutes(api, authDependencies, storage);
+      await registerRealtimeRoutes(
+        api,
+        authDependencies,
+        realtime,
+        options.realtimeStreams,
+      );
     },
     { prefix: '/api/v1' },
   );

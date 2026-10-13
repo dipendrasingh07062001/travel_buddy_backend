@@ -1,6 +1,7 @@
 import type { TripStatus } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import {
   messageInclude,
@@ -163,6 +164,11 @@ export const prismaMessagingRepository: MessagingRepository = {
         actorId: senderId,
         createdAt: now,
       });
+      await publishRealtimeEvent(transaction, {
+        type: 'message.created',
+        messageId: message.id,
+        tripId,
+      });
       return { kind: 'created', message } as const;
     });
   },
@@ -181,7 +187,9 @@ export const prismaMessagingRepository: MessagingRepository = {
         },
         include: {
           ...messageInclude,
-          conversation: { select: { trip: { select: { status: true } } } },
+          conversation: {
+            select: { tripId: true, trip: { select: { status: true } } },
+          },
         },
       });
       if (!message) return { kind: 'not_found' } as const;
@@ -208,6 +216,11 @@ export const prismaMessagingRepository: MessagingRepository = {
             ? { body: body!, status: 'EDITED', editedAt: now }
             : { status: 'DELETED', deletedAt: now },
         include: messageInclude,
+      });
+      await publishRealtimeEvent(transaction, {
+        type: action === 'EDIT' ? 'message.updated' : 'message.deleted',
+        messageId,
+        tripId: message.conversation.tripId,
       });
       return { kind: 'updated', message: updated } as const;
     });

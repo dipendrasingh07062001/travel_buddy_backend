@@ -297,9 +297,9 @@ so internal history is retained.
 Non-owner members can leave, and the trip owner can remove a non-owner member.
 Both operations atomically retain membership history, revoke future room
 access, reduce group capacity, increment the trip version, and reopen a `FULL`
-trip as `PUBLISHED`. The owner cannot leave or be removed. New messages reach
-other members through the notification inbox and push notifications; real-time
-delivery inside an open room is a separate milestone.
+trip as `PUBLISHED`. The owner cannot leave or be removed. New, edited, and
+deleted messages reach open rooms live through the
+[real-time stream](#real-time-updates).
 
 ## Shared expense ledger
 
@@ -420,9 +420,10 @@ new group messages, expense creation/edits/voiding, and external settlement
 requests/decisions. Notification titles are generic; message text, financial
 amounts and private profile details are not copied into notifications. A user
 can read or mark only their own records. Muted trip rooms and blocked senders do
-not produce new message notifications for that recipient. The Flutter or web
-client can poll the inbox and unread-count endpoints; polling frequency should
-be modest and stop when the app is in the background.
+not produce new message notifications for that recipient. While a
+[real-time stream](#real-time-updates) is open, a `notifications.changed` event
+signals that the inbox changed; without one, poll the unread count modestly and
+stop when the app is in the background.
 
 ### Push notifications
 
@@ -463,6 +464,50 @@ FCM needs Google credentials in addition to `FIREBASE_PROJECT_ID`: set
 the host's workload identity. Without credentials, the API keeps running and
 logs `Firebase Cloud Messaging rejected the request: app/invalid-credential`.
 Notifications created before this feature existed are never pushed.
+
+## Real-time updates
+
+`GET /api/v1/realtime/stream` is a
+[Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+stream for the signed-in account. One stream covers all of the account's trip
+rooms and its notification inbox. Send the Firebase ID token in the
+`Authorization` header like any other request. The browser's built-in
+`EventSource` cannot send headers, so web clients use a fetch-based SSE client
+such as `@microsoft/fetch-event-source`; Flutter clients can read the streamed
+response directly.
+
+| Event                   | Data                   | Meaning                                                    |
+| ----------------------- | ---------------------- | ---------------------------------------------------------- |
+| `ready`                 | Heartbeat and lifetime | The stream is connected                                    |
+| `message.created`       | `{ tripId, message }`  | A new message in one of the account's trip rooms           |
+| `message.updated`       | `{ tripId, message }`  | A message was edited                                       |
+| `message.deleted`       | `{ tripId, message }`  | A message was deleted by its sender or by moderation       |
+| `notifications.changed` | `{}`                   | The inbox changed; refetch the unread count or the inbox   |
+| `resync`                | `{}`                   | Events may have been missed; refetch what the screen shows |
+
+`message` has the same shape as in `GET /api/v1/trips/:tripId/messages`,
+including `isOwn` for the receiving account, so a client can append it
+directly. Events follow the same visibility rules as the message history:
+only active members of the trip receive them, and messages are never delivered
+across a block in either direction. A change that fails or rolls back is never
+announced.
+
+Client rules:
+
+- After `ready` and `resync`, refetch the open room and the unread count.
+  Events missed while disconnected are not replayed.
+- The server sends a comment line every 25 seconds to keep the connection
+  open, and ends every stream after 60 minutes. Reconnect with a fresh ID token
+  whenever the stream ends; the `retry` field suggests waiting 5 seconds.
+- An account can keep 5 streams open at once (`429 REALTIME_STREAM_LIMIT`).
+- A client that stops reading is disconnected rather than buffered.
+
+Every API instance holds one extra database connection that `LISTEN`s for
+events, so streams work across several instances without extra services. That
+connection must go directly to PostgreSQL, not through a transaction-mode
+pooler such as PgBouncer. Behind nginx or another proxy, the stream sends
+`X-Accel-Buffering: no`; the proxy's read timeout must be longer than 25
+seconds.
 
 ## Staff moderation
 
@@ -646,6 +691,7 @@ src/
   config/       Environment parsing and validation
   database/     Database connection infrastructure
   modules/      Product modules and HTTP routes
+  realtime/     Live event stream and PostgreSQL LISTEN/NOTIFY bus
   storage/      Cloudflare R2 client and upload processing
   app.ts        Fastify application composition
   server.ts     Process startup and graceful shutdown

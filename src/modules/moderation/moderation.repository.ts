@@ -2,6 +2,7 @@ import type { Prisma, Report, ReportStatus, StaffRole } from '@prisma/client';
 
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
 
 type Transaction = Prisma.TransactionClient;
 type Resolution = 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT';
@@ -327,6 +328,7 @@ async function removeContent(
     case 'MESSAGE': {
       const message = await tx.message.findUnique({
         where: { id: report.reportedMessageId! },
+        include: { conversation: { select: { tripId: true } } },
       });
       if (message && message.status !== 'DELETED') {
         count = (
@@ -344,6 +346,11 @@ async function removeContent(
               previousBody: message.body,
               createdAt: now,
             },
+          });
+          await publishRealtimeEvent(tx, {
+            type: 'message.deleted',
+            messageId: message.id,
+            tripId: message.conversation.tripId,
           });
         }
       }
