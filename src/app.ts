@@ -153,8 +153,6 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   app.setErrorHandler(async (error, request, reply) => {
-    request.log.error({ error }, 'Request failed');
-
     const statusCode =
       error instanceof AppError
         ? error.statusCode
@@ -165,6 +163,20 @@ export function buildApp(options: BuildAppOptions = {}) {
             error.statusCode >= 400
           ? error.statusCode
           : 500;
+    // Pino serialises errors only under `err`. Client errors are expected, so
+    // they are logged without a stack at info level to keep real failures visible.
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, 'Request failed');
+    } else {
+      request.log.info(
+        {
+          statusCode,
+          code: error instanceof AppError ? error.code : undefined,
+        },
+        'Request rejected',
+      );
+    }
+
     const message =
       statusCode >= 500
         ? 'An unexpected error occurred.'

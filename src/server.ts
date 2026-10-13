@@ -19,7 +19,7 @@ async function shutdown(signal: string): Promise<void> {
     await database.$disconnect();
     process.exit(0);
   } catch (error) {
-    app.log.error({ error }, 'Graceful shutdown failed');
+    app.log.error({ err: error }, 'Graceful shutdown failed');
     process.exit(1);
   }
 }
@@ -33,7 +33,7 @@ try {
     pushDelivery = startPushDelivery(createFcmPushSender(), app.log);
   }
 } catch (error) {
-  app.log.fatal({ error }, 'API failed to start');
+  app.log.fatal({ err: error }, 'API failed to start');
   await database.$disconnect();
   process.exit(1);
 }
