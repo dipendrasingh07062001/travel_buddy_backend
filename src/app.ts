@@ -31,6 +31,7 @@ import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
+import { registerPushDeviceRoutes } from './modules/notifications/push-device.routes.js';
 import { registerPolicyRoutes } from './modules/policies/policy.routes.js';
 import {
   configuredPolicyCatalog,
@@ -134,6 +135,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerModerationRoutes(api, authDependencies);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerNotificationRoutes(api, authDependencies);
+      await registerPushDeviceRoutes(api, authDependencies);
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);
       await registerFinancialRoutes(api, authDependencies);

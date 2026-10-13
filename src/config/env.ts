@@ -65,6 +65,10 @@ const envSchema = z
       .default(
         'postgresql://travel_buddy:travel_buddy@localhost:5432/travel_buddy',
       ),
+    PUSH_NOTIFICATIONS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     FIREBASE_PROJECT_ID: z.preprocess(
       (value) => (value === '' ? undefined : value),
       z.string().trim().min(1).optional(),
@@ -106,6 +110,16 @@ if (!result.success) {
 
 if (result.data.NODE_ENV === 'production' && !result.data.FIREBASE_PROJECT_ID) {
   console.error('FIREBASE_PROJECT_ID is required when NODE_ENV=production');
+  process.exit(1);
+}
+
+if (
+  result.data.PUSH_NOTIFICATIONS_ENABLED &&
+  !result.data.FIREBASE_PROJECT_ID
+) {
+  console.error(
+    'FIREBASE_PROJECT_ID is required when PUSH_NOTIFICATIONS_ENABLED=true',
+  );
   process.exit(1);
 }
 

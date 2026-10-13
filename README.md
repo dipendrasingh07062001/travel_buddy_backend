@@ -389,10 +389,45 @@ not produce new message notifications for that recipient. The Flutter or web
 client can poll the inbox and unread-count endpoints; polling frequency should
 be modest and stop when the app is in the background.
 
-This milestone does not send email or phone push notifications. Firebase Cloud
-Messaging can later deliver push alerts to opted-in devices, but PostgreSQL
-remains the authoritative in-app inbox. Do not collect or store device push
-identifiers until that delivery channel is explicitly implemented.
+### Push notifications
+
+Every inbox notification can also be delivered as a push alert through
+Firebase Cloud Messaging (FCM) to the recipient's registered devices. The inbox
+in PostgreSQL stays the source of truth; push is a best-effort copy. Email is
+not sent.
+
+A device opts in by registering its FCM token after the user allows
+notifications, and again whenever the token changes:
+
+- `POST /api/v1/me/push-devices` with
+  `{ "token": "<fcm-registration-token>", "platform": "WEB" }`. `platform` is
+  `ANDROID`, `IOS`, or `WEB`. Registering the same token again refreshes it; a
+  token registered by another account moves to that account.
+- `GET /api/v1/me/push-devices` lists the account's devices. Tokens are never
+  returned.
+- `DELETE /api/v1/me/push-devices/:deviceId` stops alerts to one device. Call it
+  when the user signs out or turns notifications off.
+
+An account keeps at most 10 devices; registering an eleventh removes the least
+recently registered one.
+
+A background worker in the API process sends pending notifications every few
+seconds. Each alert carries the same generic title as the inbox entry and a
+`data` payload with `notificationId`, `type`, `sourceId`, and `tripId` when
+there is one, so the client can open the right screen. The worker:
+
+- skips alerts older than 15 minutes, alerts already read in the inbox, and
+  recipients whose account is not active;
+- deletes device registrations whose tokens FCM reports as no longer valid;
+- records the outcome on each notification (`SENT`, `SKIPPED`, or `FAILED`)
+  and sends each alert at most once, even with several API instances running.
+
+Push delivery is off unless `PUSH_NOTIFICATIONS_ENABLED=true`. Sending through
+FCM needs Google credentials in addition to `FIREBASE_PROJECT_ID`: set
+`GOOGLE_APPLICATION_CREDENTIALS` to a Firebase service-account key file, or use
+the host's workload identity. Without credentials, the API keeps running and
+logs `Firebase Cloud Messaging rejected the request: app/invalid-credential`.
+Notifications created before this feature existed are never pushed.
 
 ## Staff moderation
 
@@ -454,7 +489,8 @@ copy. Limit: five exports per account per hour.
 The JSON includes the local account, profile, linked sign-in identity, verified
 contacts, policy acceptance and data-request history, and account-linked trips,
 memberships, requests, community activity, checklist items, expenses,
-settlements, sent messages, notifications, blocks, and submitted reports. It
+settlements, sent messages, notifications, push device registrations (platform
+and dates, not tokens), blocks, and submitted reports. It
 excludes other members' profiles and messages, moderation review notes, IP
 hashes, and Firebase-managed data that is not stored in this database. The
 export is sensitive: the Flutter client must save it only where the user

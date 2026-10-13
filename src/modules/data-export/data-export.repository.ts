@@ -83,6 +83,7 @@ export async function createAccountDataExport(userId: string) {
         messages,
         messageRevisions,
         notifications,
+        pushDevices,
         blocks,
         reports,
       ] = await Promise.all([
@@ -325,6 +326,16 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: { createdAt: 'asc' },
         }),
+        tx.pushDevice.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            platform: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
         tx.userBlock.findMany({
           where: { blockerId: userId },
           select: { blockedId: true, createdAt: true },
@@ -373,6 +384,7 @@ export async function createAccountDataExport(userId: string) {
           messages,
           messageRevisions,
           notifications,
+          pushDevices,
           blocks,
           reports,
         },
