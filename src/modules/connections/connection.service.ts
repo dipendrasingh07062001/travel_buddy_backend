@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { AppError } from '../../errors/app-error.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
+import { requireCompleteProfile } from '../profiles/profile-completeness.js';
 import type {
   ConnectionRepository,
   ConnectionRequestRecord,
@@ -14,22 +15,6 @@ export interface CreateConnectionRequestBody {
 
 const maximumRequestsPerDay = 20;
 
-function requireRequestProfile(user: AuthenticatedUser): void {
-  if (
-    !user.displayName ||
-    !user.birthDate ||
-    !user.profile?.homeCity ||
-    !user.profile.biography ||
-    user.profile.languages.length === 0
-  ) {
-    throw new AppError(
-      409,
-      'PROFILE_INCOMPLETE',
-      'Complete your display name, birth date, home city, biography, and languages before requesting a connection.',
-    );
-  }
-}
-
 export async function sendConnectionRequest(
   user: AuthenticatedUser,
   tripId: string,
@@ -37,7 +22,7 @@ export async function sendConnectionRequest(
   repository: ConnectionRepository,
   now = new Date(),
 ): Promise<ConnectionRequestRecord> {
-  requireRequestProfile(user);
+  requireCompleteProfile(user, 'requesting a connection');
   const message = body.message.trim();
   if (message.length < 20) {
     throw new AppError(

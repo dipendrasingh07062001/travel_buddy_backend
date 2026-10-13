@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
+import { utcStartOfToday } from '../trips/trip.types.js';
 import {
   connectionRequestInclude,
   membershipInclude,
@@ -160,6 +161,7 @@ export const prismaConnectionRepository: ConnectionRepository = {
         id: tripId,
         status: 'PUBLISHED',
         moderationRemovedAt: null,
+        endDate: { gte: utcStartOfToday() },
         owner: { status: 'ACTIVE' },
       },
       select: {

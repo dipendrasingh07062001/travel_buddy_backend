@@ -28,7 +28,7 @@ function bearerToken(authorization: string | undefined): string {
   return match[1];
 }
 
-export async function verifyRequestIdentity(
+async function verifyBearerIdentity(
   request: FastifyRequest,
   verifier: TokenVerifier,
 ): Promise<VerifiedIdentity> {
@@ -41,6 +41,25 @@ export async function verifyRequestIdentity(
       'UNAUTHENTICATED',
       'The authentication token contains an invalid subject.',
     );
+  }
+  return identity;
+}
+
+// The rate limiter verifies the token to key limits by account, so the result
+// is cached per request to avoid verifying it a second time in the handler.
+const verifiedIdentities = new WeakMap<
+  FastifyRequest,
+  Promise<VerifiedIdentity>
+>();
+
+export function verifyRequestIdentity(
+  request: FastifyRequest,
+  verifier: TokenVerifier,
+): Promise<VerifiedIdentity> {
+  let identity = verifiedIdentities.get(request);
+  if (!identity) {
+    identity = verifyBearerIdentity(request, verifier);
+    verifiedIdentities.set(request, identity);
   }
   return identity;
 }
@@ -97,4 +116,22 @@ export async function authenticateRequestIfPresent(
 ): Promise<AuthenticatedUser | null> {
   if (!request.headers.authorization) return null;
   return authenticateRequest(request, dependencies);
+}
+
+// Rate limits apply per account for requests with a valid token, so users who
+// share an IP address (mobile carrier NAT, an office, a load balancer without
+// trustProxy) do not share limits. Other requests are limited per IP address.
+export async function rateLimitKey(
+  request: FastifyRequest,
+  verifier: TokenVerifier,
+): Promise<string> {
+  if (request.headers.authorization) {
+    try {
+      const identity = await verifyRequestIdentity(request, verifier);
+      return `account:${identity.subject}`;
+    } catch {
+      // The route handler reports the authentication error.
+    }
+  }
+  return `ip:${request.ip}`;
 }

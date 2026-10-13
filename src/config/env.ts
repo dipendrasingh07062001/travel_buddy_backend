@@ -22,6 +22,24 @@ const policyUrl = z.preprocess(
     .optional(),
 );
 
+// Mirrors Fastify's trustProxy option: true, a hop count, or a comma-separated
+// list of trusted proxy addresses or CIDR ranges. Unset means no proxy.
+const trustProxy = z
+  .string()
+  .trim()
+  .optional()
+  .transform(
+    (value): boolean | string | ((address: string, hop: number) => boolean) => {
+      if (!value || value === 'false') return false;
+      if (value === 'true') return true;
+      if (/^\d+$/.test(value)) {
+        const hops = Number(value);
+        return (_address, hop) => hop < hops;
+      }
+      return value;
+    },
+  );
+
 if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
   console.error('DATABASE_URL is required when NODE_ENV=production');
   process.exit(1);
@@ -34,6 +52,7 @@ const envSchema = z
       .default('development'),
     HOST: z.string().min(1).default('0.0.0.0'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+    TRUST_PROXY: trustProxy,
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

@@ -10,6 +10,7 @@ import { checkDatabase } from './database/client.js';
 import { AppError } from './errors/app-error.js';
 import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
+import { rateLimitKey } from './modules/auth/auth.service.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
 import { registerDataExportRoutes } from './modules/data-export/data-export.routes.js';
@@ -48,6 +49,7 @@ import {
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
+  trustProxy?: FastifyServerOptions['trustProxy'];
   health?: Partial<HealthRouteDependencies>;
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
@@ -63,11 +65,13 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
+    trustProxy: options.trustProxy ?? env.TRUST_PROXY,
     logger: options.logger ?? {
       level: env.LOG_LEVEL,
       redact: ['req.headers.authorization', 'req.headers.cookie'],
     },
   });
+  const authDependencies = resolveAuthDependencies(options.auth);
 
   app.register(helmet);
   app.register(cors, {
@@ -79,6 +83,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    keyGenerator: (request) =>
+      rateLimitKey(request, authDependencies.tokenVerifier),
   });
   app.register(swagger, {
     openapi: {
@@ -97,7 +103,6 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(swaggerUi, { routePrefix: '/docs' });
   app.register(
     async (api) => {
-      const authDependencies = resolveAuthDependencies(options.auth);
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });

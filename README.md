@@ -58,7 +58,10 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 
 Only `PUBLISHED` and `FULL` trips in active communities are public. Draft,
 paused, cancelled, and completed trips return `404` from the details endpoint so
-their existence is not disclosed.
+their existence is not disclosed. Search and community trip lists also hide
+trips whose end date has passed (UTC), and those trips no longer accept
+connection requests. The details endpoint still returns them so shared links
+keep working.
 
 Run `npm run db:seed` to load repeatable local sample data. The seed is safe to
 run more than once. Open `/docs` after starting the server to explore the full
@@ -141,6 +144,15 @@ Trip status is not directly editable. Use the explicit lifecycle endpoints:
 - `POST /api/v1/trips/:tripId/cancel`
 - `POST /api/v1/trips/:tripId/complete`
 
+Publishing requires a complete adult profile: display name, birth date, home
+city, biography, and at least one language. An incomplete profile returns
+`409 PROFILE_INCOMPLETE`. Drafts can be created before the profile is complete.
+
+`currentGroupSize` counts travellers already committed to the trip, including
+the owner and accepted members. The owner can raise it for companions who are
+not on the platform, but not below the number of active members; that returns
+`409 GROUP_SIZE_BELOW_ACTIVE_MEMBERS`.
+
 Every edit or lifecycle request must include the latest version returned by the
 API, for example `{ "expectedVersion": 2 }`. A stale version returns
 `409 TRIP_VERSION_CONFLICT`; refresh the trip before retrying. This prevents one
@@ -215,7 +227,8 @@ capabilities only; the Flutter developer can choose how to expose them later.
 
 An authenticated user with a complete minimum profile can send a short,
 trip-specific request with `POST /api/v1/trips/:tripId/connection-requests`.
-Requests are accepted only for published trips with available group capacity.
+Requests are accepted only for published trips that have not ended and have
+available group capacity.
 Self-requests, duplicate requests, and more than 20 new requests in a rolling
 24-hour period are rejected.
 
@@ -436,7 +449,7 @@ Firebase-authenticated account. The caller supplies only a Bearer ID token;
 the API derives the local user ID from that token. Active and suspended users
 can export; deleted accounts cannot. The response uses `Content-Disposition:
 attachment` and `Cache-Control: private, no-store`; the API does not retain a
-copy. Limit: five exports per token per hour.
+copy. Limit: five exports per account per hour.
 
 The JSON includes the local account, profile, linked sign-in identity, verified
 contacts, policy acceptance and data-request history, and account-linked trips,
@@ -467,6 +480,23 @@ delete or anonymize data, or mark requests fulfilled. Do not promise an
 automatic deletion in the client UI. Agree and document retention, identity
 verification, response handling and deletion rules before implementing the
 fulfilment workflow; the PRD calls for qualified review before public beta.
+
+## Rate limiting and proxies
+
+Every route is rate limited, with stricter per-route limits on writes such as
+reports, connection requests, and messages. Requests with a valid Firebase ID
+token are counted per account, so people who share an IP address (a mobile
+carrier, an office, a campus) do not share limits. Requests without a valid token
+are counted per client IP address.
+
+When the API runs behind a load balancer or reverse proxy, set `TRUST_PROXY` to
+the number of proxy hops (usually `1`) or to a comma-separated list of proxy
+addresses. Without it, every anonymous request appears to come from the proxy and
+shares one limit. Do not set `TRUST_PROXY=true` on a server that clients can
+reach directly, because they could then spoof `X-Forwarded-For`.
+
+Limits are kept in each process's memory. Running more than one API instance
+requires a shared store such as Redis, which is not configured yet.
 
 ## Database workflow
 

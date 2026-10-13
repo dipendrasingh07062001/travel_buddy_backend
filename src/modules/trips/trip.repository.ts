@@ -4,6 +4,7 @@ import { database } from '../../database/client.js';
 import {
   publicTripInclude,
   publicTripStatuses,
+  utcStartOfToday,
   type TripRepository,
 } from './trip.types.js';
 
@@ -13,6 +14,10 @@ function dateAtUtcMidnight(value: string): Date {
 
 export const prismaTripRepository: TripRepository = {
   async listPublic(query) {
+    const today = utcStartOfToday();
+    const departureFrom = query.departureFrom
+      ? dateAtUtcMidnight(query.departureFrom)
+      : today;
     const where: Prisma.TripWhereInput = {
       status: { in: [...publicTripStatuses] },
       moderationRemovedAt: null,
@@ -24,9 +29,7 @@ export const prismaTripRepository: TripRepository = {
       ...(query.destination && {
         community: { status: 'ACTIVE', slug: query.destination },
       }),
-      ...(query.departureFrom && {
-        endDate: { gte: dateAtUtcMidnight(query.departureFrom) },
-      }),
+      endDate: { gte: departureFrom > today ? departureFrom : today },
       ...(query.departureTo && {
         startDate: { lte: dateAtUtcMidnight(query.departureTo) },
       }),

@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto';
-
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import { authenticateRequestIncludingSuspended } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
@@ -14,14 +12,7 @@ export async function registerDataExportRoutes(
     '/me/data-export',
     {
       config: {
-        rateLimit: {
-          max: 5,
-          timeWindow: '1 hour',
-          keyGenerator: (request: FastifyRequest) =>
-            createHash('sha256')
-              .update(request.headers.authorization ?? request.ip)
-              .digest('hex'),
-        },
+        rateLimit: { max: 5, timeWindow: '1 hour' },
       },
       schema: {
         tags: ['Account data'],

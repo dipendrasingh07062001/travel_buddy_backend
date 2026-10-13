@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { database } from '../../database/client.js';
+import { utcStartOfToday } from '../trips/trip.types.js';
 import { lockActiveCommunity } from './community-lock.js';
 import type {
   CommunityRepository,
@@ -45,12 +46,6 @@ function visiblePostAuthor(viewerId?: string): Prisma.UserWhereInput {
       blocksReceived: { none: { blockerId: viewerId } },
     }),
   };
-}
-
-function utcStartOfToday(now = new Date()): Date {
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
 }
 
 async function addActivityCounts(
