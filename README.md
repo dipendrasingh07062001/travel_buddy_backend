@@ -113,10 +113,23 @@ accepts only the server-configured current version, records its timestamp, and
 makes a repeated request idempotent. A stale version returns
 `409 POLICY_VERSION_CHANGED`; old acceptance records remain as history when a
 new document version is published. The Flutter or web client must show the
-actual linked document before asking for acceptance. **This foundation does not
-yet gate trip publishing or other actions.** Enable such enforcement only after
-the policy documents, versions, and onboarding flow have been approved and
-tested together.
+actual linked document before asking for acceptance.
+
+Once the policy documents are configured, actions that reach other people
+require the account to have accepted the current version of all three:
+
+- publishing a trip (`POST /trips/:tripId/publish`);
+- asking to join a trip;
+- sending or editing trip messages;
+- creating or editing community posts and comments;
+- uploading a profile photo.
+
+Otherwise they return `409 POLICY_ACCEPTANCE_REQUIRED`, naming the documents
+still to accept. Browsing, drafting trips, editing your own profile, managing
+your trips and settings, exporting data and deleting the account stay
+available. Publishing a new version of a document asks everyone to accept that
+document again before their next such action. Without configured documents,
+nothing is gated.
 
 ## User profiles
 

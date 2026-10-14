@@ -288,6 +288,7 @@ export async function registerMessagingRoutes(
     },
     async (request, reply) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'sending messages');
       const message = await sendMessage(
         request.params.tripId,
         user.id,
@@ -312,6 +313,7 @@ export async function registerMessagingRoutes(
     },
     async (request) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'editing messages');
       const message = await editMessage(
         request.params.messageId,
         user.id,

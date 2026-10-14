@@ -142,6 +142,7 @@ export async function registerConnectionRoutes(
     },
     async (request, reply) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'asking to join a trip');
       const connection = await sendConnectionRequest(
         user,
         request.params.tripId,
