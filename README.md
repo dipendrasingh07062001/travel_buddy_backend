@@ -250,9 +250,17 @@ Self-requests, duplicate requests, and more than 20 new requests in a rolling
 
 Users list their received or sent requests with
 `GET /api/v1/me/connection-requests?box=received` or `box=sent`. The trip owner
-can accept or decline a pending request. The requester can withdraw it. A
-declined or otherwise resolved request cannot be repeatedly resubmitted for the
-same trip.
+can accept or decline a pending request. The requester can withdraw it.
+
+A member who left a trip can ask to join it again with a new request, and the
+owner accepts or declines it as before; accepting restores their membership.
+Everyone else gets one chance per trip:
+
+| Situation                                    | Error code                  |
+| -------------------------------------------- | --------------------------- |
+| Already an active member                     | `ALREADY_TRIP_MEMBER`       |
+| Removed from the trip by the owner           | `REMOVED_FROM_TRIP`         |
+| A request is waiting, declined, or withdrawn | `CONNECTION_REQUEST_EXISTS` |
 
 - `POST /api/v1/connection-requests/:requestId/accept`
 - `POST /api/v1/connection-requests/:requestId/decline`

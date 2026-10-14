@@ -61,12 +61,30 @@ export async function sendConnectionRequest(
     );
   }
 
-  const existing = await repository.findExisting(tripId, user.id);
-  if (existing) {
+  // A member who left may ask again; the owner decides as before. Declined,
+  // withdrawn and blocked requests, and removed members, cannot try again.
+  const latest = await repository.findLatest(tripId, user.id);
+  if (latest?.status === 'ACCEPTED') {
+    const membership = await repository.findMembershipStatus(tripId, user.id);
+    if (membership === 'ACTIVE') {
+      throw new AppError(
+        409,
+        'ALREADY_TRIP_MEMBER',
+        'You are already a member of this trip.',
+      );
+    }
+    if (membership !== 'LEFT') {
+      throw new AppError(
+        409,
+        'REMOVED_FROM_TRIP',
+        'The trip owner removed you from this trip, so you cannot ask to join it again.',
+      );
+    }
+  } else if (latest) {
     throw new AppError(
       409,
       'CONNECTION_REQUEST_EXISTS',
-      `A ${existing.status.toLowerCase()} connection request already exists for this trip.`,
+      `A ${latest.status.toLowerCase()} connection request already exists for this trip.`,
     );
   }
 
