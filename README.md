@@ -58,7 +58,10 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 
 Only `PUBLISHED` and `FULL` trips in active communities are public. Draft,
 paused, cancelled, and completed trips return `404` from the details endpoint so
-their existence is not disclosed.
+their existence is not disclosed. Search and community trip lists also hide
+trips whose end date has passed (UTC), and those trips no longer accept
+connection requests. The details endpoint still returns them so shared links
+keep working.
 
 Run `npm run db:seed` to load repeatable local sample data. The seed is safe to
 run more than once. Open `/docs` after starting the server to explore the full
@@ -125,7 +128,23 @@ settings are returned only to the authenticated account through `/me`.
 `GET /api/v1/users/:userId` is public and deliberately returns an approximate
 age range and account-creation month. It never returns exact birth date, email,
 phone number, Firebase UID, internal photo storage key, or privacy settings.
-Profile-photo upload is deferred until an object-storage provider is selected.
+
+### Profile photos
+
+- `PUT /api/v1/me/profile-photo` uploads or replaces the photo. Send
+  `multipart/form-data` with one file in the `photo` field: JPEG, PNG, or WebP,
+  up to 5 MB.
+- `DELETE /api/v1/me/profile-photo` removes it.
+
+The API decodes and re-encodes every photo: it is rotated upright, cropped to
+512x512, converted to WebP, and stripped of all metadata, including the GPS
+location phones embed. Each upload gets a new random file name, and the
+previous file is deleted. Both endpoints return the private user from `/me`.
+
+Profile responses include `profilePhotoUrl`, a public URL on the R2 custom
+domain, and `profilePhotoAvailable`. The URL never changes for a given photo,
+so clients can cache it indefinitely. File storage is described under
+[File storage (Cloudflare R2)](#file-storage-cloudflare-r2).
 
 ## Trip management
 
@@ -140,6 +159,15 @@ Trip status is not directly editable. Use the explicit lifecycle endpoints:
 - `POST /api/v1/trips/:tripId/mark-full`
 - `POST /api/v1/trips/:tripId/cancel`
 - `POST /api/v1/trips/:tripId/complete`
+
+Publishing requires a complete adult profile: display name, birth date, home
+city, biography, and at least one language. An incomplete profile returns
+`409 PROFILE_INCOMPLETE`. Drafts can be created before the profile is complete.
+
+`currentGroupSize` counts travellers already committed to the trip, including
+the owner and accepted members. The owner can raise it for companions who are
+not on the platform, but not below the number of active members; that returns
+`409 GROUP_SIZE_BELOW_ACTIVE_MEMBERS`.
 
 Every edit or lifecycle request must include the latest version returned by the
 API, for example `{ "expectedVersion": 2 }`. A stale version returns
@@ -215,7 +243,8 @@ capabilities only; the Flutter developer can choose how to expose them later.
 
 An authenticated user with a complete minimum profile can send a short,
 trip-specific request with `POST /api/v1/trips/:tripId/connection-requests`.
-Requests are accepted only for published trips with available group capacity.
+Requests are accepted only for published trips that have not ended and have
+available group capacity.
 Self-requests, duplicate requests, and more than 20 new requests in a rolling
 24-hour period are rejected.
 
@@ -268,8 +297,9 @@ so internal history is retained.
 Non-owner members can leave, and the trip owner can remove a non-owner member.
 Both operations atomically retain membership history, revoke future room
 access, reduce group capacity, increment the trip version, and reopen a `FULL`
-trip as `PUBLISHED`. The owner cannot leave or be removed. Real-time delivery
-and notification fan-out are separate milestones.
+trip as `PUBLISHED`. The owner cannot leave or be removed. New, edited, and
+deleted messages reach open rooms live through the
+[real-time stream](#real-time-updates).
 
 ## Shared expense ledger
 
@@ -353,8 +383,26 @@ confirm or reject one addressed to them, record their own payment against an
 outstanding balance, and flag an expense affecting them. These narrow actions
 remain available after a trip is completed or cancelled so past obligations can
 be reconciled; expense entries themselves remain read-only. A block prevents
-new settlement records between the two accounts. Receipt uploads and
-notification delivery remain separate milestones.
+new settlement records between the two accounts.
+
+### Receipts
+
+- `POST /api/v1/expenses/:expenseId/receipts` attaches a receipt. Send
+  `multipart/form-data` with one file in the `receipt` field: a JPEG, PNG, or
+  WebP image, or a PDF, up to 10 MB.
+- `GET /api/v1/expenses/:expenseId/receipts` lists an expense's receipts.
+- `DELETE /api/v1/expense-receipts/:receiptId` removes one.
+
+Only the member who recorded or paid an expense can attach receipts, at most 5
+per expense, and not to a voided expense or a read-only ledger. Any active
+trip member can list them. The uploader or the expense's recorder can remove
+one; the file is deleted, and a record that it existed stays in the ledger
+history. Images are re-encoded like profile photos (WebP, at most 2000 px,
+metadata stripped); PDFs are stored as uploaded.
+
+Receipts are private. Each listed receipt has a `url` that is signed for that
+request and stops working after 15 minutes (`urlExpiresAt`); list the receipts
+again to get fresh links.
 
 ## In-app notifications
 
@@ -368,18 +416,99 @@ for the signed-in account:
 - `POST /api/v1/me/notifications/read-all`
 
 The inbox covers connection requests and decisions, trip plan/status changes,
-new group messages, expense creation/edits/voiding, and external settlement
-requests/decisions. Notification titles are generic; message text, financial
+new group messages, expense creation/edits/voiding, external settlement
+requests/decisions, and profile photos removed by moderation. Notification
+titles are generic; message text, financial
 amounts and private profile details are not copied into notifications. A user
 can read or mark only their own records. Muted trip rooms and blocked senders do
-not produce new message notifications for that recipient. The Flutter or web
-client can poll the inbox and unread-count endpoints; polling frequency should
-be modest and stop when the app is in the background.
+not produce new message notifications for that recipient. While a
+[real-time stream](#real-time-updates) is open, a `notifications.changed` event
+signals that the inbox changed; without one, poll the unread count modestly and
+stop when the app is in the background.
 
-This milestone does not send email or phone push notifications. Firebase Cloud
-Messaging can later deliver push alerts to opted-in devices, but PostgreSQL
-remains the authoritative in-app inbox. Do not collect or store device push
-identifiers until that delivery channel is explicitly implemented.
+### Push notifications
+
+Every inbox notification can also be delivered as a push alert through
+Firebase Cloud Messaging (FCM) to the recipient's registered devices. The inbox
+in PostgreSQL stays the source of truth; push is a best-effort copy. Email is
+not sent.
+
+A device opts in by registering its FCM token after the user allows
+notifications, and again whenever the token changes:
+
+- `POST /api/v1/me/push-devices` with
+  `{ "token": "<fcm-registration-token>", "platform": "WEB" }`. `platform` is
+  `ANDROID`, `IOS`, or `WEB`. Registering the same token again refreshes it; a
+  token registered by another account moves to that account.
+- `GET /api/v1/me/push-devices` lists the account's devices. Tokens are never
+  returned.
+- `DELETE /api/v1/me/push-devices/:deviceId` stops alerts to one device. Call it
+  when the user signs out or turns notifications off.
+
+An account keeps at most 10 devices; registering an eleventh removes the least
+recently registered one.
+
+A background worker in the API process sends pending notifications every few
+seconds. Each alert carries the same generic title as the inbox entry and a
+`data` payload with `notificationId`, `type`, `sourceId`, and `tripId` when
+there is one, so the client can open the right screen. The worker:
+
+- skips alerts older than 15 minutes, alerts already read in the inbox, and
+  recipients whose account is not active;
+- deletes device registrations whose tokens FCM reports as no longer valid;
+- records the outcome on each notification (`SENT`, `SKIPPED`, or `FAILED`)
+  and sends each alert at most once, even with several API instances running.
+
+Push delivery is off unless `PUSH_NOTIFICATIONS_ENABLED=true`. Sending through
+FCM needs Google credentials in addition to `FIREBASE_PROJECT_ID`: set
+`GOOGLE_APPLICATION_CREDENTIALS` to a Firebase service-account key file, or use
+the host's workload identity. Without credentials, the API keeps running and
+logs `Firebase Cloud Messaging rejected the request: app/invalid-credential`.
+Notifications created before this feature existed are never pushed.
+
+## Real-time updates
+
+`GET /api/v1/realtime/stream` is a
+[Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+stream for the signed-in account. One stream covers all of the account's trip
+rooms and its notification inbox. Send the Firebase ID token in the
+`Authorization` header like any other request. The browser's built-in
+`EventSource` cannot send headers, so web clients use a fetch-based SSE client
+such as `@microsoft/fetch-event-source`; Flutter clients can read the streamed
+response directly.
+
+| Event                   | Data                   | Meaning                                                    |
+| ----------------------- | ---------------------- | ---------------------------------------------------------- |
+| `ready`                 | Heartbeat and lifetime | The stream is connected                                    |
+| `message.created`       | `{ tripId, message }`  | A new message in one of the account's trip rooms           |
+| `message.updated`       | `{ tripId, message }`  | A message was edited                                       |
+| `message.deleted`       | `{ tripId, message }`  | A message was deleted by its sender or by moderation       |
+| `notifications.changed` | `{}`                   | The inbox changed; refetch the unread count or the inbox   |
+| `resync`                | `{}`                   | Events may have been missed; refetch what the screen shows |
+
+`message` has the same shape as in `GET /api/v1/trips/:tripId/messages`,
+including `isOwn` for the receiving account, so a client can append it
+directly. Events follow the same visibility rules as the message history:
+only active members of the trip receive them, and messages are never delivered
+across a block in either direction. A change that fails or rolls back is never
+announced.
+
+Client rules:
+
+- After `ready` and `resync`, refetch the open room and the unread count.
+  Events missed while disconnected are not replayed.
+- The server sends a comment line every 25 seconds to keep the connection
+  open, and ends every stream after 60 minutes. Reconnect with a fresh ID token
+  whenever the stream ends; the `retry` field suggests waiting 5 seconds.
+- An account can keep 5 streams open at once (`429 REALTIME_STREAM_LIMIT`).
+- A client that stops reading is disconnected rather than buffered.
+
+Every API instance holds one extra database connection that `LISTEN`s for
+events, so streams work across several instances without extra services. That
+connection must go directly to PostgreSQL, not through a transaction-mode
+pooler such as PgBouncer. Behind nginx or another proxy, the stream sends
+`X-Accel-Buffering: no`; the proxy's read timeout must be longer than 25
+seconds.
 
 ## Staff moderation
 
@@ -398,16 +527,40 @@ check the account's current database role and active status on every request.
 - `POST /api/v1/admin/users/:userId/suspend` suspends an active account with a
   reason; `POST /api/v1/admin/users/:userId/restore` restores one and is
   administrator-only.
+- `POST /api/v1/admin/users/:userId/remove-profile-photo` removes an
+  inappropriate profile photo without a report, with a reason. The same staff
+  protections as suspension apply.
 - `GET /api/v1/admin/moderation-actions` is an administrator-only audit view.
 
-Content removal supports trips, messages, community posts, and community
-comments. It retains the records for review instead of hard-deleting them.
+Content removal supports trips, messages, community posts, community
+comments, and profile photos. It retains the records for review instead of hard-deleting them.
 Removed trips disappear from public discovery and cannot be republished by the
 owner; existing private room and financial records remain available to their
 eligible members. Connection requests and user accounts are not removable
 content; use account suspension or dismiss those reports. Suspending an account
 blocks its authenticated API access and hides its public profile, trips, and
 community content. Administrator accounts cannot be suspended through the API.
+
+### Profile photo moderation
+
+Anyone can report a profile photo with `POST /api/v1/reports`, using
+`targetType` `PROFILE_PHOTO` and the photo owner's user ID as `targetId`. This
+is separate from reporting the person (`USER`), and both can be open at once.
+The report records which photo was reported and stores a private copy of it as
+evidence, because the owner may replace the photo before staff review it.
+
+- Inspecting the report shows the owner, whether the reported photo is still
+  their current one, and a 15-minute link to the evidence copy.
+- Resolving with `REMOVE_CONTENT` removes the reported photo only. If the owner
+  has already replaced it, the request returns `409 CONTENT_ALREADY_REMOVED`
+  and the new photo stays; review it with a new report or remove it directly.
+- Every removal deletes the public file, keeps the evidence copy in the private
+  bucket, records a `CONTENT_REMOVED` action with target type `PROFILE_PHOTO`,
+  and sends the owner a `PROFILE_PHOTO_REMOVED` notification. The owner can
+  upload a new photo afterwards.
+
+Evidence copies have no automatic expiry yet; their retention belongs to the
+data-retention rules still to be agreed.
 
 Staff roles are provisioned **only by a database operator**, never through a
 public API. After the target account has signed in and exists in PostgreSQL,
@@ -436,12 +589,14 @@ Firebase-authenticated account. The caller supplies only a Bearer ID token;
 the API derives the local user ID from that token. Active and suspended users
 can export; deleted accounts cannot. The response uses `Content-Disposition:
 attachment` and `Cache-Control: private, no-store`; the API does not retain a
-copy. Limit: five exports per token per hour.
+copy. Limit: five exports per account per hour.
 
 The JSON includes the local account, profile, linked sign-in identity, verified
 contacts, policy acceptance and data-request history, and account-linked trips,
 memberships, requests, community activity, checklist items, expenses,
-settlements, sent messages, notifications, blocks, and submitted reports. It
+settlements, receipts the account uploaded (file type, size, and dates, not
+links), sent messages, notifications, push device registrations (platform and
+dates, not tokens), blocks, and submitted reports. It
 excludes other members' profiles and messages, moderation review notes, IP
 hashes, and Firebase-managed data that is not stored in this database. The
 export is sensitive: the Flutter client must save it only where the user
@@ -468,6 +623,53 @@ automatic deletion in the client UI. Agree and document retention, identity
 verification, response handling and deletion rules before implementing the
 fulfilment workflow; the PRD calls for qualified review before public beta.
 
+## File storage (Cloudflare R2)
+
+Profile photos and receipts are stored in Cloudflare R2, which has a free tier
+of 10 GB of storage per month and no charge for downloads. Files go through the
+API, which validates and re-encodes them, so clients never upload to R2
+directly and buckets need no CORS rules.
+
+Set up R2 once:
+
+1. Create two buckets. The public bucket holds profile photos; the private
+   bucket holds receipts and must never be made public.
+2. Connect a custom domain to the public bucket, such as
+   `media.your-domain.example`. The `r2.dev` address works for development but
+   is rate limited and not meant for production.
+3. Create an R2 API token with **Object Read & Write** permission for those two
+   buckets only.
+4. Configure all six settings together:
+
+   | Variable               | Value                                              |
+   | ---------------------- | -------------------------------------------------- |
+   | `R2_ACCOUNT_ID`        | Cloudflare account ID (32 characters)              |
+   | `R2_ACCESS_KEY_ID`     | API token access key ID                            |
+   | `R2_SECRET_ACCESS_KEY` | API token secret access key                        |
+   | `R2_PUBLIC_BUCKET`     | Public bucket name                                 |
+   | `R2_PRIVATE_BUCKET`    | Private bucket name                                |
+   | `R2_PUBLIC_BASE_URL`   | HTTPS address of the public bucket's custom domain |
+
+Without these settings the API still runs: upload and receipt endpoints return
+`503 STORAGE_UNAVAILABLE`, and `profilePhotoUrl` is `null`.
+
+## Rate limiting and proxies
+
+Every route is rate limited, with stricter per-route limits on writes such as
+reports, connection requests, and messages. Requests with a valid Firebase ID
+token are counted per account, so people who share an IP address (a mobile
+carrier, an office, a campus) do not share limits. Requests without a valid token
+are counted per client IP address.
+
+When the API runs behind a load balancer or reverse proxy, set `TRUST_PROXY` to
+the number of proxy hops (usually `1`) or to a comma-separated list of proxy
+addresses. Without it, every anonymous request appears to come from the proxy and
+shares one limit. Do not set `TRUST_PROXY=true` on a server that clients can
+reach directly, because they could then spoof `X-Forwarded-For`.
+
+Limits are kept in each process's memory. Running more than one API instance
+requires a shared store such as Redis, which is not configured yet.
+
 ## Database workflow
 
 The project uses PostgreSQL with Prisma ORM. Prisma keeps database changes in
@@ -486,8 +688,48 @@ committed migrations with:
 npm run db:migrate:deploy
 ```
 
+The Docker image runs this automatically each time the container starts.
+
 Never run development migrations or destructive reset commands against staging
 or production databases.
+
+Prisma 7 generates its client into `src/generated/prisma`, which is not
+committed. `npm install` and `npm run build` regenerate it. After changing the
+schema, run `npm run db:generate` yourself: `db:migrate:dev` no longer
+generates the client or runs the seed.
+
+### Connection settings
+
+The API talks to PostgreSQL through node-postgres (`@prisma/adapter-pg`).
+These Prisma-style `DATABASE_URL` parameters are still honoured:
+
+| Parameter          | Effect                                                |
+| ------------------ | ----------------------------------------------------- |
+| `connection_limit` | Maximum pool size (default 10 per process)            |
+| `connect_timeout`  | Seconds to wait for a connection (default 5)          |
+| `schema`           | PostgreSQL schema for Prisma queries (default public) |
+
+Other Prisma-only parameters such as `pool_timeout` and `pgbouncer` are
+ignored. Encryption settings now behave like other Node.js tools:
+`sslmode=require` checks the server certificate, so prefer
+`sslmode=verify-full` for managed databases with a public certificate. A
+database with a self-signed certificate needs its CA in `NODE_EXTRA_CA_CERTS`;
+`uselibpqcompat=true&sslmode=require` encrypts without checking it. A database
+on the same server as the API needs no SSL parameters.
+
+Inside a transaction, Prisma 7 loads related records in parallel on one
+connection. node-postgres queues those queries and prints a one-time
+`DeprecationWarning` about it; the results are correct. pg 9 removes that
+queue, so Dependabot holds pg at major version 8 until Prisma changes this.
+
+### Dependency notes
+
+- `package.json` overrides `mysql2` and `deepmerge-ts`, which the Prisma CLI
+  pins to versions with published security advisories. The API never loads
+  either one. Remove the overrides once a Prisma release ships fixed versions.
+- TypeScript stays on 6.x until `typescript-eslint` supports TypeScript 7, and
+  `@types/node` follows the Node.js 24 runtime. Dependabot ignores those major
+  updates, together with Prisma 8.
 
 ## Quality checks
 
@@ -512,10 +754,14 @@ src/
   config/       Environment parsing and validation
   database/     Database connection infrastructure
   modules/      Product modules and HTTP routes
+  realtime/     Live event stream and PostgreSQL LISTEN/NOTIFY bus
+  storage/      Cloudflare R2 client and upload processing
+  generated/    Prisma client (generated, not committed)
   app.ts        Fastify application composition
   server.ts     Process startup and graceful shutdown
 test/           Automated tests
 prisma/         Database schema and committed migrations
+scripts/        Staff-role commands and the Docker entrypoint
 ```
 
 ## Git workflow

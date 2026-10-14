@@ -1,6 +1,13 @@
-import type { Prisma, TripTransport } from '@prisma/client';
+import type { Prisma, TripTransport } from '../../generated/prisma/client.js';
 
 export const publicTripStatuses = ['PUBLISHED', 'FULL'] as const;
+
+// Public discovery and join requests only include trips that have not ended.
+export function utcStartOfToday(now = new Date()): Date {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
 
 export interface ListTripsQuery {
   origin?: string;

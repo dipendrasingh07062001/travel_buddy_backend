@@ -1,6 +1,5 @@
-import type { PolicyType } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import type { PolicyType } from '../../generated/prisma/client.js';
 
 export function listPolicyAcceptances(userId: string) {
   return database.policyAcceptance.findMany({

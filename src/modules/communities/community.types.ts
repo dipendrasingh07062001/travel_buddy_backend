@@ -1,5 +1,4 @@
-import type { CommunityPostType } from '@prisma/client';
-
+import type { CommunityPostType } from '../../generated/prisma/client.js';
 import type { TripRepository } from '../trips/trip.types.js';
 
 export interface CommunitySummaryRecord {

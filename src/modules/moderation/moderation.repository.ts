@@ -1,7 +1,17 @@
-import type { Prisma, Report, ReportStatus, StaffRole } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import type {
+  Prisma,
+  Report,
+  ReportStatus,
+  StaffRole,
+} from '../../generated/prisma/client.js';
+import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
+import {
+  publicObjectUrl,
+  type ObjectStorage,
+} from '../../storage/object-storage.js';
+import { createNotifications } from '../notifications/notification.repository.js';
 
 type Transaction = Prisma.TransactionClient;
 type Resolution = 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT';
@@ -64,7 +74,15 @@ export async function findStaffReport(id: string) {
   return report;
 }
 
-export async function findStaffReportDetail(id: string, actorId: string) {
+// Staff see the reported photo through a short-lived link to the private
+// evidence copy, plus whether it is still the user's current photo.
+const evidenceUrlSeconds = 15 * 60;
+
+export async function findStaffReportDetail(
+  id: string,
+  actorId: string,
+  storage: ObjectStorage | null,
+) {
   const report = await findStaffReport(id);
   await database.moderationAction.create({
     data: {
@@ -78,6 +96,35 @@ export async function findStaffReportDetail(id: string, actorId: string) {
   });
   let target: object | null = null;
   switch (report.targetType) {
+    case 'PROFILE_PHOTO': {
+      const user = await database.user.findUnique({
+        where: { id: report.reportedUserId! },
+        select: {
+          id: true,
+          displayName: true,
+          status: true,
+          profile: { select: { profilePhotoStorageKey: true } },
+        },
+      });
+      const currentKey = user?.profile?.profilePhotoStorageKey ?? null;
+      target = user && {
+        id: user.id,
+        displayName: user.displayName,
+        status: user.status,
+        photo: {
+          stillCurrent: currentKey === report.reportedPhotoKey,
+          currentPhotoUrl: publicObjectUrl(currentKey),
+          evidenceUrl:
+            report.evidenceStorageKey && storage
+              ? await storage.signedPrivateUrl(
+                  report.evidenceStorageKey,
+                  evidenceUrlSeconds,
+                )
+              : null,
+        },
+      };
+      break;
+    }
     case 'USER':
       target = await database.user.findUnique({
         where: { id: report.reportedUserId! },
@@ -192,6 +239,7 @@ async function reportedAccountId(
 ): Promise<string> {
   switch (report.targetType) {
     case 'USER':
+    case 'PROFILE_PHOTO':
       return report.reportedUserId!;
     case 'TRIP': {
       const trip = await tx.trip.findUnique({
@@ -245,6 +293,27 @@ async function reportedAccountId(
   );
 }
 
+// Staff cannot act on their own account or on administrators, and only
+// administrators can act on moderators.
+function requireModeratableAccount(
+  userId: string,
+  targetRole: StaffRole,
+  actorId: string,
+  actorRole: StaffRole,
+): void {
+  if (
+    userId === actorId ||
+    targetRole === 'ADMIN' ||
+    (targetRole === 'MODERATOR' && actorRole !== 'ADMIN')
+  ) {
+    throw new AppError(
+      403,
+      'STAFF_TARGET_PROTECTED',
+      'Staff cannot take this action on this account.',
+    );
+  }
+}
+
 async function suspendUser(
   tx: Transaction,
   userId: string,
@@ -256,17 +325,7 @@ async function suspendUser(
     select: { status: true, staffRole: true },
   });
   if (!target) throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
-  if (
-    userId === actorId ||
-    target.staffRole === 'ADMIN' ||
-    (target.staffRole === 'MODERATOR' && actorRole !== 'ADMIN')
-  ) {
-    throw new AppError(
-      403,
-      'STAFF_TARGET_PROTECTED',
-      'This staff account cannot be suspended.',
-    );
-  }
+  requireModeratableAccount(userId, target.staffRole, actorId, actorRole);
   if (target.status !== 'ACTIVE') {
     throw new AppError(
       409,
@@ -297,9 +356,22 @@ async function removeContent(
   report: Report,
   actorId: string,
   now: Date,
-): Promise<void> {
+): Promise<{ removedPhotoKey: string | null }> {
   let count = 0;
+  let removedPhotoKey: string | null = null;
   switch (report.targetType) {
+    case 'PROFILE_PHOTO':
+      // Only the reported photo is removed; a replacement the user has
+      // uploaded since is not.
+      count = await clearProfilePhoto(
+        tx,
+        report.reportedUserId!,
+        report.reportedPhotoKey!,
+        report.id,
+        now,
+      );
+      if (count === 1) removedPhotoKey = report.reportedPhotoKey;
+      break;
     case 'TRIP':
       count = (
         await tx.trip.updateMany({
@@ -327,6 +399,7 @@ async function removeContent(
     case 'MESSAGE': {
       const message = await tx.message.findUnique({
         where: { id: report.reportedMessageId! },
+        include: { conversation: { select: { tripId: true } } },
       });
       if (message && message.status !== 'DELETED') {
         count = (
@@ -344,6 +417,11 @@ async function removeContent(
               previousBody: message.body,
               createdAt: now,
             },
+          });
+          await publishRealtimeEvent(tx, {
+            type: 'message.deleted',
+            messageId: message.id,
+            tripId: message.conversation.tripId,
           });
         }
       }
@@ -363,6 +441,31 @@ async function removeContent(
       'The reported content is already removed or unavailable.',
     );
   }
+  return { removedPhotoKey };
+}
+
+// Clears the photo only if it is still the given one, and tells the user.
+async function clearProfilePhoto(
+  tx: Transaction,
+  userId: string,
+  photoKey: string,
+  sourceId: string,
+  now: Date,
+): Promise<number> {
+  const cleared = await tx.userProfile.updateMany({
+    where: { userId, profilePhotoStorageKey: photoKey },
+    data: { profilePhotoStorageKey: null },
+  });
+  if (cleared.count === 1) {
+    await createNotifications(tx, {
+      recipientIds: [userId],
+      type: 'PROFILE_PHOTO_REMOVED',
+      eventKey: `profile-photo:${photoKey}:removed`,
+      sourceId,
+      createdAt: now,
+    });
+  }
+  return cleared.count;
 }
 
 export async function resolveReport(
@@ -405,6 +508,7 @@ export async function resolveReport(
         'The report was resolved by another reviewer.',
       );
 
+    let removedPhotoKey: string | null = null;
     let action: 'REPORT_DISMISSED' | 'USER_SUSPENDED' | 'CONTENT_REMOVED';
     let actionTargetType = report.targetType;
     let actionTargetId = targetId(report);
@@ -417,7 +521,12 @@ export async function resolveReport(
       await suspendUser(tx, actionTargetId, actorId, actorRole);
     } else {
       action = 'CONTENT_REMOVED';
-      await removeContent(tx, report, actorId, new Date());
+      ({ removedPhotoKey } = await removeContent(
+        tx,
+        report,
+        actorId,
+        new Date(),
+      ));
     }
     await tx.moderationAction.create({
       data: {
@@ -429,7 +538,74 @@ export async function resolveReport(
         reason,
       },
     });
-    return tx.report.findUniqueOrThrow({ where: { id: reportId } });
+    return {
+      report: await tx.report.findUniqueOrThrow({ where: { id: reportId } }),
+      // The caller deletes this public file once the transaction commits.
+      removedPhotoKey,
+    };
+  });
+}
+
+// Checks a direct photo removal before evidence is copied: returns the photo
+// that would be removed.
+export async function profilePhotoRemovalTarget(
+  userId: string,
+  actorId: string,
+  actorRole: StaffRole,
+): Promise<string> {
+  const target = await database.user.findUnique({
+    where: { id: userId },
+    select: {
+      staffRole: true,
+      profile: { select: { profilePhotoStorageKey: true } },
+    },
+  });
+  if (!target) throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
+  requireModeratableAccount(userId, target.staffRole, actorId, actorRole);
+  const photoKey = target.profile?.profilePhotoStorageKey;
+  if (!photoKey) {
+    throw new AppError(
+      409,
+      'NO_PROFILE_PHOTO',
+      'This account has no profile photo.',
+    );
+  }
+  return photoKey;
+}
+
+export async function removeProfilePhotoDirect(input: {
+  userId: string;
+  actorId: string;
+  photoKey: string;
+  evidenceKey: string | null;
+  reason: string;
+}) {
+  return database.$transaction(async (tx) => {
+    const action = await tx.moderationAction.create({
+      data: {
+        actorId: input.actorId,
+        action: 'CONTENT_REMOVED',
+        targetType: 'PROFILE_PHOTO',
+        targetId: input.userId,
+        reason: input.reason,
+        evidenceStorageKey: input.evidenceKey,
+      },
+    });
+    const cleared = await clearProfilePhoto(
+      tx,
+      input.userId,
+      input.photoKey,
+      action.id,
+      new Date(),
+    );
+    if (cleared !== 1) {
+      throw new AppError(
+        409,
+        'USER_STATE_CHANGED',
+        'The profile photo changed during review. Check it again.',
+      );
+    }
+    return { userId: input.userId, profilePhotoRemoved: true };
   });
 }
 

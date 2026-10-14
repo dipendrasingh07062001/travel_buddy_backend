@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -10,6 +11,7 @@ import { checkDatabase } from './database/client.js';
 import { AppError } from './errors/app-error.js';
 import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
+import { rateLimitKey } from './modules/auth/auth.service.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
 import { registerDataExportRoutes } from './modules/data-export/data-export.routes.js';
@@ -17,6 +19,7 @@ import { registerDataRequestRoutes } from './modules/data-requests/data-request.
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
 import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
+import { registerReceiptRoutes } from './modules/expenses/receipt.routes.js';
 import { registerCommunityRoutes } from './modules/communities/community.routes.js';
 import { registerCommunityAdminRoutes } from './modules/communities/community-admin.routes.js';
 import type { CommunityRouteDependencies } from './modules/communities/community.types.js';
@@ -30,11 +33,13 @@ import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
+import { registerPushDeviceRoutes } from './modules/notifications/push-device.routes.js';
 import { registerPolicyRoutes } from './modules/policies/policy.routes.js';
 import {
   configuredPolicyCatalog,
   type PolicyCatalog,
 } from './modules/policies/policy.service.js';
+import { registerProfilePhotoRoutes } from './modules/profiles/profile-photo.routes.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
@@ -45,9 +50,19 @@ import {
   registerTripRoutes,
   type TripRouteDependencies,
 } from './modules/trips/trip.routes.js';
+import { RealtimeHub } from './realtime/realtime-hub.js';
+import {
+  registerRealtimeRoutes,
+  type RealtimeStreamSettings,
+} from './realtime/realtime.routes.js';
+import {
+  configuredObjectStorage,
+  type ObjectStorage,
+} from './storage/object-storage.js';
 
 export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
+  trustProxy?: FastifyServerOptions['trustProxy'];
   health?: Partial<HealthRouteDependencies>;
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
@@ -59,15 +74,26 @@ export interface BuildAppOptions {
   communityContent?: Partial<CommunityContentRouteDependencies>;
   tripRoom?: Partial<TripRoomRouteDependencies>;
   policyCatalog?: PolicyCatalog;
+  storage?: ObjectStorage | null;
+  realtime?: RealtimeHub;
+  realtimeStreams?: RealtimeStreamSettings;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({
+    trustProxy: options.trustProxy ?? env.TRUST_PROXY,
     logger: options.logger ?? {
       level: env.LOG_LEVEL,
       redact: ['req.headers.authorization', 'req.headers.cookie'],
     },
   });
+  const authDependencies = resolveAuthDependencies(options.auth);
+  const storage =
+    options.storage === undefined ? configuredObjectStorage() : options.storage;
+  const realtime = options.realtime ?? new RealtimeHub();
+  realtime.logger ??= app.log;
+  // Open event streams would otherwise keep the server from closing.
+  app.addHook('preClose', async () => realtime.closeAll());
 
   app.register(helmet);
   app.register(cors, {
@@ -79,6 +105,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    keyGenerator: (request) =>
+      rateLimitKey(request, authDependencies.tokenVerifier),
   });
   app.register(swagger, {
     openapi: {
@@ -97,7 +125,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(swaggerUi, { routePrefix: '/docs' });
   app.register(
     async (api) => {
-      const authDependencies = resolveAuthDependencies(options.auth);
+      // Uploads are single files; each route sets its own size limit.
+      await api.register(multipart, {
+        limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
+      });
       await registerHealthRoutes(api, {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
@@ -110,6 +141,7 @@ export function buildApp(options: BuildAppOptions = {}) {
           : options.policyCatalog,
       );
       await registerProfileRoutes(api, authDependencies, options.profiles);
+      await registerProfilePhotoRoutes(api, authDependencies, storage);
       await registerDataExportRoutes(api, authDependencies);
       await registerDataRequestRoutes(api, authDependencies);
       await registerTripRoutes(api, authDependencies, options.trips);
@@ -125,13 +157,26 @@ export function buildApp(options: BuildAppOptions = {}) {
         authDependencies,
         options.connections,
       );
-      await registerSafetyRoutes(api, authDependencies, options.safety);
-      await registerModerationRoutes(api, authDependencies);
+      await registerSafetyRoutes(
+        api,
+        authDependencies,
+        options.safety,
+        storage,
+      );
+      await registerModerationRoutes(api, authDependencies, storage);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerNotificationRoutes(api, authDependencies);
+      await registerPushDeviceRoutes(api, authDependencies);
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);
       await registerFinancialRoutes(api, authDependencies);
+      await registerReceiptRoutes(api, authDependencies, storage);
+      await registerRealtimeRoutes(
+        api,
+        authDependencies,
+        realtime,
+        options.realtimeStreams,
+      );
     },
     { prefix: '/api/v1' },
   );
@@ -146,8 +191,6 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   app.setErrorHandler(async (error, request, reply) => {
-    request.log.error({ error }, 'Request failed');
-
     const statusCode =
       error instanceof AppError
         ? error.statusCode
@@ -158,6 +201,20 @@ export function buildApp(options: BuildAppOptions = {}) {
             error.statusCode >= 400
           ? error.statusCode
           : 500;
+    // Pino serialises errors only under `err`. Client errors are expected, so
+    // they are logged without a stack at info level to keep real failures visible.
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, 'Request failed');
+    } else {
+      request.log.info(
+        {
+          statusCode,
+          code: error instanceof AppError ? error.code : undefined,
+        },
+        'Request rejected',
+      );
+    }
+
     const message =
       statusCode >= 500
         ? 'An unexpected error occurred.'

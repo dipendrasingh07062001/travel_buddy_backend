@@ -1,11 +1,10 @@
+import { database } from '../../database/client.js';
+import { AppError } from '../../errors/app-error.js';
 import {
   Prisma,
   type AccountDataRequestStatus,
   type AccountDataRequestType,
-} from '@prisma/client';
-
-import { database } from '../../database/client.js';
-import { AppError } from '../../errors/app-error.js';
+} from '../../generated/prisma/client.js';
 
 export async function createDataRequest(
   userId: string,

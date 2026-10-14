@@ -2,23 +2,15 @@ import { presentPublicProfile } from '../profiles/profile.presenter.js';
 import type { BlockRecord, ReportRecord } from './safety.types.js';
 
 function reportTarget(report: ReportRecord) {
-  if (report.reportedUserId) return { type: 'USER', id: report.reportedUserId };
-  if (report.reportedTripId) return { type: 'TRIP', id: report.reportedTripId };
-  if (report.reportedConnectionRequestId) {
-    return {
-      type: 'CONNECTION_REQUEST',
-      id: report.reportedConnectionRequestId,
-    };
-  }
-  if (report.reportedMessageId) {
-    return { type: 'MESSAGE', id: report.reportedMessageId };
-  }
-  if (report.reportedCommunityPostId) {
-    return { type: 'COMMUNITY_POST', id: report.reportedCommunityPostId };
-  }
   return {
-    type: 'COMMUNITY_COMMENT',
-    id: report.reportedCommunityCommentId,
+    type: report.targetType,
+    id:
+      report.reportedUserId ??
+      report.reportedTripId ??
+      report.reportedConnectionRequestId ??
+      report.reportedMessageId ??
+      report.reportedCommunityPostId ??
+      report.reportedCommunityCommentId,
   };
 }
 

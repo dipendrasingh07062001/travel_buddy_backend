@@ -3,7 +3,7 @@ import type {
   ReportReason,
   ReportStatus,
   ReportTargetType,
-} from '@prisma/client';
+} from '../../generated/prisma/client.js';
 
 export const blockedUserSelect = {
   id: true,

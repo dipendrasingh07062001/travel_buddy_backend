@@ -1,7 +1,7 @@
-import type { CommunityPostType } from '@prisma/client';
-
 import { AppError } from '../../errors/app-error.js';
+import type { CommunityPostType } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
+import { requireCompleteProfile } from '../profiles/profile-completeness.js';
 import type {
   CommunityContentRepository,
   ListCommunityCommentsQuery,
@@ -20,19 +20,7 @@ export interface UpdateCommunityPostBody {
 }
 
 function requireCommunityProfile(user: AuthenticatedUser): void {
-  if (
-    !user.displayName ||
-    !user.birthDate ||
-    !user.profile?.homeCity ||
-    !user.profile.biography ||
-    user.profile.languages.length === 0
-  ) {
-    throw new AppError(
-      409,
-      'PROFILE_INCOMPLETE',
-      'Complete your display name, birth date, home city, biography, and languages before contributing to a community.',
-    );
-  }
+  requireCompleteProfile(user, 'contributing to a community');
   if (user.profile.communityActivityVisibility !== 'PUBLIC') {
     throw new AppError(
       409,

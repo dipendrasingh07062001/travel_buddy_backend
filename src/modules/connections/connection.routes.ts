@@ -1,7 +1,7 @@
-import type { ConnectionRequestStatus } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
 import { AppError } from '../../errors/app-error.js';
+import type { ConnectionRequestStatus } from '../../generated/prisma/client.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicUserSchema } from '../profiles/profile.schemas.js';

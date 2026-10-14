@@ -2,7 +2,7 @@ import type {
   ExpenseCategory,
   ExpenseSplitMethod,
   Prisma,
-} from '@prisma/client';
+} from '../../generated/prisma/client.js';
 
 export const expenseInclude = {
   createdBy: { select: { id: true, displayName: true } },

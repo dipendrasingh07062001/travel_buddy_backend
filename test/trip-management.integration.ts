@@ -48,8 +48,22 @@ beforeAll(async () => {
     url: '/api/v1/auth/bootstrap',
     headers: otherHeaders,
   });
-  ownerId = owner.json().data.id;
+  const bootstrappedOwnerId = owner.json().data.id as string;
+  ownerId = bootstrappedOwnerId;
   otherUserId = other.json().data.id;
+  await database.user.update({
+    where: { id: bootstrappedOwnerId },
+    data: {
+      birthDate: new Date('1995-05-20T00:00:00.000Z'),
+      profile: {
+        create: {
+          homeCity: 'Delhi',
+          biography: 'Integration profile for trip management testing.',
+          languages: ['english'],
+        },
+      },
+    },
+  });
 });
 
 afterAll(async () => {

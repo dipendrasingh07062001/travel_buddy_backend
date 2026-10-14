@@ -1,7 +1,6 @@
-import { Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 /** Only records belonging to this account are selected. Never export joined users or internal review notes. */
 export async function createAccountDataExport(userId: string) {
@@ -79,10 +78,12 @@ export async function createAccountDataExport(userId: string) {
         expenseShares,
         expenseRevisions,
         expenseDisputes,
+        expenseReceipts,
         settlements,
         messages,
         messageRevisions,
         notifications,
+        pushDevices,
         blocks,
         reports,
       ] = await Promise.all([
@@ -271,6 +272,18 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: { createdAt: 'asc' },
         }),
+        tx.expenseReceipt.findMany({
+          where: { uploadedById: userId },
+          select: {
+            id: true,
+            expenseId: true,
+            contentType: true,
+            sizeBytes: true,
+            createdAt: true,
+            removedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
         tx.settlement.findMany({
           where: { OR: [{ payerId: userId }, { receiverId: userId }] },
           select: {
@@ -325,6 +338,16 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: { createdAt: 'asc' },
         }),
+        tx.pushDevice.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            platform: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
         tx.userBlock.findMany({
           where: { blockerId: userId },
           select: { blockedId: true, createdAt: true },
@@ -369,10 +392,12 @@ export async function createAccountDataExport(userId: string) {
           expenseShares,
           expenseRevisions,
           expenseDisputes,
+          expenseReceipts,
           settlements,
           messages,
           messageRevisions,
           notifications,
+          pushDevices,
           blocks,
           reports,
         },

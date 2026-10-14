@@ -1,4 +1,7 @@
-import type { CommunityCommentStatus, CommunityPostType } from '@prisma/client';
+import type {
+  CommunityCommentStatus,
+  CommunityPostType,
+} from '../../generated/prisma/client.js';
 
 export interface CommunityContentAuthor {
   id: string;

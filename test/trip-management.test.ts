@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { Prisma, type TripStatus } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { Prisma, type TripStatus } from '../src/generated/prisma/client.js';
 import type {
   AuthenticatedUser,
   AuthRepository,
@@ -17,14 +17,28 @@ const otherUserId = '60000000-0000-4000-8000-000000000002';
 const communityId = '70000000-0000-4000-8000-000000000001';
 const trips = new Map<string, PublicTripRecord>();
 
+let ownerProfileComplete = true;
+
 function user(id: string): AuthenticatedUser {
+  const complete = id === ownerId && ownerProfileComplete;
   return {
     id,
     displayName: id === ownerId ? 'Trip Owner' : 'Other User',
-    birthDate: null,
+    birthDate: complete ? new Date('1995-05-20T00:00:00.000Z') : null,
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    profile: null,
+    profile: complete
+      ? {
+          profilePhotoStorageKey: null,
+          homeCity: 'Delhi',
+          homeRegion: 'Delhi NCR',
+          biography: 'Weekend trekker who organises small group trips.',
+          languages: ['english', 'hindi'],
+          travelInterests: ['trekking'],
+          pastTripsVisibility: 'MEMBERS_ONLY',
+          communityActivityVisibility: 'PUBLIC',
+        }
+      : null,
   };
 }
 
@@ -223,6 +237,22 @@ describe('authenticated trip management HTTP contract', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('TRIP_FORBIDDEN');
+  });
+
+  it('requires a complete adult profile before publishing', async () => {
+    ownerProfileComplete = false;
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${tripId}/publish`,
+        headers: { authorization: 'Bearer owner-token' },
+        payload: { expectedVersion: 2 },
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('PROFILE_INCOMPLETE');
+    } finally {
+      ownerProfileComplete = true;
+    }
   });
 
   it('publishes through the lifecycle command and rejects an invalid repeat', async () => {

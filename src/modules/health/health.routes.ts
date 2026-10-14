@@ -80,7 +80,7 @@ export async function registerHealthRoutes(
           checks: { database: 'up' as const },
         };
       } catch (error) {
-        app.log.error({ error }, 'Readiness check failed');
+        app.log.error({ err: error }, 'Readiness check failed');
         return reply.code(503).send({
           status: 'not_ready' as const,
           checks: { database: 'down' as const },

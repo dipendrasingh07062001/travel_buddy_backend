@@ -1,6 +1,9 @@
-import type { Prisma, ReportTargetType } from '@prisma/client';
-
 import { database } from '../../database/client.js';
+import { AppError } from '../../errors/app-error.js';
+import type {
+  Prisma,
+  ReportTargetType,
+} from '../../generated/prisma/client.js';
 import {
   blockInclude,
   type CreateReportInput,
@@ -13,6 +16,7 @@ function reportTargetWhere(
 ): Prisma.ReportWhereInput {
   switch (targetType) {
     case 'USER':
+    case 'PROFILE_PHOTO':
       return { reportedUserId: targetId };
     case 'TRIP':
       return { reportedTripId: targetId };
@@ -35,7 +39,10 @@ function reportTargetData(
     targetType: input.targetType,
     reason: input.reason,
     details: input.details,
-    ...(input.targetType === 'USER' && { reportedUserId: input.targetId }),
+    ...((input.targetType === 'USER' ||
+      input.targetType === 'PROFILE_PHOTO') && {
+      reportedUserId: input.targetId,
+    }),
     ...(input.targetType === 'TRIP' && { reportedTripId: input.targetId }),
     ...(input.targetType === 'CONNECTION_REQUEST' && {
       reportedConnectionRequestId: input.targetId,
@@ -108,6 +115,17 @@ export const prismaSafetyRepository: SafetyRepository = {
 
   async canReportTarget(reporterId, targetType, targetId) {
     switch (targetType) {
+      case 'PROFILE_PHOTO':
+        return (
+          (await database.user.count({
+            where: {
+              id: targetId,
+              status: 'ACTIVE',
+              deletedAt: null,
+              profile: { profilePhotoStorageKey: { not: null } },
+            },
+          })) === 1
+        );
       case 'USER':
         return (
           (await database.user.count({
@@ -205,7 +223,29 @@ export const prismaSafetyRepository: SafetyRepository = {
   },
 
   createReport(input) {
-    return database.report.create({ data: reportTargetData(input) });
+    if (input.targetType !== 'PROFILE_PHOTO') {
+      return database.report.create({ data: reportTargetData(input) });
+    }
+    // Records which photo was reported, since the user may replace it.
+    return database.$transaction(async (transaction) => {
+      const profile = await transaction.userProfile.findUnique({
+        where: { userId: input.targetId },
+        select: { profilePhotoStorageKey: true },
+      });
+      if (!profile?.profilePhotoStorageKey) {
+        throw new AppError(
+          404,
+          'REPORT_TARGET_NOT_FOUND',
+          'Report target not found.',
+        );
+      }
+      return transaction.report.create({
+        data: {
+          ...reportTargetData(input),
+          reportedPhotoKey: profile.profilePhotoStorageKey,
+        },
+      });
+    });
   },
 
   async listReports(reporterId, query) {

@@ -80,6 +80,21 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         data: { ...data, version: { increment: 1 } },
       });
       if (result.count !== 1) return null;
+      if (typeof data.currentGroupSize === 'number') {
+        // The update above holds the trip row lock. Accept, leave, and remove
+        // all update that row too, so they cannot commit a membership change
+        // that this count misses.
+        const activeMembers = await transaction.tripMembership.count({
+          where: { tripId: id, status: 'ACTIVE' },
+        });
+        if (data.currentGroupSize < activeMembers) {
+          throw new AppError(
+            409,
+            'GROUP_SIZE_BELOW_ACTIVE_MEMBERS',
+            `currentGroupSize cannot be lower than the ${activeMembers} active trip members.`,
+          );
+        }
+      }
       const trip = await transaction.trip.findUniqueOrThrow({
         where: { id },
         include: publicTripInclude,

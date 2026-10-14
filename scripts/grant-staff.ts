@@ -1,8 +1,10 @@
-import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { database } from '../src/database/client.js';
 
-const database = new PrismaClient();
-const [userId, role] = process.argv.slice(2);
+const [userId, requestedRole] = process.argv.slice(2);
+const role =
+  requestedRole === 'MODERATOR' || requestedRole === 'ADMIN'
+    ? requestedRole
+    : undefined;
 const operator = process.env.STAFF_GRANT_OPERATOR?.trim();
 
 if (
@@ -10,7 +12,7 @@ if (
   !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     userId,
   ) ||
-  !['MODERATOR', 'ADMIN'].includes(role ?? '') ||
+  !role ||
   !operator ||
   operator.length > 100
 ) {

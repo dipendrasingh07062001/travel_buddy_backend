@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum UserStatus {
@@ -178,6 +178,21 @@ enum NotificationType {
   SETTLEMENT_CONFIRMED
   SETTLEMENT_REJECTED
   SETTLEMENT_CANCELLED
+  PROFILE_PHOTO_REMOVED
+}
+
+enum PushPlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum PushDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  SKIPPED
+  FAILED
 }
 
 enum ReportTargetType {
@@ -187,6 +202,7 @@ enum ReportTargetType {
   MESSAGE
   COMMUNITY_POST
   COMMUNITY_COMMENT
+  PROFILE_PHOTO
 }
 
 enum ReportReason {
@@ -265,9 +281,12 @@ model User {
   expenseShares              ExpenseShare[]
   expenseRevisions           ExpenseRevision[]
   expenseDisputes            ExpenseDispute[]
+  expenseReceiptsUploaded    ExpenseReceipt[]          @relation("ExpenseReceiptUploader")
+  expenseReceiptsRemoved     ExpenseReceipt[]          @relation("ExpenseReceiptRemover")
   settlementsSent            Settlement[]              @relation("SettlementPayer")
   settlementsReceived        Settlement[]              @relation("SettlementReceiver")
   notifications              Notification[]
+  pushDevices                PushDevice[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -534,6 +553,7 @@ model Expense {
   shares      ExpenseShare[]
   revisions   ExpenseRevision[]
   disputes    ExpenseDispute[]
+  receipts    ExpenseReceipt[]
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -568,6 +588,25 @@ model ExpenseRevision {
   @@unique([expenseId, version])
   @@index([actorId, createdAt])
   @@map("expense_revisions")
+}
+
+model ExpenseReceipt {
+  id           String    @id @default(uuid()) @db.Uuid
+  expenseId    String    @map("expense_id") @db.Uuid
+  uploadedById String    @map("uploaded_by_id") @db.Uuid
+  storageKey   String    @unique @map("storage_key") @db.VarChar(500)
+  contentType  String    @map("content_type") @db.VarChar(100)
+  sizeBytes    Int       @map("size_bytes")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  removedAt    DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedById  String?   @map("removed_by_id") @db.Uuid
+  expense      Expense   @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedBy   User      @relation("ExpenseReceiptUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  removedBy    User?     @relation("ExpenseReceiptRemover", fields: [removedById], references: [id], onDelete: Restrict)
+
+  @@index([expenseId, createdAt])
+  @@index([uploadedById, createdAt])
+  @@map("expense_receipts")
 }
 
 model ExpenseDispute {
@@ -610,21 +649,36 @@ model Settlement {
 }
 
 model Notification {
-  id          String           @id @default(uuid()) @db.Uuid
-  recipientId String           @map("recipient_id") @db.Uuid
+  id          String             @id @default(uuid()) @db.Uuid
+  recipientId String             @map("recipient_id") @db.Uuid
   type        NotificationType
-  eventKey    String           @map("event_key") @db.VarChar(150)
-  sourceId    String           @map("source_id") @db.Uuid
-  tripId      String?          @map("trip_id") @db.Uuid
-  actorId     String?          @map("actor_id") @db.Uuid
-  recipient   User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  readAt      DateTime?        @map("read_at") @db.Timestamptz(6)
+  eventKey    String             @map("event_key") @db.VarChar(150)
+  sourceId    String             @map("source_id") @db.Uuid
+  tripId      String?            @map("trip_id") @db.Uuid
+  actorId     String?            @map("actor_id") @db.Uuid
+  recipient   User               @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  readAt      DateTime?          @map("read_at") @db.Timestamptz(6)
+  pushStatus  PushDeliveryStatus @default(PENDING) @map("push_status")
+  pushedAt    DateTime?          @map("pushed_at") @db.Timestamptz(6)
 
   @@unique([recipientId, eventKey])
   @@index([recipientId, createdAt, id])
   @@index([recipientId, readAt])
   @@map("notifications")
+}
+
+model PushDevice {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  token     String       @unique @db.VarChar(512)
+  platform  PushPlatform
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("push_devices")
 }
 
 model Conversation {
@@ -709,6 +763,8 @@ model Report {
   reportedMessageId           String?            @map("reported_message_id") @db.Uuid
   reportedCommunityPostId     String?            @map("reported_community_post_id") @db.Uuid
   reportedCommunityCommentId  String?            @map("reported_community_comment_id") @db.Uuid
+  reportedPhotoKey            String?            @map("reported_photo_key") @db.VarChar(500)
+  evidenceStorageKey          String?            @map("evidence_storage_key") @db.VarChar(500)
   reason                      ReportReason
   details                     String?            @db.VarChar(1000)
   status                      ReportStatus       @default(SUBMITTED)
@@ -740,16 +796,17 @@ model Report {
 }
 
 model ModerationAction {
-  id         String               @id @default(uuid()) @db.Uuid
-  actorId    String?              @map("actor_id") @db.Uuid
-  reportId   String?              @map("report_id") @db.Uuid
-  action     ModerationActionType
-  targetType ReportTargetType     @map("target_type")
-  targetId   String               @map("target_id") @db.Uuid
-  reason     String               @db.VarChar(1000)
-  actor      User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
-  report     Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
-  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                 String               @id @default(uuid()) @db.Uuid
+  actorId            String?              @map("actor_id") @db.Uuid
+  reportId           String?              @map("report_id") @db.Uuid
+  action             ModerationActionType
+  targetType         ReportTargetType     @map("target_type")
+  targetId           String               @map("target_id") @db.Uuid
+  reason             String               @db.VarChar(1000)
+  evidenceStorageKey String?              @map("evidence_storage_key") @db.VarChar(500)
+  actor              User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  report             Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([reportId, createdAt])
   @@index([targetType, targetId, createdAt])

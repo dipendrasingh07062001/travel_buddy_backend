@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { Prisma } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { Prisma } from '../src/generated/prisma/client.js';
 import type {
   AuthenticatedUser,
   AuthRepository,
@@ -133,6 +133,8 @@ const repository: SafetyRepository = {
         input.targetType === 'COMMUNITY_POST' ? input.targetId : null,
       reportedCommunityCommentId:
         input.targetType === 'COMMUNITY_COMMENT' ? input.targetId : null,
+      reportedPhotoKey: null,
+      evidenceStorageKey: null,
       reason: input.reason,
       details: input.details,
       status: 'SUBMITTED',

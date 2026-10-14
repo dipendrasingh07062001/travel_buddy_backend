@@ -1,6 +1,11 @@
-import type { Prisma, TripStatus, TripTransport } from '@prisma/client';
-
 import { AppError } from '../../errors/app-error.js';
+import type {
+  Prisma,
+  TripStatus,
+  TripTransport,
+} from '../../generated/prisma/client.js';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
+import { requireCompleteProfile } from '../profiles/profile-completeness.js';
 import type {
   CreateTripInput,
   TripManagementRepository,
@@ -276,17 +281,20 @@ const transitions = {
 export type TripAction = keyof typeof transitions;
 
 export async function transitionTrip(
-  ownerId: string,
+  owner: AuthenticatedUser,
   tripId: string,
   action: TripAction,
   expectedVersion: number,
   repository: TripManagementRepository,
   now = new Date(),
 ): Promise<PublicTripRecord> {
-  const trip = requireOwner(await repository.findById(tripId), ownerId);
+  const trip = requireOwner(await repository.findById(tripId), owner.id);
   requireVersion(trip, expectedVersion);
   const transition = transitions[action];
   requireStatus(trip, transition.from);
+  if (action === 'publish') {
+    requireCompleteProfile(owner, 'publishing a trip');
+  }
 
   const today = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
   if (action === 'publish' && trip.startDate < today) {
@@ -306,7 +314,7 @@ export async function transitionTrip(
 
   const updated = await repository.updateOwned(
     tripId,
-    ownerId,
+    owner.id,
     expectedVersion,
     transition.from,
     {

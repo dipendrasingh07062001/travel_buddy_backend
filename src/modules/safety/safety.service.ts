@@ -1,10 +1,9 @@
+import { AppError } from '../../errors/app-error.js';
 import {
   Prisma,
   type ReportReason,
   type ReportTargetType,
-} from '@prisma/client';
-
-import { AppError } from '../../errors/app-error.js';
+} from '../../generated/prisma/client.js';
 import type {
   BlockRecord,
   CreateReportInput,
@@ -43,7 +42,10 @@ export async function createReport(
   now = new Date(),
 ): Promise<ReportRecord> {
   const details = body.details?.trim() || null;
-  if (body.targetType === 'USER' && body.targetId === reporterId) {
+  if (
+    (body.targetType === 'USER' || body.targetType === 'PROFILE_PHOTO') &&
+    body.targetId === reporterId
+  ) {
     throw new AppError(
       409,
       'SELF_REPORT',

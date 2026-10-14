@@ -366,7 +366,7 @@ export async function registerTripRoutes(
       async (request) => {
         const user = await authenticateRequest(request, auth);
         const trip = await transitionTrip(
-          user.id,
+          user,
           request.params.tripId,
           action,
           request.body.expectedVersion,

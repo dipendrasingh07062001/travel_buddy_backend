@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { database as prisma } from '../src/database/client.js';
 
 const demoUserId = '10000000-0000-4000-8000-000000000001';
 
@@ -121,13 +119,26 @@ async function main(): Promise<void> {
     },
   });
 
+  // Trip dates stay in the future so the sample trips remain discoverable;
+  // public search hides trips after their end date.
+  const daysFromToday = (days: number) => {
+    const today = new Date();
+    return new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate() + days,
+      ),
+    );
+  };
+
   const trips = [
     {
       id: '30000000-0000-4000-8000-000000000001',
       communityId: communities[0].id,
       originCity: 'Delhi',
-      startDate: new Date('2026-10-10T00:00:00.000Z'),
-      endDate: new Date('2026-10-15T00:00:00.000Z'),
+      startDate: daysFromToday(14),
+      endDate: daysFromToday(19),
       flexibilityDays: 2,
       durationDays: 6,
       budgetMin: 12000,
@@ -144,8 +155,8 @@ async function main(): Promise<void> {
       id: '30000000-0000-4000-8000-000000000002',
       communityId: communities[1].id,
       originCity: 'Chandigarh',
-      startDate: new Date('2026-10-20T00:00:00.000Z'),
-      endDate: new Date('2026-10-28T00:00:00.000Z'),
+      startDate: daysFromToday(24),
+      endDate: daysFromToday(32),
       flexibilityDays: 1,
       durationDays: 9,
       budgetMin: 25000,
@@ -162,8 +173,8 @@ async function main(): Promise<void> {
       id: '30000000-0000-4000-8000-000000000003',
       communityId: communities[2].id,
       originCity: 'Delhi',
-      startDate: new Date('2026-11-05T00:00:00.000Z'),
-      endDate: new Date('2026-11-14T00:00:00.000Z'),
+      startDate: daysFromToday(35),
+      endDate: daysFromToday(44),
       flexibilityDays: 3,
       durationDays: 10,
       budgetMin: 30000,

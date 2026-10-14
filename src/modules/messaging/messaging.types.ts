@@ -1,5 +1,4 @@
-import type { MessageStatus, Prisma } from '@prisma/client';
-
+import type { MessageStatus, Prisma } from '../../generated/prisma/client.js';
 import { authenticatedUserSelect } from '../auth/auth.repository.js';
 import { checklistItemInclude } from '../trip-room/trip-room.types.js';
 

@@ -1,4 +1,7 @@
-import type { ProfileVisibility, UserStatus } from '@prisma/client';
+import type {
+  ProfileVisibility,
+  UserStatus,
+} from '../../generated/prisma/client.js';
 
 export interface VerifiedIdentity {
   subject: string;

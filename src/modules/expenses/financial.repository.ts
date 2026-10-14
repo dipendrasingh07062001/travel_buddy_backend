@@ -1,7 +1,9 @@
-import { Prisma, type SettlementStatus } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import {
+  Prisma,
+  type SettlementStatus,
+} from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { calculateBalances } from './expense.service.js';
 

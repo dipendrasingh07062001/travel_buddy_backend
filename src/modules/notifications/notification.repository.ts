@@ -1,7 +1,10 @@
-import type { NotificationType, Prisma } from '@prisma/client';
-
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import type {
+  NotificationType,
+  Prisma,
+} from '../../generated/prisma/client.js';
+import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
 
 interface NotificationEvent {
   recipientIds: string[];
@@ -34,6 +37,10 @@ export async function createNotifications(
       createdAt: event.createdAt ?? new Date(),
     })),
     skipDuplicates: true,
+  });
+  await publishRealtimeEvent(transaction, {
+    type: 'notifications.changed',
+    userIds: recipientIds,
   });
 }
 
@@ -91,6 +98,10 @@ export async function markNotificationRead(
       where: { id: notificationId, recipientId, readAt: null },
       data: { readAt: now },
     });
+    await publishRealtimeEvent(transaction, {
+      type: 'notifications.changed',
+      userIds: [recipientId],
+    });
     return transaction.notification.findUniqueOrThrow({
       where: { id: notificationId },
     });
@@ -101,9 +112,17 @@ export async function markAllNotificationsRead(
   recipientId: string,
   now = new Date(),
 ) {
-  const result = await database.notification.updateMany({
-    where: { recipientId, readAt: null },
-    data: { readAt: now },
+  return database.$transaction(async (transaction) => {
+    const result = await transaction.notification.updateMany({
+      where: { recipientId, readAt: null },
+      data: { readAt: now },
+    });
+    if (result.count > 0) {
+      await publishRealtimeEvent(transaction, {
+        type: 'notifications.changed',
+        userIds: [recipientId],
+      });
+    }
+    return result.count;
   });
-  return result.count;
 }
