@@ -8,6 +8,9 @@ export interface PushMessage {
   token: string;
   title: string;
   data: Record<string, string>;
+  // Devices replace an earlier alert with the same ID instead of showing it
+  // twice, so a resend after a crash does not duplicate it.
+  collapseId: string;
 }
 
 export type PushSendResult = 'sent' | 'invalid_token' | 'failed';
@@ -27,6 +30,9 @@ export interface PushBatchResult {
   claimed: number;
   sent: number;
   skipped: number;
+  // Failed this time and scheduled for another attempt.
+  retrying: number;
+  // Failed on the last allowed attempt.
   failed: number;
   removedDevices: number;
 }
@@ -35,6 +41,12 @@ const defaultBatchSize = 100;
 // Older alerts are no longer timely as a push; the inbox still shows them.
 const defaultMaximumAgeMs = 15 * 60 * 1000;
 const idleIntervalMs = 5_000;
+// A failed alert is tried again after each of these delays, then given up.
+const retryDelaysMs = [30_000, 2 * 60_000, 5 * 60_000];
+const maximumAttempts = retryDelaysMs.length + 1;
+// Sending a batch takes seconds; a claim this old belongs to a worker that
+// crashed or hung.
+const abandonedClaimMs = 5 * 60 * 1000;
 
 interface ClaimedNotification {
   id: string;
@@ -42,12 +54,13 @@ interface ClaimedNotification {
   type: NotificationType;
   source_id: string;
   trip_id: string | null;
+  push_attempts: number;
 }
 
 // Notification rows are the outbox: actions write them inside their own
-// transaction, and this worker delivers them after commit. Delivery is
-// at most once; a crash mid-batch leaves rows SENDING rather than risking a
-// duplicate alert.
+// transaction, and this worker delivers them after commit. A failed alert is
+// retried a few times. Rows left SENDING by a crashed worker are sent again;
+// the collapse ID stops a device from showing the same alert twice.
 export async function processPushBatch(
   sender: PushSender,
   options: PushBatchOptions = {},
@@ -61,9 +74,27 @@ export async function processPushBatch(
     claimed: 0,
     sent: 0,
     skipped: 0,
+    retrying: 0,
     failed: 0,
     removedDevices: 0,
   };
+
+  // Alerts claimed by a worker that never finished go back in the queue,
+  // unless that was already their last attempt.
+  const abandoned = {
+    pushStatus: 'SENDING',
+    pushClaimedAt: { lt: new Date(now.getTime() - abandonedClaimMs) },
+  } as const;
+  await database.$transaction([
+    database.notification.updateMany({
+      where: { ...abandoned, pushAttempts: { lt: maximumAttempts } },
+      data: { pushStatus: 'PENDING', pushNextAttemptAt: null },
+    }),
+    database.notification.updateMany({
+      where: { ...abandoned, pushAttempts: { gte: maximumAttempts } },
+      data: { pushStatus: 'FAILED' },
+    }),
+  ]);
 
   // Expired alerts, and alerts the user already read in the inbox, are not
   // worth interrupting them for.
@@ -79,15 +110,20 @@ export async function processPushBatch(
   // SKIP LOCKED lets several API instances share the queue without claiming
   // the same row twice.
   const claimed = await database.$queryRaw<ClaimedNotification[]>`
-    UPDATE "notifications" SET "push_status" = 'SENDING'
+    UPDATE "notifications"
+    SET "push_status" = 'SENDING',
+        "push_claimed_at" = ${now},
+        "push_attempts" = "push_attempts" + 1
     WHERE "id" IN (
       SELECT "id" FROM "notifications"
       WHERE "push_status" = 'PENDING'
+        AND ("push_next_attempt_at" IS NULL OR "push_next_attempt_at" <= ${now})
       ORDER BY "created_at", "id"
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING "id", "recipient_id", "type", "source_id", "trip_id"
+    RETURNING "id", "recipient_id", "type", "source_id", "trip_id",
+      "push_attempts"
   `;
   result.claimed = claimed.length;
   if (claimed.length === 0) return result;
@@ -124,6 +160,7 @@ export async function processPushBatch(
           sourceId: notification.source_id,
           ...(notification.trip_id && { tripId: notification.trip_id }),
         },
+        collapseId: notification.id,
       });
       messageNotificationIds.push(notification.id);
     }
@@ -147,7 +184,24 @@ export async function processPushBatch(
       sendError = error;
     }
   }
-  const failedIds = [...attemptedIds].filter((id) => !deliveredIds.has(id));
+  const attemptsById = new Map(
+    claimed.map((item) => [item.id, item.push_attempts]),
+  );
+  // Groups alerts by the attempt they just failed, which sets the next delay.
+  const retryIdsByAttempt = new Map<number, string[]>();
+  const failedIds: string[] = [];
+  for (const id of attemptedIds) {
+    if (deliveredIds.has(id)) continue;
+    const attempts = attemptsById.get(id) ?? maximumAttempts;
+    if (attempts >= maximumAttempts) {
+      failedIds.push(id);
+    } else {
+      retryIdsByAttempt.set(attempts, [
+        ...(retryIdsByAttempt.get(attempts) ?? []),
+        id,
+      ]);
+    }
+  }
 
   if (invalidTokens.length > 0) {
     const removed = await database.pushDevice.deleteMany({
@@ -160,6 +214,17 @@ export async function processPushBatch(
       where: { id: { in: [...deliveredIds] } },
       data: { pushStatus: 'SENT', pushedAt: now },
     }),
+    ...[...retryIdsByAttempt].map(([attempts, ids]) =>
+      database.notification.updateMany({
+        where: { id: { in: ids } },
+        data: {
+          pushStatus: 'PENDING',
+          pushNextAttemptAt: new Date(
+            now.getTime() + (retryDelaysMs[attempts - 1] ?? 0),
+          ),
+        },
+      }),
+    ),
     database.notification.updateMany({
       where: { id: { in: failedIds } },
       data: { pushStatus: 'FAILED' },
@@ -170,6 +235,7 @@ export async function processPushBatch(
     }),
   ]);
   result.sent = deliveredIds.size;
+  result.retrying = [...retryIdsByAttempt.values()].flat().length;
   result.failed = failedIds.length;
   result.skipped += skippedIds.length;
 

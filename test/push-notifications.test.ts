@@ -44,6 +44,7 @@ function message(index: number): PushMessage {
     token: `device-token-${index}`,
     title: 'New trip message',
     data: { notificationId: `n-${index}`, type: 'MESSAGE_RECEIVED' },
+    collapseId: `n-${index}`,
   };
 }
 
@@ -72,6 +73,9 @@ describe('FCM push sender', () => {
       token: 'device-token-0',
       notification: { title: 'New trip message' },
       data: { notificationId: 'n-0', type: 'MESSAGE_RECEIVED' },
+      android: { notification: { tag: 'n-0' } },
+      apns: { headers: { 'apns-collapse-id': 'n-0' } },
+      webpush: { notification: { tag: 'n-0' } },
     });
   });
 

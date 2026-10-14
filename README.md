@@ -456,8 +456,17 @@ there is one, so the client can open the right screen. The worker:
 - skips alerts older than 15 minutes, alerts already read in the inbox, and
   recipients whose account is not active;
 - deletes device registrations whose tokens FCM reports as no longer valid;
+- retries an alert that no device received after 30 seconds, 2 minutes and 5
+  minutes, then records it as `FAILED`;
+- sends again alerts that a crashed or stopped API process claimed but never
+  finished, after 5 minutes;
 - records the outcome on each notification (`SENT`, `SKIPPED`, or `FAILED`)
-  and sends each alert at most once, even with several API instances running.
+  and never claims the same alert twice at once, even with several API
+  instances running.
+
+Each alert carries its notification ID as a collapse key (an Android and web
+`tag`, and `apns-collapse-id` on iOS), so if an alert is ever sent twice, the
+device replaces the first copy instead of showing both.
 
 Push delivery is off unless `PUSH_NOTIFICATIONS_ENABLED=true`. Sending through
 FCM needs Google credentials in addition to `FIREBASE_PROJECT_ID`: set

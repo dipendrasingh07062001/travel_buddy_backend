@@ -649,18 +649,21 @@ model Settlement {
 }
 
 model Notification {
-  id          String             @id @default(uuid()) @db.Uuid
-  recipientId String             @map("recipient_id") @db.Uuid
-  type        NotificationType
-  eventKey    String             @map("event_key") @db.VarChar(150)
-  sourceId    String             @map("source_id") @db.Uuid
-  tripId      String?            @map("trip_id") @db.Uuid
-  actorId     String?            @map("actor_id") @db.Uuid
-  recipient   User               @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  readAt      DateTime?          @map("read_at") @db.Timestamptz(6)
-  pushStatus  PushDeliveryStatus @default(PENDING) @map("push_status")
-  pushedAt    DateTime?          @map("pushed_at") @db.Timestamptz(6)
+  id                String             @id @default(uuid()) @db.Uuid
+  recipientId       String             @map("recipient_id") @db.Uuid
+  type              NotificationType
+  eventKey          String             @map("event_key") @db.VarChar(150)
+  sourceId          String             @map("source_id") @db.Uuid
+  tripId            String?            @map("trip_id") @db.Uuid
+  actorId           String?            @map("actor_id") @db.Uuid
+  recipient         User               @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  readAt            DateTime?          @map("read_at") @db.Timestamptz(6)
+  pushStatus        PushDeliveryStatus @default(PENDING) @map("push_status")
+  pushedAt          DateTime?          @map("pushed_at") @db.Timestamptz(6)
+  pushAttempts      Int                @default(0) @map("push_attempts")
+  pushNextAttemptAt DateTime?          @map("push_next_attempt_at") @db.Timestamptz(6)
+  pushClaimedAt     DateTime?          @map("push_claimed_at") @db.Timestamptz(6)
 
   @@unique([recipientId, eventKey])
   @@index([recipientId, createdAt, id])

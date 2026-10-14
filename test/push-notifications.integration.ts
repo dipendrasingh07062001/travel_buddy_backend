@@ -281,21 +281,123 @@ describe('push delivery', () => {
     ]);
   });
 
-  it('marks a batch failed when the sender is unavailable', async () => {
+  it('retries a failed alert after a delay and gives up after four attempts', async () => {
     const notification = await notify('alice');
     const outage: PushSender = {
       async send() {
         throw new Error('FCM unavailable');
       },
     };
+    const start = Date.now();
+    const attemptAt = async (secondsLater: number) => {
+      await expect(
+        processPushBatch(outage, {
+          batchSize: 500,
+          now: new Date(start + secondsLater * 1000),
+        }),
+      ).rejects.toThrow('FCM unavailable');
+      return database.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      });
+    };
 
-    await expect(processPushBatch(outage, { batchSize: 500 })).rejects.toThrow(
-      'FCM unavailable',
-    );
-    const stored = await database.notification.findUniqueOrThrow({
-      where: { id: notification.id },
+    const first = await attemptAt(0);
+    expect(first).toMatchObject({ pushStatus: 'PENDING', pushAttempts: 1 });
+    expect(first.pushNextAttemptAt?.getTime()).toBe(start + 30_000);
+
+    // Not due yet, so it is left alone.
+    const early = await processPushBatch(recordingSender().sender, {
+      batchSize: 500,
+      now: new Date(start + 10_000),
     });
-    expect(stored.pushStatus).toBe('FAILED');
+    expect(early.claimed).toBe(0);
+
+    const second = await attemptAt(30);
+    expect(second).toMatchObject({ pushStatus: 'PENDING', pushAttempts: 2 });
+    expect(second.pushNextAttemptAt?.getTime()).toBe(start + 150_000);
+    const third = await attemptAt(150);
+    expect(third.pushNextAttemptAt?.getTime()).toBe(start + 450_000);
+    const last = await attemptAt(450);
+    expect(last).toMatchObject({ pushStatus: 'FAILED', pushAttempts: 4 });
+  });
+
+  it('delivers an alert on a later attempt after a temporary failure', async () => {
+    const notification = await notify('alice');
+    const start = Date.now();
+    const failing = recordingSender(() => 'failed');
+    const first = await processPushBatch(failing.sender, {
+      batchSize: 500,
+      now: new Date(start),
+    });
+    expect(first.retrying).toBeGreaterThanOrEqual(1);
+
+    const { sent, sender } = recordingSender();
+    await processPushBatch(sender, {
+      batchSize: 500,
+      now: new Date(start + 31_000),
+    });
+
+    const mine = sent.filter(
+      (message) => message.data.notificationId === notification.id,
+    );
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.collapseId).toBe(notification.id);
+    expect(
+      await database.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      }),
+    ).toMatchObject({ pushStatus: 'SENT', pushAttempts: 2 });
+  });
+
+  it('sends again alerts left behind by a crashed worker, within the attempt limit', async () => {
+    const start = Date.now();
+    const crashed = await notify('alice');
+    const exhausted = await notify('alice');
+    await database.notification.update({
+      where: { id: crashed.id },
+      data: {
+        pushStatus: 'SENDING',
+        pushAttempts: 1,
+        pushClaimedAt: new Date(start),
+      },
+    });
+    await database.notification.update({
+      where: { id: exhausted.id },
+      data: {
+        pushStatus: 'SENDING',
+        pushAttempts: 4,
+        pushClaimedAt: new Date(start),
+      },
+    });
+    const ids = [crashed.id, exhausted.id];
+    const { sent, sender } = recordingSender();
+    const mine = () =>
+      sent.filter((message) => ids.includes(message.data.notificationId ?? ''));
+
+    // A minute later the claim could still be in progress.
+    await processPushBatch(sender, {
+      batchSize: 500,
+      now: new Date(start + 60_000),
+    });
+    expect(mine()).toEqual([]);
+
+    await processPushBatch(sender, {
+      batchSize: 500,
+      now: new Date(start + 6 * 60_000),
+    });
+    expect(mine().map((message) => message.data.notificationId)).toEqual([
+      crashed.id,
+    ]);
+    const stored = await database.notification.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, pushStatus: true, pushAttempts: true },
+    });
+    expect(stored).toEqual(
+      expect.arrayContaining([
+        { id: crashed.id, pushStatus: 'SENT', pushAttempts: 2 },
+        { id: exhausted.id, pushStatus: 'FAILED', pushAttempts: 4 },
+      ]),
+    );
   });
 
   it('delivers from the background worker and stops cleanly', async () => {

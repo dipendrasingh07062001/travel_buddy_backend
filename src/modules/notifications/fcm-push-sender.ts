@@ -30,8 +30,15 @@ export function createFcmPushSender(
             token: message.token,
             notification: { title: message.title },
             data: message.data,
-            android: { priority: 'high' as const },
-            apns: { payload: { aps: { sound: 'default' } } },
+            android: {
+              priority: 'high' as const,
+              notification: { tag: message.collapseId },
+            },
+            apns: {
+              headers: { 'apns-collapse-id': message.collapseId },
+              payload: { aps: { sound: 'default' } },
+            },
+            webpush: { notification: { tag: message.collapseId } },
           })),
         );
         // An app/ error on every message means the server's Firebase setup is
