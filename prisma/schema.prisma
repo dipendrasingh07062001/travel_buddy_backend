@@ -10,6 +10,7 @@ datasource db {
 enum UserStatus {
   ACTIVE
   SUSPENDED
+  PENDING_DELETION
   DELETED
 }
 
@@ -48,6 +49,7 @@ enum AccountDataRequestType {
 enum AccountDataRequestStatus {
   OPEN
   CANCELLED
+  COMPLETED
 }
 
 enum CommunityStatus {
@@ -290,6 +292,8 @@ model User {
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
+  statusBeforeDeletion       UserStatus?               @map("status_before_deletion")
+  recordsPurgedAt            DateTime?                 @map("records_purged_at") @db.Timestamptz(6)
 
   @@index([status])
   @@map("users")
@@ -847,13 +851,16 @@ model PolicyAcceptance {
 }
 
 model AccountDataRequest {
-  id          String                   @id @default(uuid()) @db.Uuid
-  userId      String                   @map("user_id") @db.Uuid
-  type        AccountDataRequestType
-  status      AccountDataRequestStatus @default(OPEN)
-  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  cancelledAt DateTime?                @map("cancelled_at") @db.Timestamptz(6)
-  user        User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id           String                   @id @default(uuid()) @db.Uuid
+  userId       String                   @map("user_id") @db.Uuid
+  type         AccountDataRequestType
+  status       AccountDataRequestStatus @default(OPEN)
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  cancelledAt  DateTime?                @map("cancelled_at") @db.Timestamptz(6)
+  // When an account deletion request erases the account.
+  scheduledFor DateTime?                @map("scheduled_for") @db.Timestamptz(6)
+  completedAt  DateTime?                @map("completed_at") @db.Timestamptz(6)
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId, createdAt, id])
   @@index([status, createdAt, id])

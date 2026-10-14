@@ -1,6 +1,11 @@
 import { buildApp } from './app.js';
 import { env } from './config/env.js';
 import { database } from './database/client.js';
+import {
+  startAccountErasure,
+  type AccountErasureWorker,
+} from './modules/account-deletion/account-erasure.js';
+import { firebaseSignInAccounts } from './modules/auth/firebase-sign-in-accounts.js';
 import { createFcmPushSender } from './modules/notifications/fcm-push-sender.js';
 import {
   startRealtimeListener,
@@ -11,17 +16,20 @@ import {
   startPushDelivery,
   type PushDeliveryWorker,
 } from './modules/notifications/push-delivery.js';
+import { configuredObjectStorage } from './storage/object-storage.js';
 
 const realtime = new RealtimeHub();
 const app = buildApp({ realtime });
 let pushDelivery: PushDeliveryWorker | undefined;
 let realtimeListener: RealtimeListener | undefined;
+let accountErasure: AccountErasureWorker | undefined;
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'Shutting down');
 
   try {
     await pushDelivery?.stop();
+    await accountErasure?.stop();
     await realtimeListener?.stop();
     // Live streams end first (see buildApp). In-flight requests get a few
     // seconds; then connections that never sent a request, which browsers
@@ -53,6 +61,11 @@ try {
   if (env.PUSH_NOTIFICATIONS_ENABLED) {
     pushDelivery = startPushDelivery(createFcmPushSender(), app.log);
   }
+  accountErasure = startAccountErasure({
+    storage: configuredObjectStorage(),
+    signInAccounts: firebaseSignInAccounts,
+    logger: app.log,
+  });
 } catch (error) {
   app.log.fatal({ err: error }, 'API failed to start');
   await database.$disconnect();

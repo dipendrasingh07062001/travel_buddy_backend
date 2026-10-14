@@ -65,6 +65,13 @@ export function verifyRequestIdentity(
 }
 
 export function requireActiveUser(user: AuthenticatedUser): AuthenticatedUser {
+  if (user.status === 'PENDING_DELETION') {
+    throw new AppError(
+      403,
+      'ACCOUNT_DELETION_PENDING',
+      'This account is scheduled for deletion. Cancel the deletion request to use it again.',
+    );
+  }
   if (user.status !== 'ACTIVE') {
     throw new AppError(
       403,
