@@ -89,15 +89,40 @@ async function acceptOnce(
       });
       if (requestUpdate.count !== 1) throw new RetryAcceptance();
 
-      await transaction.tripMembership.create({
-        data: {
-          tripId: request.tripId,
-          userId: request.requesterId,
-          connectionRequestId: request.id,
-          role: 'MEMBER',
-          joinedAt: now,
+      // Someone who left and asked to join again gets their old membership
+      // back, now linked to the new request.
+      const previous = await transaction.tripMembership.findUnique({
+        where: {
+          tripId_userId: {
+            tripId: request.tripId,
+            userId: request.requesterId,
+          },
         },
+        select: { id: true, status: true },
       });
+      if (previous && previous.status !== 'LEFT') return { kind: 'conflict' };
+      if (previous) {
+        await transaction.tripMembership.update({
+          where: { id: previous.id },
+          data: {
+            status: 'ACTIVE',
+            role: 'MEMBER',
+            connectionRequestId: request.id,
+            joinedAt: now,
+            leftAt: null,
+          },
+        });
+      } else {
+        await transaction.tripMembership.create({
+          data: {
+            tripId: request.tripId,
+            userId: request.requesterId,
+            connectionRequestId: request.id,
+            role: 'MEMBER',
+            joinedAt: now,
+          },
+        });
+      }
 
       const conversation = await transaction.conversation.upsert({
         where: { tripId: request.tripId },
@@ -186,11 +211,20 @@ export const prismaConnectionRepository: ConnectionRepository = {
     );
   },
 
-  findExisting(tripId, requesterId) {
-    return database.connectionRequest.findUnique({
-      where: { tripId_requesterId: { tripId, requesterId } },
+  findLatest(tripId, requesterId) {
+    return database.connectionRequest.findFirst({
+      where: { tripId, requesterId },
       include: connectionRequestInclude,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+  },
+
+  async findMembershipStatus(tripId, userId) {
+    const membership = await database.tripMembership.findUnique({
+      where: { tripId_userId: { tripId, userId } },
+      select: { status: true },
+    });
+    return membership?.status ?? null;
   },
 
   countRecentByRequester(requesterId, since) {

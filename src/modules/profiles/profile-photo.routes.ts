@@ -46,6 +46,7 @@ export async function registerProfilePhotoRoutes(
     },
     async (request) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'uploading a profile photo');
       const store = requireStorage(storage);
       const photo = await processProfilePhoto(
         await readSingleUpload(request, 'photo', maximumPhotoBytes),

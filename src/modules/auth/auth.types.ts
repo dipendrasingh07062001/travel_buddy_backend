@@ -9,6 +9,8 @@ export interface VerifiedIdentity {
   email?: string;
   emailVerified: boolean;
   phoneNumber?: string;
+  // When the user last signed in, as opposed to when the token was refreshed.
+  authTime?: Date;
 }
 
 export interface TokenVerifier {

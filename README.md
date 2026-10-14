@@ -113,10 +113,23 @@ accepts only the server-configured current version, records its timestamp, and
 makes a repeated request idempotent. A stale version returns
 `409 POLICY_VERSION_CHANGED`; old acceptance records remain as history when a
 new document version is published. The Flutter or web client must show the
-actual linked document before asking for acceptance. **This foundation does not
-yet gate trip publishing or other actions.** Enable such enforcement only after
-the policy documents, versions, and onboarding flow have been approved and
-tested together.
+actual linked document before asking for acceptance.
+
+Once the policy documents are configured, actions that reach other people
+require the account to have accepted the current version of all three:
+
+- publishing a trip (`POST /trips/:tripId/publish`);
+- asking to join a trip;
+- sending or editing trip messages;
+- creating or editing community posts and comments;
+- uploading a profile photo.
+
+Otherwise they return `409 POLICY_ACCEPTANCE_REQUIRED`, naming the documents
+still to accept. Browsing, drafting trips, editing your own profile, managing
+your trips and settings, exporting data and deleting the account stay
+available. Publishing a new version of a document asks everyone to accept that
+document again before their next such action. Without configured documents,
+nothing is gated.
 
 ## User profiles
 
@@ -250,9 +263,17 @@ Self-requests, duplicate requests, and more than 20 new requests in a rolling
 
 Users list their received or sent requests with
 `GET /api/v1/me/connection-requests?box=received` or `box=sent`. The trip owner
-can accept or decline a pending request. The requester can withdraw it. A
-declined or otherwise resolved request cannot be repeatedly resubmitted for the
-same trip.
+can accept or decline a pending request. The requester can withdraw it.
+
+A member who left a trip can ask to join it again with a new request, and the
+owner accepts or declines it as before; accepting restores their membership.
+Everyone else gets one chance per trip:
+
+| Situation                                    | Error code                  |
+| -------------------------------------------- | --------------------------- |
+| Already an active member                     | `ALREADY_TRIP_MEMBER`       |
+| Removed from the trip by the owner           | `REMOVED_FROM_TRIP`         |
+| A request is waiting, declined, or withdrawn | `CONNECTION_REQUEST_EXISTS` |
 
 - `POST /api/v1/connection-requests/:requestId/accept`
 - `POST /api/v1/connection-requests/:requestId/decline`
@@ -456,8 +477,17 @@ there is one, so the client can open the right screen. The worker:
 - skips alerts older than 15 minutes, alerts already read in the inbox, and
   recipients whose account is not active;
 - deletes device registrations whose tokens FCM reports as no longer valid;
+- retries an alert that no device received after 30 seconds, 2 minutes and 5
+  minutes, then records it as `FAILED`;
+- sends again alerts that a crashed or stopped API process claimed but never
+  finished, after 5 minutes;
 - records the outcome on each notification (`SENT`, `SKIPPED`, or `FAILED`)
-  and sends each alert at most once, even with several API instances running.
+  and never claims the same alert twice at once, even with several API
+  instances running.
+
+Each alert carries its notification ID as a collapse key (an Android and web
+`tag`, and `apns-collapse-id` on iOS), so if an alert is ever sent twice, the
+device replaces the first copy instead of showing both.
 
 Push delivery is off unless `PUSH_NOTIFICATIONS_ENABLED=true`. Sending through
 FCM needs Google credentials in addition to `FIREBASE_PROJECT_ID`: set
@@ -559,8 +589,8 @@ evidence, because the owner may replace the photo before staff review it.
   and sends the owner a `PROFILE_PHOTO_REMOVED` notification. The owner can
   upload a new photo afterwards.
 
-Evidence copies have no automatic expiry yet; their retention belongs to the
-data-retention rules still to be agreed.
+Evidence copies are kept while the account exists, and deleted one year after
+the account is erased (see account deletion).
 
 Staff roles are provisioned **only by a database operator**, never through a
 public API. After the target account has signed in and exists in PostgreSQL,
@@ -586,8 +616,9 @@ actions intentionally persist and must not be run on real user records.
 
 `POST /api/v1/me/data-export` returns a downloadable JSON snapshot for the
 Firebase-authenticated account. The caller supplies only a Bearer ID token;
-the API derives the local user ID from that token. Active and suspended users
-can export; deleted accounts cannot. The response uses `Content-Disposition:
+the API derives the local user ID from that token. Active and suspended
+accounts, and accounts waiting for deletion, can export; deleted accounts
+cannot. The response uses `Content-Disposition:
 attachment` and `Cache-Control: private, no-store`; the API does not retain a
 copy. Limit: five exports per account per hour.
 
@@ -600,28 +631,63 @@ dates, not tokens), blocks, and submitted reports. It
 excludes other members' profiles and messages, moderation review notes, IP
 hashes, and Firebase-managed data that is not stored in this database. The
 export is sensitive: the Flutter client must save it only where the user
-chooses and must not log or upload its contents. This is an in-app self-service
-snapshot, not the complete operator-assisted data-request or account-deletion process;
-those require separate retention and policy decisions.
+chooses and must not log or upload its contents. Offer it before an account
+deletion is confirmed.
 
-### Account data request intake
+### Account data requests and deletion
 
-Users can submit `{ "type": "ACCESS" }` or
-`{ "type": "ACCOUNT_DELETION" }` to `POST /api/v1/me/data-requests` with a
-Firebase Bearer token. `GET /api/v1/me/data-requests` lists only their own
-requests. `POST /api/v1/me/data-requests/:requestId/cancel` cancels one of their
-open requests. These routes also work for suspended accounts, but not deleted
-accounts. Repeating an open request of the same type returns its existing ID;
-the database prevents concurrent duplicate open requests.
+`POST /api/v1/me/data-requests` takes `{ "type": "ACCESS" }` or
+`{ "type": "ACCOUNT_DELETION", "confirm": true }` with a Firebase Bearer token.
+`GET /api/v1/me/data-requests` lists only the caller's requests, and
+`POST /api/v1/me/data-requests/:requestId/cancel` cancels an open one. These
+routes also work for suspended accounts and accounts waiting for deletion, but
+not deleted accounts. Repeating an open request of the same type returns its
+existing ID; the database prevents concurrent duplicate open requests.
 
-`GET /api/v1/admin/data-requests?status=OPEN` gives administrators (not ordinary
-users or moderators) a paginated queue of request IDs, account IDs, type and
-timestamps. This is an intake and visibility workflow for the two founders.
-It does **not** send email, perform an export beyond the self-service endpoint,
-delete or anonymize data, or mark requests fulfilled. Do not promise an
-automatic deletion in the client UI. Agree and document retention, identity
-verification, response handling and deletion rules before implementing the
-fulfilment workflow; the PRD calls for qualified review before public beta.
+An `ACCESS` request is for the founders to handle by hand; the self-service
+export above covers most needs.
+
+An `ACCOUNT_DELETION` request deletes the account in two stages.
+
+1. **At once:** the account is locked and hidden. Its public profile, trips,
+   and community posts disappear from listings. Every signed-in route except
+   the data-request routes and `POST /api/v1/me/data-export` returns
+   `403 ACCOUNT_DELETION_PENDING`, including `POST /api/v1/auth/bootstrap`, so
+   the app knows to offer a "restore account" option at sign-in. The
+   request's `scheduledFor` is 30 days later. Cancelling the request within
+   that time restores the account as it was, including a suspension. Staff
+   accounts must have their role revoked first (`409 STAFF_ACCOUNT_DELETION`).
+   The request needs a sign-in within the last 10 minutes
+   (`403 RECENT_SIGN_IN_REQUIRED`); ask the user to sign in again before
+   confirming.
+2. **After 30 days**, a background job in the API erases the account and marks
+   the request `COMPLETED`:
+   - deletes the profile, profile photo, login links, verified email and
+     phone, push devices, notifications, follows, blocks, and policy
+     acceptances, and clears the name and birth date;
+   - deletes the Firebase sign-in account too (this needs the same Google
+     credentials as push notifications; without them, the job logs a warning
+     and the account must be deleted in the Firebase console);
+   - cancels upcoming trips the person owns and tells their members, and
+     takes them out of upcoming trips that others own;
+   - declines join requests waiting for them, withdraws their own waiting
+     requests, and cancels pending settlements involving them;
+   - takes down their community posts and comments.
+
+Trip messages, expenses, receipts, settlements, checklist items, and
+memberships in trips that have already started stay, so other members' chats
+and balances remain correct. They point to the erased account, which then has
+`displayName: null`; the apps should show it as "Deleted user". Signing in
+again with the same login starts a new, empty account.
+
+Moderation records are kept for one year after erasure. Then the job clears
+the text of the person's removed community posts, comments, and join-request
+messages, and deletes evidence copies of their photos. Reports and the
+moderation audit trail themselves remain.
+
+`GET /api/v1/admin/data-requests?status=OPEN` gives administrators (not
+ordinary users or moderators) a paginated queue of request IDs, account IDs,
+type, status, and dates; `COMPLETED` and `CANCELLED` filter the history.
 
 ## File storage (Cloudflare R2)
 

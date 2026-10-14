@@ -14,6 +14,7 @@ export const firebaseTokenVerifier: TokenVerifier = {
         ...(decoded.email && { email: decoded.email }),
         emailVerified: decoded.email_verified === true,
         ...(decoded.phone_number && { phoneNumber: decoded.phone_number }),
+        authTime: new Date(decoded.auth_time * 1000),
       };
     } catch (error) {
       if (error instanceof AppError) {

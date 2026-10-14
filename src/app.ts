@@ -34,6 +34,7 @@ import type { MessagingRouteDependencies } from './modules/messaging/messaging.t
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
 import { registerPushDeviceRoutes } from './modules/notifications/push-device.routes.js';
+import { createPolicyGate } from './modules/policies/policy-gate.js';
 import { registerPolicyRoutes } from './modules/policies/policy.routes.js';
 import {
   configuredPolicyCatalog,
@@ -133,13 +134,12 @@ export function buildApp(options: BuildAppOptions = {}) {
         checkReadiness: options.health?.checkReadiness ?? checkDatabase,
       });
       await registerAuthRoutes(api, authDependencies);
-      await registerPolicyRoutes(
-        api,
-        authDependencies,
+      const policyCatalog =
         options.policyCatalog === undefined
           ? configuredPolicyCatalog()
-          : options.policyCatalog,
-      );
+          : options.policyCatalog;
+      api.decorate('policyGate', createPolicyGate(policyCatalog));
+      await registerPolicyRoutes(api, authDependencies, policyCatalog);
       await registerProfileRoutes(api, authDependencies, options.profiles);
       await registerProfilePhotoRoutes(api, authDependencies, storage);
       await registerDataExportRoutes(api, authDependencies);

@@ -108,7 +108,7 @@ describe('account data request intake', () => {
           method: 'POST',
           url: '/api/v1/me/data-requests',
           headers: headers('alice'),
-          payload: { type: 'ACCOUNT_DELETION' },
+          payload: { type: 'ACCOUNT_DELETION', confirm: true },
         }),
       ),
     );
@@ -118,11 +118,12 @@ describe('account data request intake', () => {
     expect(
       new Set(simultaneous.map((response) => response.json().data.id)).size,
     ).toBe(1);
-    const stillActive = await database.user.findUniqueOrThrow({
+    // The account is locked for deletion but nothing is erased yet.
+    const locked = await database.user.findUniqueOrThrow({
       where: { id: ids.alice },
       select: { status: true, deletedAt: true },
     });
-    expect(stillActive).toEqual({ status: 'ACTIVE', deletedAt: null });
+    expect(locked).toEqual({ status: 'PENDING_DELETION', deletedAt: null });
 
     const exportResponse = await app.inject({
       method: 'POST',

@@ -365,6 +365,9 @@ export async function registerTripRoutes(
       },
       async (request) => {
         const user = await authenticateRequest(request, auth);
+        if (action === 'publish') {
+          await app.policyGate.require(user.id, 'publishing a trip');
+        }
         const trip = await transitionTrip(
           user,
           request.params.tripId,

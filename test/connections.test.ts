@@ -149,12 +149,20 @@ const repository: ConnectionRepository = {
   async isOwnedPublicTrip() {
     return true;
   },
-  async findExisting(tripId, requestedBy) {
+  async findLatest(tripId, requestedBy) {
     return (
-      [...requests.values()].find(
-        (request) =>
-          request.tripId === tripId && request.requesterId === requestedBy,
-      ) ?? null
+      [...requests.values()]
+        .filter(
+          (request) =>
+            request.tripId === tripId && request.requesterId === requestedBy,
+        )
+        .at(-1) ?? null
+    );
+  },
+  async findMembershipStatus(tripId, userId) {
+    return (
+      memberships.get(tripId)?.find((member) => member.userId === userId)
+        ?.status ?? null
     );
   },
   async countRecentByRequester() {

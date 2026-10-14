@@ -4,9 +4,11 @@ import type {
   AccountDataRequestStatus,
   AccountDataRequestType,
 } from '../../generated/prisma/client.js';
+import { AppError } from '../../errors/app-error.js';
 import {
   authenticateRequest,
   authenticateRequestIncludingSuspended,
+  verifyRequestIdentity,
 } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import {
@@ -22,7 +24,13 @@ import {
 
 interface CreateBody {
   type: AccountDataRequestType;
+  confirm?: boolean;
 }
+
+// Deleting an account needs a fresh sign-in, so a device left signed in is
+// not enough.
+const recentSignInMs = 10 * 60 * 1000;
+const requestStatuses = ['OPEN', 'CANCELLED', 'COMPLETED'] as const;
 
 interface RequestParams {
   requestId: string;
@@ -49,14 +57,29 @@ const pageSchema = {
 const dataRequestSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['id', 'userId', 'type', 'status', 'createdAt', 'cancelledAt'],
+  required: [
+    'id',
+    'userId',
+    'type',
+    'status',
+    'createdAt',
+    'cancelledAt',
+    'scheduledFor',
+    'completedAt',
+  ],
   properties: {
     id: { type: 'string', format: 'uuid' },
     userId: { type: 'string', format: 'uuid' },
     type: { type: 'string', enum: ['ACCESS', 'ACCOUNT_DELETION'] },
-    status: { type: 'string', enum: ['OPEN', 'CANCELLED'] },
+    status: { type: 'string', enum: requestStatuses },
     createdAt: { type: 'string', format: 'date-time' },
     cancelledAt: {
+      anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+    },
+    scheduledFor: {
+      anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+    },
+    completedAt: {
       anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
     },
   },
@@ -102,6 +125,8 @@ function presentRequest(request: {
   status: AccountDataRequestStatus;
   createdAt: Date;
   cancelledAt: Date | null;
+  scheduledFor: Date | null;
+  completedAt: Date | null;
 }) {
   return {
     id: request.id,
@@ -110,6 +135,8 @@ function presentRequest(request: {
     status: request.status,
     createdAt: request.createdAt.toISOString(),
     cancelledAt: request.cancelledAt?.toISOString() ?? null,
+    scheduledFor: request.scheduledFor?.toISOString() ?? null,
+    completedAt: request.completedAt?.toISOString() ?? null,
   };
 }
 
@@ -122,10 +149,9 @@ export async function registerDataRequestRoutes(
     {
       schema: {
         tags: ['Account data'],
-        summary:
-          'Request additional account data or request account deletion review',
+        summary: 'Request additional account data or delete your account',
         description:
-          'Creates an operator-review request only. This endpoint never deletes account data or sends the request automatically to an external service.',
+          'ACCESS creates a request for the founders to review. ACCOUNT_DELETION needs { "confirm": true } and a sign-in within the last 10 minutes; it locks the account at once and erases it at scheduledFor, 30 days later, unless the request is cancelled first.',
         security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
@@ -133,6 +159,7 @@ export async function registerDataRequestRoutes(
           additionalProperties: false,
           properties: {
             type: { type: 'string', enum: ['ACCESS', 'ACCOUNT_DELETION'] },
+            confirm: { type: 'boolean' },
           },
         },
         response: { 200: singleResponseSchema, 201: singleResponseSchema },
@@ -140,6 +167,26 @@ export async function registerDataRequestRoutes(
     },
     async (request, reply) => {
       const user = await authenticateRequestIncludingSuspended(request, auth);
+      if (request.body.type === 'ACCOUNT_DELETION') {
+        if (request.body.confirm !== true) {
+          throw new AppError(
+            400,
+            'DELETION_NOT_CONFIRMED',
+            'Send "confirm": true to delete this account.',
+          );
+        }
+        const { authTime } = await verifyRequestIdentity(
+          request,
+          auth.tokenVerifier,
+        );
+        if (authTime && Date.now() - authTime.getTime() > recentSignInMs) {
+          throw new AppError(
+            403,
+            'RECENT_SIGN_IN_REQUIRED',
+            'Sign in again before deleting this account.',
+          );
+        }
+      }
       const result = await createDataRequest(user.id, request.body.type);
       return reply
         .code(result.created ? 201 : 200)
@@ -174,7 +221,8 @@ export async function registerDataRequestRoutes(
     {
       schema: {
         tags: ['Account data'],
-        summary: 'Cancel your open request without deleting any account data',
+        summary:
+          'Cancel your open request; cancelling a deletion restores the account',
         security: [{ bearerAuth: [] }],
         params: {
           type: 'object',
@@ -206,7 +254,7 @@ export async function registerDataRequestRoutes(
           ...pageSchema,
           properties: {
             ...pageSchema.properties,
-            status: { type: 'string', enum: ['OPEN', 'CANCELLED'] },
+            status: { type: 'string', enum: requestStatuses },
           },
         },
         response: { 200: listResponseSchema },

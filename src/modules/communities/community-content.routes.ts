@@ -180,6 +180,7 @@ export async function registerCommunityContentRoutes(
     },
     async (request, reply) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'posting in communities');
       const post = await createCommunityPost(
         user,
         request.params.communityId,
@@ -246,6 +247,7 @@ export async function registerCommunityContentRoutes(
     },
     async (request) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'editing community posts');
       const post = await updateCommunityPost(
         user.id,
         request.params.postId,
@@ -345,6 +347,7 @@ export async function registerCommunityContentRoutes(
     },
     async (request, reply) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'commenting in communities');
       const comment = await createCommunityComment(
         user,
         request.params.postId,
@@ -382,6 +385,7 @@ export async function registerCommunityContentRoutes(
     },
     async (request) => {
       const user = await authenticateRequest(request, auth);
+      await app.policyGate.require(user.id, 'editing community comments');
       const comment = await updateCommunityComment(
         user.id,
         request.params.commentId,

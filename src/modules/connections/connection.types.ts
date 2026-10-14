@@ -1,6 +1,7 @@
 import type {
   ConnectionRequestStatus,
   Prisma,
+  TripMembershipStatus,
 } from '../../generated/prisma/client.js';
 
 export const connectionRequestInclude = {
@@ -97,10 +98,15 @@ export interface ConnectionRepository {
     desiredGroupSize: number;
   } | null>;
   isOwnedPublicTrip(tripId: string, ownerId: string): Promise<boolean>;
-  findExisting(
+  // The requester's most recent request for the trip.
+  findLatest(
     tripId: string,
     requesterId: string,
   ): Promise<ConnectionRequestRecord | null>;
+  findMembershipStatus(
+    tripId: string,
+    userId: string,
+  ): Promise<TripMembershipStatus | null>;
   countRecentByRequester(requesterId: string, since: Date): Promise<number>;
   isBlockedEitherDirection(userAId: string, userBId: string): Promise<boolean>;
   create(input: CreateConnectionRequestInput): Promise<ConnectionRequestRecord>;

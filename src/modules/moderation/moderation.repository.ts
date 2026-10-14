@@ -322,10 +322,32 @@ async function suspendUser(
 ): Promise<void> {
   const target = await tx.user.findUnique({
     where: { id: userId },
-    select: { status: true, staffRole: true },
+    select: { status: true, staffRole: true, statusBeforeDeletion: true },
   });
   if (!target) throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
   requireModeratableAccount(userId, target.staffRole, actorId, actorRole);
+  // An account waiting for deletion stays locked; if the user cancels the
+  // deletion, it comes back suspended.
+  if (
+    target.status === 'PENDING_DELETION' &&
+    target.statusBeforeDeletion === 'ACTIVE'
+  ) {
+    const changed = await tx.user.updateMany({
+      where: {
+        id: userId,
+        status: 'PENDING_DELETION',
+        statusBeforeDeletion: 'ACTIVE',
+      },
+      data: { statusBeforeDeletion: 'SUSPENDED' },
+    });
+    if (changed.count !== 1)
+      throw new AppError(
+        409,
+        'USER_STATE_CHANGED',
+        'The account changed during review.',
+      );
+    return;
+  }
   if (target.status !== 'ACTIVE') {
     throw new AppError(
       409,
@@ -641,16 +663,24 @@ export async function restoreAccount(
   return database.$transaction(async (tx) => {
     const user = await tx.user.findUnique({
       where: { id: userId },
-      select: { status: true },
+      select: { status: true, statusBeforeDeletion: true },
     });
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
-    if (user.status !== 'SUSPENDED')
+    const suspendedBeforeDeletion =
+      user.status === 'PENDING_DELETION' &&
+      user.statusBeforeDeletion === 'SUSPENDED';
+    if (user.status !== 'SUSPENDED' && !suspendedBeforeDeletion)
       throw new AppError(
         409,
         'USER_NOT_SUSPENDED',
         'Only suspended accounts can be restored.',
       );
-    await tx.user.update({ where: { id: userId }, data: { status: 'ACTIVE' } });
+    await tx.user.update({
+      where: { id: userId },
+      data: suspendedBeforeDeletion
+        ? { statusBeforeDeletion: 'ACTIVE' }
+        : { status: 'ACTIVE' },
+    });
     await tx.moderationAction.create({
       data: {
         actorId,
@@ -660,7 +690,10 @@ export async function restoreAccount(
         reason,
       },
     });
-    return { id: userId, status: 'ACTIVE' as const };
+    return tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, status: true },
+    });
   });
 }
 
