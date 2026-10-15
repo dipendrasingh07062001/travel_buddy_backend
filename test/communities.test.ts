@@ -220,6 +220,39 @@ describe('community HTTP contract', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('forwards the same duration, availability and date-overlap options', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/communities/MANALI/trips?minDuration=2&maxDuration=7&availableOnly=true&sort=date_overlap&departureFrom=2027-04-10&departureTo=2027-04-15',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(capturedTripQuery).toMatchObject({
+      destination: 'manali',
+      minDuration: 2,
+      maxDuration: 7,
+      availableOnly: true,
+      sort: 'date_overlap',
+      departureFrom: '2027-04-10',
+      departureTo: '2027-04-15',
+    });
+  });
+
+  it.each([
+    'minDuration=7&maxDuration=3',
+    'maxDuration=366',
+    'availableOnly=yes',
+    'sort=date_overlap',
+    'sort=date_overlap&departureTo=2027-04-15',
+  ])('rejects an invalid community trip query: %s', async (query) => {
+    capturedTripQuery = undefined;
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/communities/manali/trips?${query}`,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(capturedTripQuery).toBeUndefined();
+  });
+
   it('filters public community posts by their declared type', async () => {
     const matching = await app.inject({
       method: 'GET',

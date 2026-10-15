@@ -5,6 +5,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { postgresSettings } from './connection-settings.js';
 
 const { schema, ...pool } = postgresSettings(env.DATABASE_URL);
+export const databaseSchema = schema ?? 'public';
 
 export const database = new PrismaClient({
   adapter: new PrismaPg(

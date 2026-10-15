@@ -51,9 +51,15 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 - `destination`: exact community slug, such as `manali`
 - `departureFrom` and `departureTo`: `YYYY-MM-DD` date window
 - `minBudget` and `maxBudget`: inclusive budget overlap
+- `minDuration` and `maxDuration`: inclusive trip-duration bounds, from 1 to
+  365 calendar days; either bound may be supplied alone
+- `availableOnly`: `true` returns only `PUBLISHED` trips with
+  `currentGroupSize < desiredGroupSize`; defaults to `false`, which also
+  includes `FULL` trips. A trip manually marked full is excluded even if its
+  recorded group count is below capacity.
 - `transport`: `BUS`, `TRAIN`, `FLIGHT`, `CAR`, `MOTORCYCLE`, `OTHER`, or
   `UNDECIDED`
-- `sort`: `newest` (default) or `departure_asc`
+- `sort`: `newest` (default), `departure_asc`, or `date_overlap`
 - `page` and `pageSize`: page-based pagination; page size is capped at 100
 
 Only `PUBLISHED` and `FULL` trips in active communities are public. Draft,
@@ -62,6 +68,31 @@ their existence is not disclosed. Search and community trip lists also hide
 trips whose end date has passed (UTC), and those trips no longer accept
 connection requests. The details endpoint still returns them so shared links
 keep working.
+
+Joining still requires an accepted connection request; availability can change
+between searching and approval.
+
+`date_overlap` requires both `departureFrom` and `departureTo`. It orders trips
+by the number of calendar days shared with that inclusive date window, highest
+first. Ties use the smallest sum of start-date and end-date differences from
+the requested bounds, then earliest departure, then trip UUID ascending. For
+example, for 10–14 April, a 10–14 April trip sorts ahead of 9–15 April: both
+overlap five days, but the first has closer boundaries. This compares the
+published dates only; it does not assume the owner will move the trip within
+their `flexibilityDays`, and it is not a traveller recommendation.
+
+Sorting happens in PostgreSQL before pagination. Every sort uses the same
+visibility rules and filters. Counts remain available when a requested page is
+empty. Inverted date/budget/duration ranges, invalid duration/boolean values,
+and overlap sorting without both dates return `400`.
+
+The same query options are supported by
+`GET /api/v1/communities/:slug/trips`; its destination comes from the community
+path. The response format is unchanged. Example:
+
+```http
+GET /api/v1/trips?destination=manali&minDuration=3&maxDuration=5&availableOnly=true&departureFrom=2027-04-10&departureTo=2027-04-14&sort=date_overlap
+```
 
 Run `npm run db:seed` to load repeatable local sample data. The seed is safe to
 run more than once. Open `/docs` after starting the server to explore the full

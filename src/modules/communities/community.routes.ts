@@ -1,9 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import type {
-  CommunityPostType,
-  TripTransport,
-} from '../../generated/prisma/client.js';
+import type { CommunityPostType } from '../../generated/prisma/client.js';
 import {
   authenticateRequest,
   authenticateRequestIfPresent,
@@ -13,6 +10,10 @@ import { publicTripSchema } from '../trips/trip.routes.js';
 import { presentTrip } from '../trips/trip.presenter.js';
 import { prismaTripRepository } from '../trips/trip.repository.js';
 import type { ListTripsQuery } from '../trips/trip.types.js';
+import {
+  normalizeTripSearchQuery,
+  tripSearchQueryProperties,
+} from '../trips/trip-search.query.js';
 import {
   presentCommunity,
   presentCommunityPost,
@@ -54,27 +55,9 @@ interface CommunityPostListQuery extends PageQuery {
   type?: CommunityPostType;
 }
 
-interface CommunityTripListQuery extends PageQuery {
-  origin?: string;
-  departureFrom?: string;
-  departureTo?: string;
-  minBudget?: number;
-  maxBudget?: number;
-  transport?: TripTransport;
-  sort?: 'newest' | 'departure_asc';
-}
+type CommunityTripListQuery = Omit<ListTripsQuery, 'destination'>;
 
 const postTypes = ['DISCUSSION', 'QUESTION', 'EXPERIENCE'] as const;
-const transportValues = [
-  'BUS',
-  'TRAIN',
-  'FLIGHT',
-  'CAR',
-  'MOTORCYCLE',
-  'OTHER',
-  'UNDECIDED',
-] as const;
-
 const paginationQuerySchema = {
   page: { type: 'integer', minimum: 1, default: 1 },
   pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
@@ -176,29 +159,6 @@ function pagination(page: number, pageSize: number, totalItems: number) {
   };
 }
 
-function validateTripRanges(query: CommunityTripListQuery): void {
-  if (
-    query.departureFrom &&
-    query.departureTo &&
-    query.departureFrom > query.departureTo
-  ) {
-    throw Object.assign(
-      new Error('departureFrom must be on or before departureTo.'),
-      { statusCode: 400 },
-    );
-  }
-  if (
-    query.minBudget !== undefined &&
-    query.maxBudget !== undefined &&
-    query.minBudget > query.maxBudget
-  ) {
-    throw Object.assign(
-      new Error('minBudget must be less than or equal to maxBudget.'),
-      { statusCode: 400 },
-    );
-  }
-}
-
 export async function registerCommunityRoutes(
   app: FastifyInstance,
   auth: AuthRouteDependencies,
@@ -283,20 +243,7 @@ export async function registerCommunityRoutes(
         querystring: {
           type: 'object',
           additionalProperties: false,
-          properties: {
-            origin: { type: 'string', minLength: 1, maxLength: 120 },
-            departureFrom: { type: 'string', format: 'date' },
-            departureTo: { type: 'string', format: 'date' },
-            minBudget: { type: 'number', minimum: 0 },
-            maxBudget: { type: 'number', minimum: 0 },
-            transport: { type: 'string', enum: transportValues },
-            sort: {
-              type: 'string',
-              enum: ['newest', 'departure_asc'],
-              default: 'newest',
-            },
-            ...paginationQuerySchema,
-          },
+          properties: tripSearchQueryProperties,
         },
         response: {
           200: {
@@ -311,17 +258,7 @@ export async function registerCommunityRoutes(
       },
     },
     async (request) => {
-      validateTripRanges(request.query);
-      const query: ListTripsQuery & {
-        page: number;
-        pageSize: number;
-        sort: 'newest' | 'departure_asc';
-      } = {
-        ...request.query,
-        page: request.query.page ?? 1,
-        pageSize: request.query.pageSize ?? 20,
-        sort: request.query.sort ?? 'newest',
-      };
+      const query = normalizeTripSearchQuery(request.query);
       const result = await listCommunityTrips(
         request.params.slug,
         query,
