@@ -19,6 +19,7 @@ import type {
 import { presentOwnedTrip, presentTrip } from './trip.presenter.js';
 import { prismaTripRepository } from './trip.repository.js';
 import {
+  tripStatusValues,
   tripTransportValues as transportValues,
   type ListTripsQuery,
   type TripRepository,
@@ -36,15 +37,6 @@ export interface TripRouteDependencies {
 interface TripParams {
   tripId: string;
 }
-
-const tripStatusValues = [
-  'DRAFT',
-  'PUBLISHED',
-  'PAUSED',
-  'FULL',
-  'COMPLETED',
-  'CANCELLED',
-] as const;
 
 export const publicTripSchema = {
   type: 'object',
