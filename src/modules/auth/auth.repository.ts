@@ -28,7 +28,7 @@ export const authenticatedUserSelect = {
   },
 } satisfies Prisma.UserSelect;
 
-function verifiedContacts(identity: VerifiedIdentity) {
+export function verifiedContacts(identity: VerifiedIdentity) {
   const contacts: Array<{
     type: IdentityType;
     normalizedValue: string;
