@@ -43,6 +43,10 @@ import {
 import { registerProfilePhotoRoutes } from './modules/profiles/profile-photo.routes.js';
 import { registerProfileRoutes } from './modules/profiles/profile.routes.js';
 import type { ProfileRouteDependencies } from './modules/profiles/profile.types.js';
+import { registerProfileActivityRoutes } from './modules/profiles/profile-activity.routes.js';
+import type { ProfileActivityDependencies } from './modules/profiles/profile-activity.types.js';
+import { registerProfileSignalsRoutes } from './modules/profiles/profile-signals.routes.js';
+import type { ProfileSignalsDependencies } from './modules/profiles/profile-signals.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
 import type { SafetyRouteDependencies } from './modules/safety/safety.types.js';
 import { registerTripRoomRoutes } from './modules/trip-room/trip-room.routes.js';
@@ -70,6 +74,8 @@ export interface BuildAppOptions {
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
+  profileActivity?: Partial<ProfileActivityDependencies>;
+  profileSignals?: Partial<ProfileSignalsDependencies>;
   connections?: Partial<ConnectionRouteDependencies>;
   safety?: Partial<SafetyRouteDependencies>;
   messaging?: Partial<MessagingRouteDependencies>;
@@ -144,6 +150,16 @@ export function buildApp(options: BuildAppOptions = {}) {
       api.decorate('policyGate', createPolicyGate(policyCatalog));
       await registerPolicyRoutes(api, authDependencies, policyCatalog);
       await registerProfileRoutes(api, authDependencies, options.profiles);
+      await registerProfileActivityRoutes(
+        api,
+        authDependencies,
+        options.profileActivity,
+      );
+      await registerProfileSignalsRoutes(
+        api,
+        authDependencies,
+        options.profileSignals,
+      );
       await registerProfilePhotoRoutes(api, authDependencies, storage);
       await registerDataExportRoutes(api, authDependencies);
       await registerDataRequestRoutes(api, authDependencies);

@@ -193,6 +193,71 @@ domain, and `profilePhotoAvailable`. The URL never changes for a given photo,
 so clients can cache it indefinitely. File storage is described under
 [File storage (Cloudflare R2)](#file-storage-cloudflare-r2).
 
+## Profile activity and factual verification signals
+
+The basic profile, photo and privacy-setting APIs above are unchanged. These
+additional endpoints provide paginated, minimal activity cards:
+
+- `GET /api/v1/users/:userId/trips?period=upcoming&page=1&pageSize=20`
+- `GET /api/v1/users/:userId/trips?period=past&page=1&pageSize=20`
+- `GET /api/v1/users/:userId/community-posts?page=1&pageSize=20`
+- `GET /api/v1/users/:userId/community-comments?page=1&pageSize=20`
+
+Guests may read visible activity. An optional Bearer token applies the
+identified viewer's blocks and existing trip membership. Invalid or disabled
+authenticated viewers are rejected, not silently treated as guests. Missing,
+inactive, pending-deletion, erased or mutually blocked target accounts return
+`404` without revealing totals. Responses use `Cache-Control: private, no-store`.
+
+Trip cards include only authored trips, never the person's private joined-trip
+participation. Upcoming cards include unended, published/full trips in active
+destinations. Past cards include only previously published trips marked
+completed, not cancelled, draft, paused, unpublished or moderation-removed
+plans. Marked completed is a user-entered status, not proof travel happened.
+
+Past trip privacy applies per trip: `PUBLIC` permits guest cards;
+`MEMBERS_ONLY` requires the viewer to still be an active accepted member of
+that same trip; `PRIVATE` shows no cards on this public-profile surface,
+including to the owner. Owners/current members use the existing private
+My Trips/membership APIs for their private history. Cards never grant room,
+message, member-list or expense access.
+
+Community activity follows existing public feeds: only `PUBLIC` contributions
+appear. `PRIVATE` and `MEMBERS_ONLY` remain hidden here even to signed-in
+visitors; following a community does not grant access. Comments appear only
+when their parent post, destination and author are also publicly visible to
+the viewer. Removed content is excluded. Cards contain links/identifiers and
+public titles/dates/destination metadata, not post/comment bodies, trip
+descriptions, private contacts, member lists or financial records.
+
+All lists use `page`/`pageSize` (defaults 1/20, maximum 100 per page) and reject
+unsafe offsets. Trip cards sort by start date (upcoming ascending, past
+descending), post cards by publication date descending, and comment cards by
+creation date descending; UUID ascending breaks every tie. Visible totals and
+cards share one database snapshot, including when a requested page is empty.
+
+`GET /api/v1/users/:userId/verification-signals` returns one `EMAIL`/`PHONE`
+signal per recorded type, with its `recordedAt`, source, explanation and
+limitations. It never returns email/phone values, identity IDs, Firebase UIDs,
+identity-document results, scores or an endorsement of a person. An absent
+signal means **no stored verified claim**, not proof the provider currently
+considers the contact unverified. `recordedAt` is when this backend observed
+the claim, not the provider's original verification date or a live check.
+
+After a Firebase contact/verification change, obtain a fresh ID token and call
+`POST /api/v1/me/verification-signals/refresh` with the Bearer token and **no
+request body**. The server reuses its verified Firebase claims, never
+client-supplied `emailVerified` or phone values. It updates matching records,
+removes contacts absent from those verified claims, and returns only dated
+signals. An ordinary profile edit cannot award these signals. This endpoint
+allows 10 requests per account per minute. A contact belonging to another
+local account returns `409 IDENTITY_ALREADY_LINKED`; accounts are never
+silently merged or contacts transferred. Refreshes recheck active account and
+sign-in linkage inside the transaction and cannot recreate contacts after
+account deletion/pending-deletion wins the race.
+
+No new service, API key, schema migration or frontend change is required.
+
 ## Trip management
 
 Authenticated users create trips as private drafts with `POST /api/v1/trips`.
