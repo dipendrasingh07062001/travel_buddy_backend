@@ -1,10 +1,10 @@
-import type { FastifyBaseLogger } from 'fastify';
-
 import { database } from '../../database/client.js';
 import {
-  deleteObjectQuietly,
-  type ObjectStorage,
-} from '../../storage/object-storage.js';
+  processAccountCleanupBatch,
+  queueAccountCleanup,
+  type AccountCleanupOptions,
+  type AccountCleanupResult,
+} from './account-cleanup.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 
 // Moderation records about a deleted account (reports, removed content and
@@ -13,47 +13,32 @@ export const moderationRecordRetentionMs = 365 * 24 * 60 * 60 * 1000;
 const batchSize = 20;
 const intervalMs = 10 * 60 * 1000;
 
-// Removes the account from the sign-in provider, so the person's login is
-// gone too. A sign-in with the same login later starts a new, empty account.
-export interface SignInAccountRemover {
-  remove(subject: string): Promise<void>;
-}
-
-export interface AccountErasureOptions {
-  storage: ObjectStorage | null;
-  signInAccounts?: SignInAccountRemover;
-  logger: FastifyBaseLogger;
-  now?: Date;
-}
+export type AccountErasureOptions = AccountCleanupOptions;
 
 export interface AccountErasureResult {
   erased: number;
   purged: number;
-}
-
-interface ErasedAccount {
-  photoKey: string | null;
-  firebaseSubjects: string[];
+  cleanup: AccountCleanupResult;
 }
 
 function startOfUtcDay(now: Date): Date {
   return new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
-// Erases one account whose grace period has ended. Returns null when the
+// Erases one account whose grace period has ended. Returns false when the
 // request is no longer due (cancelled, or erased by another API instance).
 async function eraseAccount(
   requestId: string,
   userId: string,
   now: Date,
-): Promise<ErasedAccount | null> {
+): Promise<boolean> {
   return database.$transaction(
     async (tx) => {
       const claimed = await tx.accountDataRequest.updateMany({
         where: { id: requestId, status: 'OPEN', scheduledFor: { lte: now } },
         data: { status: 'COMPLETED', completedAt: now },
       });
-      if (claimed.count !== 1) return null;
+      if (claimed.count !== 1) return false;
       const user = await tx.user.findUniqueOrThrow({
         where: { id: userId },
         select: {
@@ -67,6 +52,23 @@ async function eraseAccount(
           `Account ${userId} has a due deletion request but status ${user.status}.`,
         );
       }
+      const photoKey = user.profile?.profilePhotoStorageKey;
+      await queueAccountCleanup(
+        tx,
+        userId,
+        [
+          ...(photoKey
+            ? [{ kind: 'PUBLIC_OBJECT' as const, target: photoKey }]
+            : []),
+          ...user.authAccounts
+            .filter((account) => account.provider === 'FIREBASE')
+            .map((account) => ({
+              kind: 'FIREBASE_ACCOUNT' as const,
+              target: account.providerSubject,
+            })),
+        ],
+        now,
+      );
       const today = startOfUtcDay(now);
 
       // Upcoming trips they own are cancelled, and their members are told.
@@ -234,29 +236,24 @@ async function eraseAccount(
         },
       });
 
-      return {
-        photoKey: user.profile?.profilePhotoStorageKey ?? null,
-        firebaseSubjects: user.authAccounts
-          .filter((account) => account.provider === 'FIREBASE')
-          .map((account) => account.providerSubject),
-      };
+      return true;
     },
     { timeout: 30_000 },
   );
 }
 
 // A year after erasure, clears the deleted account's remaining text and the
-// evidence copies of its photos. Returns the evidence objects to delete.
+// evidence copies of its photos, queuing their deletion in the same transaction.
 async function purgeModerationRecords(
   userId: string,
   now: Date,
-): Promise<string[] | null> {
+): Promise<boolean> {
   return database.$transaction(async (tx) => {
     const claimed = await tx.user.updateMany({
       where: { id: userId, status: 'DELETED', recordsPurgedAt: null },
       data: { recordsPurgedAt: now },
     });
-    if (claimed.count !== 1) return null;
+    if (claimed.count !== 1) return false;
 
     await tx.communityPost.updateMany({
       where: { authorId: userId },
@@ -283,6 +280,21 @@ async function purgeModerationRecords(
       },
       select: { evidenceStorageKey: true },
     });
+    await queueAccountCleanup(
+      tx,
+      userId,
+      [...reports, ...actions].flatMap((record) =>
+        record.evidenceStorageKey
+          ? [
+              {
+                kind: 'PRIVATE_OBJECT' as const,
+                target: record.evidenceStorageKey,
+              },
+            ]
+          : [],
+      ),
+      now,
+    );
     await tx.report.updateMany({
       where: { reportedUserId: userId, evidenceStorageKey: { not: null } },
       data: { evidenceStorageKey: null },
@@ -295,35 +307,19 @@ async function purgeModerationRecords(
       },
       data: { evidenceStorageKey: null },
     });
-    return [...reports, ...actions].flatMap((record) =>
-      record.evidenceStorageKey ? [record.evidenceStorageKey] : [],
-    );
+    return true;
   });
-}
-
-async function deleteFiles(
-  options: AccountErasureOptions,
-  bucket: 'public' | 'private',
-  keys: string[],
-): Promise<void> {
-  if (keys.length === 0) return;
-  if (!options.storage) {
-    options.logger.warn(
-      { bucket, keys },
-      'File storage is not configured; delete these objects by hand',
-    );
-    return;
-  }
-  for (const key of new Set(keys)) {
-    await deleteObjectQuietly(options.storage, bucket, key, options.logger);
-  }
 }
 
 export async function processAccountErasures(
   options: AccountErasureOptions,
 ): Promise<AccountErasureResult> {
   const now = options.now ?? new Date();
-  const result: AccountErasureResult = { erased: 0, purged: 0 };
+  const result: AccountErasureResult = {
+    erased: 0,
+    purged: 0,
+    cleanup: { claimed: 0, completed: 0, retrying: 0 },
+  };
 
   const due = await database.accountDataRequest.findMany({
     where: {
@@ -341,21 +337,6 @@ export async function processAccountErasures(
       if (!erased) continue;
       result.erased += 1;
       options.logger.info({ userId: request.userId }, 'Account erased');
-      await deleteFiles(
-        options,
-        'public',
-        erased.photoKey ? [erased.photoKey] : [],
-      );
-      for (const subject of erased.firebaseSubjects) {
-        try {
-          await options.signInAccounts?.remove(subject);
-        } catch (error) {
-          options.logger.warn(
-            { err: error, userId: request.userId },
-            'Could not delete the Firebase sign-in account; delete it in the Firebase console',
-          );
-        }
-      }
     } catch (error) {
       options.logger.error(
         { err: error, userId: request.userId },
@@ -376,10 +357,9 @@ export async function processAccountErasures(
   });
   for (const user of purgeDue) {
     try {
-      const evidenceKeys = await purgeModerationRecords(user.id, now);
-      if (!evidenceKeys) continue;
+      const purged = await purgeModerationRecords(user.id, now);
+      if (!purged) continue;
       result.purged += 1;
-      await deleteFiles(options, 'private', evidenceKeys);
     } catch (error) {
       options.logger.error(
         { err: error, userId: user.id },
@@ -387,6 +367,7 @@ export async function processAccountErasures(
       );
     }
   }
+  result.cleanup = await processAccountCleanupBatch(options);
   return result;
 }
 
@@ -404,7 +385,11 @@ export function startAccountErasure(
   const run = async () => {
     try {
       const result = await processAccountErasures(options);
-      if (result.erased > 0 || result.purged > 0) {
+      if (
+        result.erased > 0 ||
+        result.purged > 0 ||
+        result.cleanup.claimed > 0
+      ) {
         options.logger.info({ accounts: result }, 'Account erasure processed');
       }
     } catch (error) {

@@ -77,7 +77,9 @@ Authorization: Bearer <firebase-id-token>
 ```
 
 The backend verifies that token and links its Firebase UID to a local PostgreSQL
-user. Call `POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
+user. Verification also checks whether Firebase has revoked the token, disabled
+the account, or deleted it; an unexpired token alone cannot restore an erased
+account. Call `POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
 operation is idempotent and returns `201` only when it creates the local account.
 Subsequent calls return `200`. `GET /api/v1/me` returns the authenticated local
 profile.
@@ -658,16 +660,15 @@ An `ACCOUNT_DELETION` request deletes the account in two stages.
    that time restores the account as it was, including a suspension. Staff
    accounts must have their role revoked first (`409 STAFF_ACCOUNT_DELETION`).
    The request needs a sign-in within the last 10 minutes
-   (`403 RECENT_SIGN_IN_REQUIRED`); ask the user to sign in again before
-   confirming.
+   (`403 RECENT_SIGN_IN_REQUIRED`); a missing, invalid, or future sign-in time
+   is rejected too. Ask the user to sign in again before confirming.
 2. **After 30 days**, a background job in the API erases the account and marks
    the request `COMPLETED`:
    - deletes the profile, profile photo, login links, verified email and
      phone, push devices, notifications, follows, blocks, and policy
      acceptances, and clears the name and birth date;
-   - deletes the Firebase sign-in account too (this needs the same Google
-     credentials as push notifications; without them, the job logs a warning
-     and the account must be deleted in the Firebase console);
+   - queues deletion of the Firebase sign-in account and public profile photo
+     in the same database transaction, then performs those external deletions;
    - cancels upcoming trips the person owns and tells their members, and
      takes them out of upcoming trips that others own;
    - declines join requests waiting for them, withdraws their own waiting
@@ -678,12 +679,53 @@ Trip messages, expenses, receipts, settlements, checklist items, and
 memberships in trips that have already started stay, so other members' chats
 and balances remain correct. They point to the erased account, which then has
 `displayName: null`; the apps should show it as "Deleted user". Signing in
-again with the same login starts a new, empty account.
+again with the same login starts a new, empty account after the Firebase
+account is deleted. While that deletion is retrying, bootstrap for the old
+Firebase UID returns `403 ACCOUNT_CLEANUP_PENDING`. A newly created Firebase
+account has a new UID and starts with an empty local account.
 
 Moderation records are kept for one year after erasure. Then the job clears
 the text of the person's removed community posts, comments, and join-request
 messages, and deletes evidence copies of their photos. Reports and the
 moderation audit trail themselves remain.
+
+#### Cleanup retries and operations
+
+External deletion tasks live in `account_cleanup_tasks`. Raw Firebase UIDs and
+storage keys are retained only while their deletion task is unfinished. After
+Firebase deletion succeeds, a hash of the old UID blocks account bootstrap for
+one hour, covering requests whose token verification raced with deletion.
+This `FIREBASE_SIGN_IN_GUARD` then expires automatically. Evidence-file deletion
+is queued before moderation references are
+cleared, so failed file deletion does not lose its retry target. A data request
+marked `COMPLETED` means local account erasure has finished; external cleanup
+may still be pending.
+
+The worker runs at startup and every 10 minutes. Failed deletions retry after
+10 minutes, doubling the delay up to 24 hours, with no attempt limit. Missing
+Google credentials or R2 configuration also leave tasks queued: restore the
+configuration and restart the API, then the next due run retries them. Multiple
+API instances claim separate tasks; a claim abandoned for 5 minutes can be
+recovered. Deleting a provider account or object that is already gone counts
+as success, so recovery after a crash is safe.
+
+Warnings identify the task ID, type, attempt count, and next retry time without
+logging Firebase UIDs, object keys, or provider error text. Operators can inspect
+the backlog without exposing targets:
+
+```sql
+SELECT kind, count(*) AS pending, min(created_at) AS oldest_task,
+       min(next_attempt_at) AS next_attempt, max(attempts) AS most_attempts
+FROM account_cleanup_tasks
+WHERE kind <> 'FIREBASE_SIGN_IN_GUARD'
+GROUP BY kind;
+```
+
+Investigate a growing or repeatedly failing backlog by checking Firebase Admin
+permissions and R2 credentials/bucket permissions. Keep pending rows until their
+external deletion succeeds. Cleanup targets lost by the older worker before
+this migration cannot be reconstructed from these tasks; any earlier manual
+cleanup warnings still need operator attention.
 
 `GET /api/v1/admin/data-requests?status=OPEN` gives administrators (not
 ordinary users or moderators) a paginated queue of request IDs, account IDs,

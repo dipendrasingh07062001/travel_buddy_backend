@@ -1,6 +1,6 @@
 import { getAuth } from 'firebase-admin/auth';
 
-import type { SignInAccountRemover } from '../account-deletion/account-erasure.js';
+import type { SignInAccountRemover } from '../account-deletion/account-cleanup.js';
 import { firebaseApp } from './firebase-app.js';
 
 // Deleting a Firebase user needs Google credentials, like push delivery.

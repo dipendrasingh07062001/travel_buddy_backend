@@ -28,15 +28,24 @@ const tripIds = {
 };
 const day = 86_400_000;
 
-// A token ending in ":stale" signed in an hour ago; others just now.
+// Exercise invalid authentication times as well as a genuinely old sign-in.
 const tokenVerifier: TokenVerifier = {
   async verify(token) {
     const [role, age] = token.split(':');
+    const authTime =
+      age === 'missing'
+        ? undefined
+        : age === 'invalid'
+          ? new Date(Number.NaN)
+          : new Date(
+              Date.now() +
+                (age === 'stale' ? -3_600_000 : age === 'future' ? 60_000 : 0),
+            );
     return {
       subject: subject(role ?? token),
       displayName: `Deletion ${role}`,
       emailVerified: false,
-      authTime: new Date(Date.now() - (age === 'stale' ? 3_600_000 : 0)),
+      ...(authTime && { authTime }),
     };
   },
 };
@@ -197,6 +206,26 @@ describe('requesting account deletion', () => {
     expect(stale.statusCode).toBe(403);
     expect(stale.json().error.code).toBe('RECENT_SIGN_IN_REQUIRED');
   });
+
+  it.each(['missing', 'invalid', 'future'])(
+    'rejects a %s authentication time without scheduling deletion',
+    async (age) => {
+      const response = await requestDeletion(`canceller:${age}`);
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('RECENT_SIGN_IN_REQUIRED');
+      expect(
+        await database.accountDataRequest.count({
+          where: { userId: userIds.canceller, type: 'ACCOUNT_DELETION' },
+        }),
+      ).toBe(0);
+      expect(
+        await database.user.findUniqueOrThrow({
+          where: { id: userIds.canceller },
+          select: { status: true },
+        }),
+      ).toEqual({ status: 'ACTIVE' });
+    },
+  );
 
   it('refuses staff accounts', async () => {
     const response = await requestDeletion('admin');
