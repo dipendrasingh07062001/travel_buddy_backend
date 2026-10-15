@@ -1,6 +1,7 @@
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
 import { Prisma, type IdentityType } from '../../generated/prisma/client.js';
+import { firebaseSignInGuardTarget } from '../account-deletion/account-cleanup.js';
 import type {
   AuthenticatedUser,
   AuthRepository,
@@ -70,6 +71,26 @@ async function findFirebaseUser(
 export const prismaAuthRepository: AuthRepository = {
   async bootstrapFirebaseUser(identity) {
     const existing = await findFirebaseUser(identity.subject);
+    const cleanup = await database.accountCleanupTask.findFirst({
+      where: {
+        OR: [
+          { kind: 'FIREBASE_ACCOUNT', target: identity.subject },
+          {
+            kind: 'FIREBASE_SIGN_IN_GUARD',
+            target: firebaseSignInGuardTarget(identity.subject),
+            nextAttemptAt: { gt: new Date() },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (cleanup) {
+      throw new AppError(
+        403,
+        'ACCOUNT_CLEANUP_PENDING',
+        'This sign-in account is being deleted or was recently deleted. Sign up again after deletion finishes.',
+      );
+    }
     if (existing) {
       return { user: existing, created: false };
     }

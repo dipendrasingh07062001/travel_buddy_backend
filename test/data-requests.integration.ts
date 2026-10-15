@@ -17,6 +17,7 @@ const tokenVerifier: TokenVerifier = {
     return {
       subject: subjects[token as keyof typeof subjects] ?? token,
       emailVerified: false,
+      authTime: new Date(),
     };
   },
 };

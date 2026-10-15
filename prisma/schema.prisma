@@ -52,6 +52,13 @@ enum AccountDataRequestStatus {
   COMPLETED
 }
 
+enum AccountCleanupKind {
+  FIREBASE_ACCOUNT
+  FIREBASE_SIGN_IN_GUARD
+  PUBLIC_OBJECT
+  PRIVATE_OBJECT
+}
+
 enum CommunityStatus {
   ACTIVE
   ARCHIVED
@@ -258,6 +265,7 @@ model User {
   identities                 AuthIdentity[]
   policyAcceptances          PolicyAcceptance[]
   dataRequests               AccountDataRequest[]
+  cleanupTasks               AccountCleanupTask[]
   trips                      Trip[]
   sentConnectionRequests     ConnectionRequest[]       @relation("ConnectionRequester")
   receivedConnectionRequests ConnectionRequest[]       @relation("ConnectionRecipient")
@@ -865,4 +873,24 @@ model AccountDataRequest {
   @@index([userId, createdAt, id])
   @@index([status, createdAt, id])
   @@map("account_data_requests")
+}
+
+// Unfinished external deletions and short-lived hashed sign-in guards.
+// Raw Firebase UIDs and storage keys are removed after cleanup succeeds.
+model AccountCleanupTask {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @map("user_id") @db.Uuid
+  kind          AccountCleanupKind
+  target        String             @db.VarChar(1024)
+  attempts      Int                @default(0)
+  nextAttemptAt DateTime           @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  claimToken    String?            @map("claim_token") @db.Uuid
+  claimedAt     DateTime?          @map("claimed_at") @db.Timestamptz(6)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([kind, target])
+  @@index([nextAttemptAt, createdAt, id])
+  @@index([userId])
+  @@map("account_cleanup_tasks")
 }

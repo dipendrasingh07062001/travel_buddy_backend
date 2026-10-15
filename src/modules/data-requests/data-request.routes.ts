@@ -179,7 +179,14 @@ export async function registerDataRequestRoutes(
           request,
           auth.tokenVerifier,
         );
-        if (authTime && Date.now() - authTime.getTime() > recentSignInMs) {
+        const signedInAt = authTime?.getTime();
+        const now = Date.now();
+        if (
+          signedInAt === undefined ||
+          !Number.isFinite(signedInAt) ||
+          signedInAt > now ||
+          now - signedInAt > recentSignInMs
+        ) {
           throw new AppError(
             403,
             'RECENT_SIGN_IN_REQUIRED',

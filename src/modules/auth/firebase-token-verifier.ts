@@ -4,10 +4,23 @@ import { AppError } from '../../errors/app-error.js';
 import type { TokenVerifier, VerifiedIdentity } from './auth.types.js';
 import { firebaseApp } from './firebase-app.js';
 
+const rejectedTokenCodes = new Set([
+  'auth/argument-error',
+  'auth/invalid-argument',
+  'auth/invalid-id-token',
+  'auth/id-token-expired',
+  'auth/id-token-revoked',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/tenant-id-mismatch',
+]);
+
 export const firebaseTokenVerifier: TokenVerifier = {
   async verify(token): Promise<VerifiedIdentity> {
     try {
-      const decoded = await getAuth(firebaseApp()).verifyIdToken(token);
+      // Also checks the provider account still exists and is not disabled or
+      // revoked. An unexpired token must not recreate an erased account.
+      const decoded = await getAuth(firebaseApp()).verifyIdToken(token, true);
       return {
         subject: decoded.uid,
         ...(decoded.name && { displayName: decoded.name }),
@@ -27,7 +40,7 @@ export const firebaseTokenVerifier: TokenVerifier = {
         typeof error.code === 'string'
           ? error.code
           : undefined;
-      if (code?.startsWith('auth/')) {
+      if (code && rejectedTokenCodes.has(code)) {
         throw new AppError(
           401,
           'UNAUTHENTICATED',
