@@ -38,6 +38,7 @@ The API runs at `http://localhost:3000` by default.
 - Public user profile: `GET http://localhost:3000/api/v1/users/:userId`
 - Create a private trip draft: `POST http://localhost:3000/api/v1/trips`
 - List the current user's trips: `GET http://localhost:3000/api/v1/me/trips`
+- List created/joined memberships: `GET http://localhost:3000/api/v1/me/trip-memberships`
 - Browse destination communities: `GET http://localhost:3000/api/v1/communities`
 
 The health endpoint reports whether the Node.js process is running. The
@@ -221,6 +222,53 @@ API, for example `{ "expectedVersion": 2 }`. A stale version returns
 device from silently overwriting a newer change from another device. Only the
 owner may mutate a trip. The server derives `durationDays` from the dates and
 validates date, budget, group-size, community, ownership, and lifecycle rules.
+
+### My Trips and membership history
+
+`GET /api/v1/me/trips` is unchanged: it lists only trips the caller created,
+including drafts, and returns the owner's version and edit metadata.
+
+`GET /api/v1/me/trip-memberships` provides the signed-in account's created
+and joined trips, without accepting another user's ID. It supports:
+
+- `view=active` (default): current `ACTIVE` memberships, including owner rows.
+- `view=history`: only memberships the caller left or was removed from.
+- `view=all`: current and former memberships together.
+- `role=OWNER` or `role=MEMBER`: optionally narrow any view to created or
+  joined trips.
+- `tripStatus`: any trip lifecycle status, but **only with `view=active`**.
+  Filtering former memberships by the current trip status could reveal changes
+  made after access was revoked, so `history`/`all` with this filter returns `400`.
+- `page` and `pageSize`: defaults 1 and 20, with at most 100 items per page.
+  Unsafe pagination offsets return `400`.
+
+Each item contains the caller's membership `id`, `tripId`, `role`, `status`,
+`joinedAt`, `leftAt`, and `removedAt`, plus a `trip` summary for active members.
+Former memberships always return `trip: null`: this endpoint does not expose
+fresh trip details or restore room, message, member-list or ledger access.
+The summary does not include owner write metadata, private contact details,
+messages, expenses, or other memberships. Active members retain their private
+trip summary even when a trip is paused, ended, cancelled, completed, hidden
+from public discovery or in an archived destination.
+
+"Active" describes membership, not whether the trip is upcoming. Completed
+and cancelled trips remain in this view while the membership is active; use
+`tripStatus=COMPLETED` or `tripStatus=CANCELLED` for those history screens.
+Pending, declined, withdrawn and blocked connection requests are not memberships.
+Re-joining after a new accepted request reuses the existing membership row;
+the endpoint returns its latest state and join timestamp, not a timeline of
+every previous join/leave event.
+
+Results sort by `joinedAt` descending and membership UUID ascending. Counts,
+membership state and trip summaries share one database snapshot. Empty and
+out-of-range pages retain their total count. Responses are private and must
+not be cached. Example requests:
+
+```http
+GET /api/v1/me/trip-memberships?role=MEMBER
+GET /api/v1/me/trip-memberships?view=active&tripStatus=COMPLETED
+GET /api/v1/me/trip-memberships?view=history&page=1&pageSize=20
+```
 
 ## Destination communities
 

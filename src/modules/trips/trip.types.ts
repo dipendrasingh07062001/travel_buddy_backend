@@ -2,6 +2,15 @@ import type { Prisma, TripTransport } from '../../generated/prisma/client.js';
 
 export const publicTripStatuses = ['PUBLISHED', 'FULL'] as const;
 
+export const tripStatusValues = [
+  'DRAFT',
+  'PUBLISHED',
+  'PAUSED',
+  'FULL',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+
 export const tripTransportValues = [
   'BUS',
   'TRAIN',

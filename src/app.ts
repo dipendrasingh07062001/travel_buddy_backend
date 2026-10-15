@@ -47,6 +47,8 @@ import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
 import type { SafetyRouteDependencies } from './modules/safety/safety.types.js';
 import { registerTripRoomRoutes } from './modules/trip-room/trip-room.routes.js';
 import type { TripRoomRouteDependencies } from './modules/trip-room/trip-room.types.js';
+import { registerTripMembershipRoutes } from './modules/trips/trip-membership.routes.js';
+import type { TripMembershipRouteDependencies } from './modules/trips/trip-membership.types.js';
 import {
   registerTripRoutes,
   type TripRouteDependencies,
@@ -74,6 +76,7 @@ export interface BuildAppOptions {
   communities?: Partial<CommunityRouteDependencies>;
   communityContent?: Partial<CommunityContentRouteDependencies>;
   tripRoom?: Partial<TripRoomRouteDependencies>;
+  tripMemberships?: Partial<TripMembershipRouteDependencies>;
   policyCatalog?: PolicyCatalog;
   storage?: ObjectStorage | null;
   realtime?: RealtimeHub;
@@ -145,6 +148,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerDataExportRoutes(api, authDependencies);
       await registerDataRequestRoutes(api, authDependencies);
       await registerTripRoutes(api, authDependencies, options.trips);
+      await registerTripMembershipRoutes(
+        api,
+        authDependencies,
+        options.tripMemberships,
+      );
       await registerCommunityRoutes(api, authDependencies, options.communities);
       await registerCommunityAdminRoutes(api, authDependencies);
       await registerCommunityContentRoutes(
