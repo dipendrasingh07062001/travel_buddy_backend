@@ -18,7 +18,15 @@ import type {
 } from './trip-management.types.js';
 import { presentOwnedTrip, presentTrip } from './trip.presenter.js';
 import { prismaTripRepository } from './trip.repository.js';
-import type { ListTripsQuery, TripRepository } from './trip.types.js';
+import {
+  tripTransportValues as transportValues,
+  type ListTripsQuery,
+  type TripRepository,
+} from './trip.types.js';
+import {
+  normalizeTripSearchQuery,
+  tripSearchQueryProperties,
+} from './trip-search.query.js';
 
 export interface TripRouteDependencies {
   repository: TripRepository;
@@ -28,16 +36,6 @@ export interface TripRouteDependencies {
 interface TripParams {
   tripId: string;
 }
-
-const transportValues = [
-  'BUS',
-  'TRAIN',
-  'FLIGHT',
-  'CAR',
-  'MOTORCYCLE',
-  'OTHER',
-  'UNDECIDED',
-] as const;
 
 const tripStatusValues = [
   'DRAFT',
@@ -166,27 +164,6 @@ const ownedTripResponse = {
   required: ['data'],
   properties: { data: ownedTripSchema },
 } as const;
-
-function badRequest(message: string): Error & { statusCode: number } {
-  return Object.assign(new Error(message), { statusCode: 400 });
-}
-
-function validateRange(query: ListTripsQuery): void {
-  if (
-    query.departureFrom &&
-    query.departureTo &&
-    query.departureFrom > query.departureTo
-  ) {
-    throw badRequest('departureFrom must be on or before departureTo.');
-  }
-  if (
-    query.minBudget !== undefined &&
-    query.maxBudget !== undefined &&
-    query.minBudget > query.maxBudget
-  ) {
-    throw badRequest('minBudget must be less than or equal to maxBudget.');
-  }
-}
 
 export async function registerTripRoutes(
   app: FastifyInstance,
@@ -390,29 +367,12 @@ export async function registerTripRoutes(
           type: 'object',
           additionalProperties: false,
           properties: {
-            origin: { type: 'string', minLength: 1, maxLength: 120 },
+            ...tripSearchQueryProperties,
             destination: {
               type: 'string',
               minLength: 1,
               maxLength: 120,
               pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
-            },
-            departureFrom: { type: 'string', format: 'date' },
-            departureTo: { type: 'string', format: 'date' },
-            minBudget: { type: 'number', minimum: 0 },
-            maxBudget: { type: 'number', minimum: 0 },
-            transport: { type: 'string', enum: transportValues },
-            sort: {
-              type: 'string',
-              enum: ['newest', 'departure_asc'],
-              default: 'newest',
-            },
-            page: { type: 'integer', minimum: 1, default: 1 },
-            pageSize: {
-              type: 'integer',
-              minimum: 1,
-              maximum: 100,
-              default: 20,
             },
           },
         },
@@ -438,13 +398,7 @@ export async function registerTripRoutes(
       },
     },
     async (request) => {
-      validateRange(request.query);
-      const query = {
-        ...request.query,
-        page: request.query.page ?? 1,
-        pageSize: request.query.pageSize ?? 20,
-        sort: request.query.sort ?? ('newest' as const),
-      };
+      const query = normalizeTripSearchQuery(request.query);
       const result = await repository.listPublic(query);
       return {
         data: result.trips.map(presentTrip),
