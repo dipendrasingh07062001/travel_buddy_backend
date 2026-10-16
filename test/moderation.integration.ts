@@ -242,6 +242,22 @@ describe('moderation and enforcement', () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json().data.status).toBe('ACTIONED');
+    const tripHistory = await database.tripChange.findMany({
+      where: { tripId },
+    });
+    expect(tripHistory).toHaveLength(1);
+    expect(tripHistory[0]).toMatchObject({
+      action: 'MODERATION_REMOVED',
+      version: 2,
+      changes: { moderationRemoved: { before: false, after: true } },
+    });
+    expect(JSON.stringify(tripHistory)).not.toContain('commercial spam');
+    const hiddenHistory = await app.inject({
+      method: 'GET',
+      url: `/api/v1/trips/${tripId}/history`,
+      headers: headers('owner'),
+    });
+    expect(hiddenHistory.statusCode).toBe(404);
 
     const publicTrip = await app.inject({
       method: 'GET',

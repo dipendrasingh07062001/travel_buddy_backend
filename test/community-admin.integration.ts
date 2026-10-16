@@ -313,6 +313,28 @@ describe('destination community administration', () => {
     });
     expect(source.status).toBe('ARCHIVED');
     expect(source.mergedIntoId).toBe(ids.target);
+    const tripHistory = await database.tripChange.findMany({
+      where: { tripId: ids.trip },
+    });
+    expect(tripHistory).toHaveLength(1);
+    expect(tripHistory[0]).toMatchObject({
+      version: 2,
+      actorId: ids.admin,
+      action: 'COMMUNITY_MERGED',
+      changes: { communityId: { before: ids.source, after: ids.target } },
+    });
+    expect(JSON.stringify(tripHistory)).not.toContain('reason');
+    expect(
+      (await database.trip.findUniqueOrThrow({ where: { id: ids.trip } }))
+        .version,
+    ).toBe(2);
+    const staleTripEdit = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/trips/${ids.trip}`,
+      headers: headers('owner'),
+      payload: { expectedVersion: 1, originCity: 'Jaipur' },
+    });
+    expect(staleTripEdit.statusCode).toBe(409);
     expect(
       (await database.trip.findUniqueOrThrow({ where: { id: ids.trip } }))
         .communityId,

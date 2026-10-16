@@ -370,6 +370,15 @@ describe('erasing an account after the grace period', () => {
     });
 
     const requested = await requestDeletion('leaver');
+    await database.tripChange.create({
+      data: {
+        tripId: tripIds.owned,
+        version: 1,
+        actorId: leaver,
+        action: 'CREATED',
+        changes: { status: { before: null, after: 'PUBLISHED' } },
+      },
+    });
     expect(requested.statusCode).toBe(201);
     deletionId = requested.json().data.id as string;
   });
@@ -431,6 +440,28 @@ describe('erasing an account after the grace period', () => {
       }),
     ).toEqual({ status: 'CANCELLED' });
     expect(await notificationsFor('companion', 'TRIP_STATUS_CHANGED')).toBe(1);
+    const ownedHistory = await database.tripChange.findMany({
+      where: { tripId: tripIds.owned },
+      orderBy: { version: 'asc' },
+    });
+    expect(ownedHistory).toHaveLength(2);
+    expect(ownedHistory.every((row) => row.actorId === null)).toBe(true);
+    expect(ownedHistory[1]).toMatchObject({
+      action: 'ACCOUNT_ERASURE',
+      changes: { status: { before: 'PUBLISHED', after: 'CANCELLED' } },
+    });
+    expect(
+      await database.tripChange.findFirst({
+        where: { tripId: tripIds.joined },
+      }),
+    ).toMatchObject({
+      actorId: null,
+      action: 'ACCOUNT_ERASURE',
+      changes: {
+        currentGroupSize: { before: 2, after: 1 },
+        status: { before: 'FULL', after: 'PUBLISHED' },
+      },
+    });
 
     // They leave the other upcoming trip, which has room again.
     expect(

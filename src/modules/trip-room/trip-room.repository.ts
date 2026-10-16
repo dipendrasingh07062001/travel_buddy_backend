@@ -1,4 +1,5 @@
 import { database } from '../../database/client.js';
+import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 import {
   Prisma,
   type TripMembershipStatus,
@@ -27,6 +28,7 @@ async function changeMembershipOnce(
       const trip = await transaction.trip.findUnique({
         where: { id: tripId },
         select: {
+          ...tripHistorySelect,
           ownerId: true,
           status: true,
           version: true,
@@ -82,6 +84,19 @@ async function changeMembershipOnce(
         },
       });
       if (tripUpdate.count !== 1) throw new RetryMembershipMutation();
+      await recordTripChange(
+        transaction,
+        trip,
+        {
+          ...trip,
+          version: trip.version + 1,
+          currentGroupSize: nextGroupSize,
+          status: trip.status === 'FULL' ? 'PUBLISHED' : trip.status,
+        },
+        status === 'LEFT' ? 'MEMBER_LEFT' : 'MEMBER_REMOVED',
+        actorId,
+        now,
+      );
       return { kind: 'updated' };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

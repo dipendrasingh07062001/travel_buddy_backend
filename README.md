@@ -39,6 +39,7 @@ The API runs at `http://localhost:3000` by default.
 - Create a private trip draft: `POST http://localhost:3000/api/v1/trips`
 - List the current user's trips: `GET http://localhost:3000/api/v1/me/trips`
 - List created/joined memberships: `GET http://localhost:3000/api/v1/me/trip-memberships`
+- Private trip-change history: `GET http://localhost:3000/api/v1/trips/:tripId/history`
 - Browse destination communities: `GET http://localhost:3000/api/v1/communities`
 
 The health endpoint reports whether the Node.js process is running. The
@@ -334,6 +335,18 @@ GET /api/v1/me/trip-memberships?role=MEMBER
 GET /api/v1/me/trip-memberships?view=active&tripStatus=COMPLETED
 GET /api/v1/me/trip-memberships?view=history&page=1&pageSize=20
 ```
+
+## Trip-change history
+
+Owners and current members can read recorded changes to trip plans, status and
+group size. History is newest-version first, with `pageSize` and `beforeVersion`
+pagination. Members see changes only from their latest join onward; leaving or
+removal revokes access. Old trip changes are not backfilled. Description edits
+are marked without storing old/new description text, and private staff notes
+are never copied. See the [contract and privacy rules](docs/trip-change-history.md).
+
+Track feature gaps in [remaining backend work](docs/backend-remaining-work.md)
+and provider/deployment requirements in the [setup checklist](docs/backend-setup-checklist.md).
 
 ## Destination communities
 

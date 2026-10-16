@@ -56,6 +56,8 @@ import { registerTripAlertRoutes } from './modules/trip-alerts/trip-alert.routes
 import type { TripAlertDependencies } from './modules/trip-alerts/trip-alert.types.js';
 import type { TripRoomRouteDependencies } from './modules/trip-room/trip-room.types.js';
 import { registerTripMembershipRoutes } from './modules/trips/trip-membership.routes.js';
+import { registerTripHistoryRoutes } from './modules/trips/trip-history.routes.js';
+import type { TripHistoryRepository } from './modules/trips/trip-history.repository.js';
 import type { TripMembershipRouteDependencies } from './modules/trips/trip-membership.types.js';
 import {
   registerTripRoutes,
@@ -87,6 +89,7 @@ export interface BuildAppOptions {
   communityContent?: Partial<CommunityContentRouteDependencies>;
   tripRoom?: Partial<TripRoomRouteDependencies>;
   tripMemberships?: Partial<TripMembershipRouteDependencies>;
+  tripHistory?: TripHistoryRepository;
   tripAlerts?: Partial<TripAlertDependencies>;
   emailPreferences?: Partial<EmailPreferenceDependencies>;
   policyCatalog?: PolicyCatalog;
@@ -170,6 +173,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerDataExportRoutes(api, authDependencies);
       await registerDataRequestRoutes(api, authDependencies);
       await registerTripRoutes(api, authDependencies, options.trips);
+      await registerTripHistoryRoutes(
+        api,
+        authDependencies,
+        options.tripHistory,
+      );
       await registerTripAlertRoutes(api, authDependencies, options.tripAlerts);
       await registerTripMembershipRoutes(
         api,

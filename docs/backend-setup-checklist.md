@@ -64,7 +64,8 @@ only; it is not a substitute for a future approved mandatory-notice policy.
 ## Keep separate from external setup
 
 This checklist is not a claim that every PRD feature is finished. Continue the
-backend gap audit separately: account/policy notice coverage, agreed moderation
-follow-up behavior, privacy-aware analytics/material trip-change history and
-any confirmed discovery gaps. Do not label the backend launch-ready until
+backend gap audit separately: see [remaining feature work](backend-remaining-work.md)
+for account/policy notices, moderation, analytics and confirmed discovery gaps.
+Trip-change history has its own [contract](trip-change-history.md).
+Do not label the backend launch-ready until
 feature decisions, provider checks and operational tests are all complete.

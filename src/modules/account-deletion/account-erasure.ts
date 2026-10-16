@@ -6,6 +6,7 @@ import {
   type AccountCleanupResult,
 } from './account-cleanup.js';
 import { createNotifications } from '../notifications/notification.repository.js';
+import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 
 // Moderation records about a deleted account (reports, removed content and
 // evidence copies of photos) are kept this long after erasure, then cleared.
@@ -81,11 +82,29 @@ async function eraseAccount(
         select: { id: true },
       });
       for (const trip of ownedTrips) {
+        await tx.$queryRaw`SELECT id FROM trips WHERE id = ${trip.id}::uuid FOR UPDATE`;
+        const before = await tx.trip.findFirst({
+          where: {
+            id: trip.id,
+            status: { in: ['DRAFT', 'PUBLISHED', 'PAUSED', 'FULL'] },
+            startDate: { gt: today },
+          },
+          select: tripHistorySelect,
+        });
+        if (!before) continue;
         const cancelled = await tx.trip.update({
           where: { id: trip.id },
           data: { status: 'CANCELLED', version: { increment: 1 } },
           select: { version: true },
         });
+        await recordTripChange(
+          tx,
+          before,
+          { ...before, status: 'CANCELLED', version: cancelled.version },
+          'ACCOUNT_ERASURE',
+          null,
+          now,
+        );
         const members = await tx.tripMembership.findMany({
           where: { tripId: trip.id, status: 'ACTIVE' },
           select: { userId: true },
@@ -115,25 +134,28 @@ async function eraseAccount(
         select: { id: true, tripId: true },
       });
       for (const membership of memberships) {
-        const [trip] = await tx.$queryRaw<
-          { current_group_size: number; status: string }[]
-        >`
-          SELECT "current_group_size", "status" FROM "trips"
+        await tx.$queryRaw`
+          SELECT id FROM "trips"
           WHERE "id" = ${membership.tripId}::uuid FOR UPDATE
         `;
+        const trip = await tx.trip.findUnique({
+          where: { id: membership.tripId },
+          select: tripHistorySelect,
+        });
         if (!trip) continue;
         await tx.tripMembership.update({
           where: { id: membership.id },
           data: { status: 'LEFT', leftAt: now },
         });
-        await tx.trip.update({
+        const after = await tx.trip.update({
           where: { id: membership.tripId },
           data: {
-            currentGroupSize: Math.max(1, trip.current_group_size - 1),
+            currentGroupSize: Math.max(1, trip.currentGroupSize - 1),
             version: { increment: 1 },
             ...(trip.status === 'FULL' && { status: 'PUBLISHED' }),
           },
         });
+        await recordTripChange(tx, trip, after, 'ACCOUNT_ERASURE', null, now);
       }
 
       // Nobody can answer their waiting join requests any more.
@@ -219,6 +241,10 @@ async function eraseAccount(
       await tx.authIdentity.deleteMany({ where: { userId } });
       await tx.pushDevice.deleteMany({ where: { userId } });
       await tx.emailPreference.deleteMany({ where: { userId } });
+      await tx.tripChange.updateMany({
+        where: { actorId: userId },
+        data: { actorId: null },
+      });
       await tx.tripAlertSubscription.deleteMany({ where: { userId } });
       await tx.notification.deleteMany({ where: { recipientId: userId } });
       await tx.communityFollow.deleteMany({ where: { userId } });

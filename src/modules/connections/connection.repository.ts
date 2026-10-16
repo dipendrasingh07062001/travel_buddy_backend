@@ -2,6 +2,7 @@ import { database } from '../../database/client.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
+import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 import {
   connectionRequestInclude,
   membershipInclude,
@@ -63,7 +64,7 @@ async function acceptOnce(
       const trip = await transaction.trip.findUnique({
         where: { id: request.tripId },
         select: {
-          id: true,
+          ...tripHistorySelect,
           ownerId: true,
           version: true,
           status: true,
@@ -109,6 +110,7 @@ async function acceptOnce(
             role: 'MEMBER',
             connectionRequestId: request.id,
             joinedAt: now,
+            historyFromVersion: trip.version + 1,
             leftAt: null,
           },
         });
@@ -120,6 +122,7 @@ async function acceptOnce(
             connectionRequestId: request.id,
             role: 'MEMBER',
             joinedAt: now,
+            historyFromVersion: trip.version + 1,
           },
         });
       }
@@ -158,6 +161,19 @@ async function acceptOnce(
         },
       });
       if (tripUpdate.count !== 1) throw new RetryAcceptance();
+      await recordTripChange(
+        transaction,
+        trip,
+        {
+          ...trip,
+          version: trip.version + 1,
+          currentGroupSize: nextGroupSize,
+          status: nextGroupSize >= trip.desiredGroupSize ? 'FULL' : trip.status,
+        },
+        'MEMBER_JOINED',
+        recipientId,
+        now,
+      );
 
       const accepted = await transaction.connectionRequest.findUniqueOrThrow({
         where: { id },

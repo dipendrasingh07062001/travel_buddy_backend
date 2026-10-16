@@ -4,6 +4,7 @@ import { lockActiveCommunity } from '../communities/community-lock.js';
 import { AppError } from '../../errors/app-error.js';
 import { publicTripInclude } from './trip.types.js';
 import type { TripManagementRepository } from './trip-management.types.js';
+import { recordTripChange, tripHistorySelect } from './trip-history.js';
 
 export const prismaTripManagementRepository: TripManagementRepository = {
   async isActiveCommunity(communityId) {
@@ -19,7 +20,7 @@ export const prismaTripManagementRepository: TripManagementRepository = {
       if (!(await lockActiveCommunity(transaction, input.communityId))) {
         throw new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not found.');
       }
-      return transaction.trip.create({
+      const trip = await transaction.trip.create({
         data: {
           ...input,
           memberships: {
@@ -33,6 +34,8 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         },
         include: publicTripInclude,
       });
+      await recordTripChange(transaction, null, trip, 'CREATED', input.ownerId);
+      return trip;
     });
   },
 
@@ -69,6 +72,10 @@ export const prismaTripManagementRepository: TripManagementRepository = {
       ) {
         throw new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not found.');
       }
+      const before = await transaction.trip.findUnique({
+        where: { id },
+        select: tripHistorySelect,
+      });
       const result = await transaction.trip.updateMany({
         where: {
           id,
@@ -99,6 +106,13 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         where: { id },
         include: publicTripInclude,
       });
+      await recordTripChange(
+        transaction,
+        before,
+        trip,
+        data.status !== undefined ? 'STATUS_CHANGED' : 'OWNER_UPDATED',
+        ownerId,
+      );
       if (data.status === 'PUBLISHED' && data.publishedAt && trip.publishedAt) {
         await transaction.tripPublicationAlert.createMany({
           data: [
@@ -118,6 +132,7 @@ export const prismaTripManagementRepository: TripManagementRepository = {
           'originCity',
           'startDate',
           'endDate',
+          'flexibilityDays',
           'desiredGroupSize',
           'currentGroupSize',
           'budgetMin',
