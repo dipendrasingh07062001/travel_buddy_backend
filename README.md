@@ -40,6 +40,7 @@ The API runs at `http://localhost:3000` by default.
 - List the current user's trips: `GET http://localhost:3000/api/v1/me/trips`
 - List created/joined memberships: `GET http://localhost:3000/api/v1/me/trip-memberships`
 - Private trip-change history: `GET http://localhost:3000/api/v1/trips/:tripId/history`
+- Administrator summary counts: `GET http://localhost:3000/api/v1/admin/metrics/overview`
 - Browse destination communities: `GET http://localhost:3000/api/v1/communities`
 
 The health endpoint reports whether the Node.js process is running. The
@@ -862,6 +863,16 @@ connection must go directly to PostgreSQL, not through a transaction-mode
 pooler such as PgBouncer. Behind nginx or another proxy, the stream sends
 `X-Accel-Buffering: no`; the proxy's read timeout must be longer than 25
 seconds.
+
+## Administrator metrics
+
+`GET /api/v1/admin/metrics/overview?days=30` returns aggregate account, trip,
+connection-request and report counts. Only active local `ADMIN` accounts can
+access it; moderators and ordinary users cannot. `days` is 7, 30 (default) or 90.
+It includes current status breakdowns and creation counts in the rolling UTC
+window, not engagement or historical status-transition analytics. No personal
+data or tracking SDK is added. See [metric definitions and limits](docs/admin-metrics.md).
+This milestone needs no new migration, API key or frontend changes.
 
 ## Staff moderation
 
