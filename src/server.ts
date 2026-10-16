@@ -17,6 +17,12 @@ import {
   type PushDeliveryWorker,
 } from './modules/notifications/push-delivery.js';
 import { configuredObjectStorage } from './storage/object-storage.js';
+import { configuredEmailSender } from './modules/email/email.configuration.js';
+import {
+  startEmailDelivery,
+  type EmailDeliveryWorker,
+} from './modules/email/email-delivery.js';
+import { createFirebaseEmailRecipientResolver } from './modules/email/firebase-email-recipient.js';
 import {
   startTripAlerts,
   type TripAlertWorker,
@@ -28,12 +34,14 @@ let pushDelivery: PushDeliveryWorker | undefined;
 let realtimeListener: RealtimeListener | undefined;
 let accountErasure: AccountErasureWorker | undefined;
 let tripAlerts: TripAlertWorker | undefined;
+let emailDelivery: EmailDeliveryWorker | undefined;
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'Shutting down');
 
   try {
     await pushDelivery?.stop();
+    await emailDelivery?.stop();
     await tripAlerts?.stop();
     await accountErasure?.stop();
     await realtimeListener?.stop();
@@ -73,6 +81,15 @@ try {
     logger: app.log,
   });
   tripAlerts = startTripAlerts(app.log);
+  const emailSender = configuredEmailSender();
+  if (emailSender)
+    emailDelivery = startEmailDelivery(
+      {
+        sender: emailSender,
+        recipients: createFirebaseEmailRecipientResolver(),
+      },
+      app.log,
+    );
 } catch (error) {
   app.log.fatal({ err: error }, 'API failed to start');
   await database.$disconnect();
