@@ -188,6 +188,7 @@ enum NotificationType {
   SETTLEMENT_REJECTED
   SETTLEMENT_CANCELLED
   PROFILE_PHOTO_REMOVED
+  MATCHING_TRIP_PUBLISHED
 }
 
 enum PushPlatform {
@@ -297,6 +298,7 @@ model User {
   settlementsReceived        Settlement[]              @relation("SettlementReceiver")
   notifications              Notification[]
   pushDevices                PushDevice[]
+  tripAlerts                 TripAlertSubscription[]
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -340,24 +342,25 @@ model AuthAccount {
 }
 
 model Community {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  slug               String                 @unique @db.VarChar(120)
-  name               String                 @db.VarChar(120)
-  region             String?                @db.VarChar(120)
-  countryCode        String                 @default("IN") @map("country_code") @db.Char(2)
+  id                 String                  @id @default(uuid()) @db.Uuid
+  slug               String                  @unique @db.VarChar(120)
+  name               String                  @db.VarChar(120)
+  region             String?                 @db.VarChar(120)
+  countryCode        String                  @default("IN") @map("country_code") @db.Char(2)
   description        String?
-  status             CommunityStatus        @default(ACTIVE)
-  version            Int                    @default(1)
-  mergedIntoId       String?                @map("merged_into_id") @db.Uuid
-  mergedInto         Community?             @relation("CommunityMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
-  mergedFrom         Community[]            @relation("CommunityMerge")
+  status             CommunityStatus         @default(ACTIVE)
+  version            Int                     @default(1)
+  mergedIntoId       String?                 @map("merged_into_id") @db.Uuid
+  mergedInto         Community?              @relation("CommunityMerge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom         Community[]             @relation("CommunityMerge")
   trips              Trip[]
   followers          CommunityFollow[]
   posts              CommunityPost[]
-  adminActions       CommunityAdminAction[] @relation("CommunityAdminSource")
-  targetAdminActions CommunityAdminAction[] @relation("CommunityAdminTarget")
-  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  adminActions       CommunityAdminAction[]  @relation("CommunityAdminSource")
+  tripAlerts         TripAlertSubscription[]
+  targetAdminActions CommunityAdminAction[]  @relation("CommunityAdminTarget")
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, name])
   @@index([mergedIntoId])
@@ -437,37 +440,38 @@ model CommunityComment {
 }
 
 model Trip {
-  id                        String              @id @default(uuid()) @db.Uuid
-  ownerId                   String              @map("owner_id") @db.Uuid
-  communityId               String              @map("community_id") @db.Uuid
-  originCity                String              @map("origin_city") @db.VarChar(120)
-  startDate                 DateTime            @map("start_date") @db.Date
-  endDate                   DateTime            @map("end_date") @db.Date
-  flexibilityDays           Int                 @default(0) @map("flexibility_days")
-  durationDays              Int                 @map("duration_days")
-  budgetMin                 Decimal?            @map("budget_min") @db.Decimal(12, 2)
-  budgetMax                 Decimal?            @map("budget_max") @db.Decimal(12, 2)
-  currency                  String              @default("INR") @db.Char(3)
-  currentGroupSize          Int                 @default(1) @map("current_group_size")
-  desiredGroupSize          Int                 @map("desired_group_size")
-  transport                 TripTransport       @default(UNDECIDED)
+  id                        String                @id @default(uuid()) @db.Uuid
+  ownerId                   String                @map("owner_id") @db.Uuid
+  communityId               String                @map("community_id") @db.Uuid
+  originCity                String                @map("origin_city") @db.VarChar(120)
+  startDate                 DateTime              @map("start_date") @db.Date
+  endDate                   DateTime              @map("end_date") @db.Date
+  flexibilityDays           Int                   @default(0) @map("flexibility_days")
+  durationDays              Int                   @map("duration_days")
+  budgetMin                 Decimal?              @map("budget_min") @db.Decimal(12, 2)
+  budgetMax                 Decimal?              @map("budget_max") @db.Decimal(12, 2)
+  currency                  String                @default("INR") @db.Char(3)
+  currentGroupSize          Int                   @default(1) @map("current_group_size")
+  desiredGroupSize          Int                   @map("desired_group_size")
+  transport                 TripTransport         @default(UNDECIDED)
   description               String
-  status                    TripStatus          @default(DRAFT)
-  version                   Int                 @default(1)
-  publishedAt               DateTime?           @map("published_at") @db.Timestamptz(6)
-  moderationRemovedAt       DateTime?           @map("moderation_removed_at") @db.Timestamptz(6)
-  owner                     User                @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  community                 Community           @relation(fields: [communityId], references: [id], onDelete: Restrict)
-  connectionRequests        ConnectionRequest[] @relation("ConnectionTargetTrip")
-  relatedConnectionRequests ConnectionRequest[] @relation("ConnectionRelatedTrip")
+  status                    TripStatus            @default(DRAFT)
+  version                   Int                   @default(1)
+  publishedAt               DateTime?             @map("published_at") @db.Timestamptz(6)
+  moderationRemovedAt       DateTime?             @map("moderation_removed_at") @db.Timestamptz(6)
+  owner                     User                  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  community                 Community             @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  connectionRequests        ConnectionRequest[]   @relation("ConnectionTargetTrip")
+  relatedConnectionRequests ConnectionRequest[]   @relation("ConnectionRelatedTrip")
   memberships               TripMembership[]
   reports                   Report[]
   conversation              Conversation?
   checklistItems            TripChecklistItem[]
   expenses                  Expense[]
   settlements               Settlement[]
-  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                 DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publicationAlert          TripPublicationAlert?
+  createdAt                 DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, startDate])
   @@index([communityId, status, startDate])
@@ -658,6 +662,49 @@ model Settlement {
   @@index([payerId, status, createdAt])
   @@index([receiverId, status, createdAt])
   @@map("settlements")
+}
+
+// Private, explicitly opted-in saved searches. Updating replaces all criteria.
+model TripAlertSubscription {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  communityId   String         @map("community_id") @db.Uuid
+  name          String         @db.VarChar(80)
+  enabled       Boolean
+  version       Int            @default(1)
+  origin        String?        @db.VarChar(120)
+  departureFrom DateTime?      @map("departure_from") @db.Date
+  departureTo   DateTime?      @map("departure_to") @db.Date
+  minBudget     Decimal?       @map("min_budget") @db.Decimal(12, 2)
+  maxBudget     Decimal?       @map("max_budget") @db.Decimal(12, 2)
+  minDuration   Int?           @map("min_duration")
+  maxDuration   Int?           @map("max_duration")
+  transport     TripTransport?
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community     Community      @relation(fields: [communityId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt, id])
+  @@index([communityId, enabled, id])
+  @@map("trip_alert_subscriptions")
+}
+
+// One durable job per first publication, saved in the publishing transaction.
+// No historical-trip backfill. The cursor advances atomically with notifications.
+model TripPublicationAlert {
+  tripId         String    @id @map("trip_id") @db.Uuid
+  // Snapshot, not a live relation: a moved trip must not retarget a queued job.
+  communityId    String    @map("community_id") @db.Uuid
+  publishedAt    DateTime  @map("published_at") @db.Timestamptz(6)
+  cursorId       String?   @map("cursor_id") @db.Uuid
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
+  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  trip           Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([completedAt, nextAttemptAt, publishedAt])
+  @@map("trip_publication_alerts")
 }
 
 model Notification {
