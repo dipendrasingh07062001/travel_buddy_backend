@@ -197,6 +197,21 @@ enum PushPlatform {
   WEB
 }
 
+enum EmailCategory {
+  CONNECTIONS
+  TRIPS
+  FINANCES
+  SAFETY
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  SKIPPED
+  FAILED
+}
+
 enum PushDeliveryStatus {
   PENDING
   SENDING
@@ -299,6 +314,7 @@ model User {
   notifications              Notification[]
   pushDevices                PushDevice[]
   tripAlerts                 TripAlertSubscription[]
+  emailPreference            EmailPreference?
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -723,11 +739,46 @@ model Notification {
   pushAttempts      Int                @default(0) @map("push_attempts")
   pushNextAttemptAt DateTime?          @map("push_next_attempt_at") @db.Timestamptz(6)
   pushClaimedAt     DateTime?          @map("push_claimed_at") @db.Timestamptz(6)
+  emailDelivery     EmailDelivery?
 
   @@unique([recipientId, eventKey])
   @@index([recipientId, createdAt, id])
   @@index([recipientId, readAt])
   @@map("notifications")
+}
+
+// Optional activity email only. No address is accepted through this model/API.
+model EmailPreference {
+  userId      String   @id @map("user_id") @db.Uuid
+  connections Boolean  @default(false)
+  trips       Boolean  @default(false)
+  finances    Boolean  @default(false)
+  safety      Boolean  @default(false)
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_preferences")
+}
+
+// Metadata only: recipients/addresses and rendered bodies are resolved at send
+// time, never retained in this outbox. SENT means provider accepted, not inbox delivery.
+model EmailDelivery {
+  id                String              @id @default(uuid()) @db.Uuid
+  notificationId    String              @unique @map("notification_id") @db.Uuid
+  category          EmailCategory
+  preferenceVersion Int                 @map("preference_version")
+  status            EmailDeliveryStatus @default(PENDING)
+  attempts          Int                 @default(0)
+  nextAttemptAt     DateTime            @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  claimToken        String?             @map("claim_token") @db.Uuid
+  claimedAt         DateTime?           @map("claimed_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(6)
+  notification      Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@map("email_deliveries")
 }
 
 model PushDevice {

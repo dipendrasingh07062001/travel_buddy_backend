@@ -683,6 +683,80 @@ reserve a place. A committed pause/delete stops future processing of that
 search, but does not erase notifications already created. Saved criteria are
 included in the owner's account-data export and erased with the account.
 
+### Email notification foundation (real sending off)
+
+The provider-neutral foundation is testable without a domain or an email API
+key. **No real sender is configured**, no email worker runs, and source events
+do not enqueue email while delivery is unconfigured. There is no console sender
+that logs addresses and pretends to send, and no HTTP send-to-address endpoint.
+Existing inbox/FCM behavior is unchanged; matching-trip alerts stay in-app only.
+
+- `GET /api/v1/me/email-preferences` reads only your private preferences.
+- `PATCH /api/v1/me/email-preferences` changes explicitly supplied categories.
+  Both routes require an active, bootstrapped Firebase Bearer identity and
+  return `Cache-Control: private, no-store`.
+
+The four optional categories are `connections` (connection request events),
+`trips` (trip plan/status updates), `finances` (shared expense/settlement updates)
+and `safety` (currently profile-photo removal only). All default to `false`.
+This does **not** create a mandatory legal/account-notice policy. Chat messages
+and matching-trip events are not allowed into the email outbox.
+
+An account with no saved preferences receives `version: 0`, `updatedAt: null`
+and all categories off. Supply that version in the first update:
+
+```json
+{
+  "expectedVersion": 0,
+  "connections": true,
+  "trips": true
+}
+```
+
+Omitted categories are preserved, not enabled. Later edits must supply the
+returned version as `expectedVersion`; stale/concurrent edits return
+`409 EMAIL_PREFERENCE_VERSION_CONFLICT`. An update must change at least one
+category and is limited to 20 requests per account/minute. `deliveryConfigured`
+is currently `false` even if a category is opted in. Email addresses, other
+account IDs and arbitrary delivery targets are never writable settings here.
+
+When a reviewed real adapter is installed later, eligible **new** notifications
+and their email outbox metadata are committed together. Duplicate event keys,
+old inbox entries and later opt-in/configuration are not backfilled. A delivery
+records its consent version, not an address or rendered message. Any preference
+update skips existing pending email; re-enabling does not replay it. In-flight
+requests cannot be recalled, so the worker rechecks consent/account eligibility
+immediately before starting each send. Trip/financial emails additionally
+require current active trip membership; blocks in either direction are honored.
+
+The tested worker uses short `SKIP LOCKED` claims, claim-token guarded updates,
+four bounded attempts, 30-second/2-minute/5-minute retry delays, two-minute stale
+claim recovery and a 24-hour expiry. Reads and opted-out/inactive recipients
+are skipped. External lookups/sends happen outside database transactions with
+deadlines. A real adapter must enforce the stable per-notification idempotency
+key across the whole retry/expiry window; after a timeout/crash it may be called
+again. `SENT` means **provider accepted**, not inbox delivery. Bounce/complaint
+processing belongs to the future provider integration. Raw provider errors,
+addresses, message bodies and credentials are never stored in the queue or logs.
+
+Recipient resolution queries the linked Firebase account's **current** email,
+`emailVerified` and disabled state via Admin SDK, not historical `AuthIdentity`
+rows. Missing/unverified/disabled provider accounts receive no email; temporary
+lookup failures retry without falling back to an old address. Subjects are
+generic inbox titles and plain text asks users to open the app; private message
+text, prices, trip descriptions, contact details and trip IDs are not included.
+
+Preferences and owned delivery metadata are included in account exports.
+Erasure deletes preferences and notifications, cascading their outbox rows;
+stale authenticated writes cannot recreate preferences after deletion begins.
+
+No provider, key or `.env` activation switch is introduced by this milestone.
+Real delivery still needs a domain/provider adapter, sender verification,
+unsubscribe/suppression handling, bounce/complaint webhooks and live tests.
+Track these in [the backend setup checklist](docs/backend-setup-checklist.md).
+Run `npm run db:migrate:deploy` after pulling the merged migration before using
+the new preferences API.
+
 ### Push notifications
 
 Inbox notifications other than in-app-only matching-trip alerts can also be delivered as a push alert through

@@ -33,6 +33,8 @@ import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
+import { registerEmailPreferenceRoutes } from './modules/email/email-preference.routes.js';
+import type { EmailPreferenceDependencies } from './modules/email/email.types.js';
 import { registerPushDeviceRoutes } from './modules/notifications/push-device.routes.js';
 import { createPolicyGate } from './modules/policies/policy-gate.js';
 import { registerPolicyRoutes } from './modules/policies/policy.routes.js';
@@ -86,6 +88,7 @@ export interface BuildAppOptions {
   tripRoom?: Partial<TripRoomRouteDependencies>;
   tripMemberships?: Partial<TripMembershipRouteDependencies>;
   tripAlerts?: Partial<TripAlertDependencies>;
+  emailPreferences?: Partial<EmailPreferenceDependencies>;
   policyCatalog?: PolicyCatalog;
   storage?: ObjectStorage | null;
   realtime?: RealtimeHub;
@@ -194,6 +197,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerModerationRoutes(api, authDependencies, storage);
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerNotificationRoutes(api, authDependencies);
+      await registerEmailPreferenceRoutes(
+        api,
+        authDependencies,
+        options.emailPreferences,
+      );
       await registerPushDeviceRoutes(api, authDependencies);
       await registerTripRoomRoutes(api, authDependencies, options.tripRoom);
       await registerExpenseRoutes(api, authDependencies);

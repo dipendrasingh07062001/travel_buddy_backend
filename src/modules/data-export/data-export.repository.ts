@@ -54,6 +54,16 @@ export async function createAccountDataExport(userId: string) {
             },
             orderBy: { createdAt: 'asc' },
           },
+          emailPreference: {
+            select: {
+              connections: true,
+              trips: true,
+              finances: true,
+              safety: true,
+              version: true,
+              updatedAt: true,
+            },
+          },
         },
       });
       if (!account || account.status === 'DELETED') {
@@ -87,6 +97,7 @@ export async function createAccountDataExport(userId: string) {
         blocks,
         reports,
         tripAlerts,
+        emailDeliveries,
       ] = await Promise.all([
         tx.trip.findMany({
           where: { ownerId: userId },
@@ -394,6 +405,18 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         }),
+        tx.emailDelivery.findMany({
+          where: { notification: { recipientId: userId } },
+          select: {
+            notificationId: true,
+            category: true,
+            status: true,
+            attempts: true,
+            createdAt: true,
+            sentAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
 
       return {
@@ -423,6 +446,7 @@ export async function createAccountDataExport(userId: string) {
           blocks,
           reports,
           tripAlerts,
+          emailDeliveries,
         },
       };
     },

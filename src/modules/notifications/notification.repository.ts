@@ -5,6 +5,7 @@ import type {
   Prisma,
 } from '../../generated/prisma/client.js';
 import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
+import { queueEmailNotifications } from '../email/email-outbox.js';
 
 interface NotificationEvent {
   recipientIds: string[];
@@ -27,7 +28,7 @@ export async function createNotifications(
     (id) => id !== event.actorId,
   );
   if (recipientIds.length === 0) return;
-  await transaction.notification.createMany({
+  const created = await transaction.notification.createManyAndReturn({
     data: recipientIds.map((recipientId) => ({
       recipientId,
       type: event.type,
@@ -39,7 +40,9 @@ export async function createNotifications(
       ...(event.pushEligible === false && { pushStatus: 'SKIPPED' as const }),
     })),
     skipDuplicates: true,
+    select: { id: true, recipientId: true, type: true },
   });
+  await queueEmailNotifications(transaction, created);
   await publishRealtimeEvent(transaction, {
     type: 'notifications.changed',
     userIds: recipientIds,
