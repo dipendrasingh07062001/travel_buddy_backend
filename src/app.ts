@@ -8,6 +8,8 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 
 import { env } from './config/env.js';
 import { checkDatabase } from './database/client.js';
+import { registerAdminMetricsRoutes } from './modules/admin-metrics/admin-metrics.routes.js';
+import type { AdminMetricsDependencies } from './modules/admin-metrics/admin-metrics.types.js';
 import { AppError } from './errors/app-error.js';
 import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
@@ -79,6 +81,7 @@ export interface BuildAppOptions {
   health?: Partial<HealthRouteDependencies>;
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
+  adminMetrics?: Partial<AdminMetricsDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
   profileActivity?: Partial<ProfileActivityDependencies>;
   profileSignals?: Partial<ProfileSignalsDependencies>;
@@ -203,6 +206,11 @@ export function buildApp(options: BuildAppOptions = {}) {
         storage,
       );
       await registerModerationRoutes(api, authDependencies, storage);
+      await registerAdminMetricsRoutes(
+        api,
+        authDependencies,
+        options.adminMetrics,
+      );
       await registerMessagingRoutes(api, authDependencies, options.messaging);
       await registerNotificationRoutes(api, authDependencies);
       await registerEmailPreferenceRoutes(

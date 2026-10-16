@@ -6,15 +6,23 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Administrator metrics: private counts/status breakdowns and rolling creation
+  windows. See [definitions and access rules](admin-metrics.md). Backend API only;
+  this does not implement an admin dashboard or behavioural/marketing analytics.
+- No new database migration, provider or API key is required for this milestone.
+
+## Already implemented
+
 - Trip-change history: structured, private, transactional history of material
   trip-plan/status/group changes. See [contract](trip-change-history.md).
-- Apply its reviewed migration after merging before running the updated API.
+  Its migration is part of the existing 34-migration baseline.
 
 ## Feature/decision work still open
 
-- Privacy-aware admin analytics/metrics. Agree the small set of useful counts,
-  aggregation windows, staff access and retention; avoid collecting tracking
-  identifiers or message/contact contents by default.
+- The initial operational admin counts are covered by the current milestone.
+  Daily/monthly engagement, conversion funnels or historical series are not
+  included; confirm a product need and privacy/retention decisions before adding
+  tracking. They are not silently treated as required MVP features.
 - Moderation follow-up: founders must agree severity/escalation, appeals and
   response expectations. Existing report review/removal is not a complete
   operational moderation policy. Implement any agreed workflow gaps separately.
@@ -34,6 +42,6 @@ Firebase/FCM and storage checks, approved policy URLs/versions, production
 hosting/secrets/HTTPS/CORS, backups and restore, monitoring, security/load tests
 and final API integration. These require separate verification, not just PRs.
 
-No new external key is required for trip history. Keep all service-account
+No new external key is required for these admin metrics. Keep all service-account
 files and provider secrets outside Git and chat. Complete feature work first,
 then prepare the agreed provider/setup list together as requested by the founders.
