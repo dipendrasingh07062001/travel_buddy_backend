@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import type {
@@ -166,16 +166,13 @@ const repository: ConnectionRepository = {
         ?.status ?? null
     );
   },
-  async countRecentByRequester() {
-    return 0;
-  },
   async isBlockedEitherDirection(userAId, userBId) {
     return (
       blockedPairs.has(`${userAId}:${userBId}`) ||
       blockedPairs.has(`${userBId}:${userAId}`)
     );
   },
-  async create(input) {
+  async createWithinDailyLimit(input) {
     const request = connectionRecord(input.tripId, input);
     requests.set(request.id, request);
     return request;
@@ -329,6 +326,27 @@ describe('connection request HTTP contract', () => {
     acceptedRequestId = created.json().data.id;
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.json().error.code).toBe('CONNECTION_REQUEST_EXISTS');
+  });
+
+  it('returns the existing 429 contract when the atomic quota decision rejects a request', async () => {
+    const create = vi
+      .spyOn(repository, 'createWithinDailyLimit')
+      .mockResolvedValueOnce(null);
+    const previousSize = requests.size;
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${targetTripIds[3]}/connection-requests`,
+        headers: headers('requester-token'),
+        payload: { message: 'I would like to join this separate travel plan.' },
+      });
+      expect(response.statusCode).toBe(429);
+      expect(response.json().error.code).toBe('CONNECTION_REQUEST_LIMIT');
+      expect(requests.size).toBe(previousSize);
+      expect(create).toHaveBeenCalledOnce();
+    } finally {
+      create.mockRestore();
+    }
   });
 
   it('keeps sent and received inboxes scoped to the authenticated user', async () => {
