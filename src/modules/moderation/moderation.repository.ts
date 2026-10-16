@@ -1,4 +1,5 @@
 import { database } from '../../database/client.js';
+import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 import { AppError } from '../../errors/app-error.js';
 import type {
   Prisma,
@@ -394,14 +395,34 @@ async function removeContent(
       );
       if (count === 1) removedPhotoKey = report.reportedPhotoKey;
       break;
-    case 'TRIP':
+    case 'TRIP': {
+      await tx.$queryRaw`SELECT id FROM trips WHERE id = ${report.reportedTripId!}::uuid FOR UPDATE`;
+      const before = await tx.trip.findUnique({
+        where: { id: report.reportedTripId! },
+        select: tripHistorySelect,
+      });
       count = (
         await tx.trip.updateMany({
           where: { id: report.reportedTripId!, moderationRemovedAt: null },
           data: { moderationRemovedAt: now, version: { increment: 1 } },
         })
       ).count;
+      if (count === 1 && before) {
+        await recordTripChange(
+          tx,
+          before,
+          {
+            ...before,
+            moderationRemovedAt: now,
+            version: before.version + 1,
+          },
+          'MODERATION_REMOVED',
+          actorId,
+          now,
+        );
+      }
       break;
+    }
     case 'COMMUNITY_POST':
       count = (
         await tx.communityPost.updateMany({

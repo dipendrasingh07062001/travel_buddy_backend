@@ -98,6 +98,7 @@ export async function createAccountDataExport(userId: string) {
         reports,
         tripAlerts,
         emailDeliveries,
+        tripChanges,
       ] = await Promise.all([
         tx.trip.findMany({
           where: { ownerId: userId },
@@ -417,6 +418,18 @@ export async function createAccountDataExport(userId: string) {
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         }),
+        tx.tripChange.findMany({
+          where: { actorId: userId },
+          select: {
+            id: true,
+            tripId: true,
+            version: true,
+            action: true,
+            changes: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
       ]);
 
       return {
@@ -447,6 +460,7 @@ export async function createAccountDataExport(userId: string) {
           reports,
           tripAlerts,
           emailDeliveries,
+          tripChanges,
         },
       };
     },

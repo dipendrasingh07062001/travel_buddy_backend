@@ -266,9 +266,29 @@ export async function mergeAdminCommunities(
       const targetFollowersAfter = await transaction.communityFollow.count({
         where: { communityId: targetId },
       });
+      // Community locks come first everywhere. Lock trips in a stable order
+      // before taking snapshots so a simultaneous edit cannot be misattributed.
+      await transaction.$queryRaw`
+        SELECT id FROM trips WHERE community_id = ${sourceId}::uuid ORDER BY id FOR UPDATE
+      `;
+      const movedTrips = await transaction.trip.findMany({
+        where: { communityId: sourceId },
+        select: { id: true, version: true, communityId: true },
+      });
       const trips = await transaction.trip.updateMany({
         where: { communityId: sourceId },
-        data: { communityId: targetId },
+        data: { communityId: targetId, version: { increment: 1 } },
+      });
+      await transaction.tripChange.createMany({
+        data: movedTrips.map((trip) => ({
+          tripId: trip.id,
+          version: trip.version + 1,
+          actorId,
+          action: 'COMMUNITY_MERGED',
+          changes: {
+            communityId: { before: trip.communityId, after: targetId },
+          },
+        })),
       });
       const posts = await transaction.communityPost.updateMany({
         where: { communityId: sourceId },
