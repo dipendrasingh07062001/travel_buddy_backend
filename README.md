@@ -593,9 +593,99 @@ not produce new message notifications for that recipient. While a
 signals that the inbox changed; without one, poll the unread count modestly and
 stop when the app is in the background.
 
+### Saved matching-trip alerts
+
+Users explicitly opt into private saved searches for **newly published trips**.
+This is criteria matching, not a recommendation score or a booking guarantee.
+It reuses the inbox and `notifications.changed` real-time event. This first
+version is **in-app only**: matching alerts are stored with push delivery
+`SKIPPED`, even when FCM is enabled. No new provider, key, or environment setting
+is needed. Existing notifications keep their current push behavior.
+
+All routes require a Firebase Bearer token for an active, bootstrapped account:
+
+- `GET /api/v1/me/trip-alerts` lists only your saved searches (maximum 20).
+- `POST /api/v1/me/trip-alerts` creates one, returning `201` and `version: 1`.
+- `PUT /api/v1/me/trip-alerts/:alertId` **replaces all criteria**, using
+  `expectedVersion` to protect against concurrent edits. Send the complete
+  desired state; omitted optional filters are cleared. Use `enabled: false`
+  to pause and `enabled: true` to resume.
+- `DELETE /api/v1/me/trip-alerts/:alertId` unsubscribes and deletes the criteria
+  (`204`). Other people's or nonexistent alert IDs return `404`.
+
+Example creation body:
+
+```json
+{
+  "name": "Manali holiday",
+  "communityId": "<active-destination-community-uuid>",
+  "enabled": true,
+  "origin": "Delhi",
+  "departureFrom": "2027-04-10",
+  "departureTo": "2027-04-20",
+  "minBudget": 10000,
+  "maxBudget": 20000,
+  "minDuration": 3,
+  "maxDuration": 10,
+  "transport": "BUS"
+}
+```
+
+`name` (1–80 nonblank characters), exact destination `communityId`, and an
+explicit `enabled` boolean are required. Nothing is enabled automatically.
+All other filters are optional; omit them rather than sending `null`. For PUT,
+also include the version you last read as `expectedVersion`. Money is in INR,
+nonnegative, at most two decimal places; responses use decimal strings. Date
+windows overlap inclusively with the trip dates (not just its departure day),
+budget intervals overlap inclusively, duration is 1–365 inclusive calendar
+days, origin is a case-insensitive **literal** substring, and transport is an
+exact enum match. A requested budget bound does not match an unknown relevant
+trip-price bound. Currency conversion and flexibility-day expansion are not
+performed. An alert with only a destination matches any eligible trip there.
+
+The quota includes paused alerts. Concurrent creations cannot exceed it
+(`409 TRIP_ALERT_LIMIT_REACHED`). Stale edits return
+`409 TRIP_ALERT_VERSION_CONFLICT`. Creation and replacement each allow 20
+requests per account per minute, subject to the normal global rate limit.
+New/enabled destinations must be active. Archived/merged destinations do not
+produce matches; users can still pause/delete old searches and explicitly
+resave them against an active destination. Searches are not silently moved
+to a different community. Managing private preferences does not activate or
+bypass the publishing policy gate.
+
+The first successful publication writes a durable `trip_publication_alerts`
+job **inside the publishing transaction**. Existing trips are not backfilled.
+Editing, re-opening capacity, or pausing/republishing does not create another
+job. The API process polls every five seconds and processes at most 100 saved
+searches per database transaction. Row locks allow multiple workers; saved
+progress and notifications commit together. Errors roll back progress and
+back off that job for a minute, allowing other publications to proceed.
+Jobs survive restarts. No external queue or cron installation is required.
+After updating the code, run `npm run db:migrate:deploy` before starting it.
+
+For each batch, matching uses the **current trip fields** and only enabled
+searches last saved **on or before the first publication timestamp**. Creating,
+editing, or resuming a search does not retroactively subscribe to pending old
+publications. A trip moved to a different destination closes its pending job;
+it never silently retargets the job's audience. Trips must still be `PUBLISHED`, not ended (UTC), have free space,
+an active destination and active owner, and not be removed by moderation. Full,
+paused, cancelled, completed, expired and removed trips are skipped. The owner,
+current active trip members, non-active accounts, and users blocked in either
+direction receive no new match alert. An ineligible queued event is completed,
+not replayed if its trip becomes eligible again later.
+
+Overlapping saved searches still produce **at most one notification per user
+per trip**. The generic `MATCHING_TRIP_PUBLISHED` notification uses the trip ID
+as `sourceId` and `tripId`; no saved search name/criteria, description, contact
+data, or price is copied into it. Fetch normal public trip details before
+opening or requesting to join: a saved notification does not grant access or
+reserve a place. A committed pause/delete stops future processing of that
+search, but does not erase notifications already created. Saved criteria are
+included in the owner's account-data export and erased with the account.
+
 ### Push notifications
 
-Every inbox notification can also be delivered as a push alert through
+Inbox notifications other than in-app-only matching-trip alerts can also be delivered as a push alert through
 Firebase Cloud Messaging (FCM) to the recipient's registered devices. The inbox
 in PostgreSQL stays the source of truth; push is a best-effort copy. Email is
 not sent.

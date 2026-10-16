@@ -17,18 +17,24 @@ import {
   type PushDeliveryWorker,
 } from './modules/notifications/push-delivery.js';
 import { configuredObjectStorage } from './storage/object-storage.js';
+import {
+  startTripAlerts,
+  type TripAlertWorker,
+} from './modules/trip-alerts/trip-alert.worker.js';
 
 const realtime = new RealtimeHub();
 const app = buildApp({ realtime });
 let pushDelivery: PushDeliveryWorker | undefined;
 let realtimeListener: RealtimeListener | undefined;
 let accountErasure: AccountErasureWorker | undefined;
+let tripAlerts: TripAlertWorker | undefined;
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'Shutting down');
 
   try {
     await pushDelivery?.stop();
+    await tripAlerts?.stop();
     await accountErasure?.stop();
     await realtimeListener?.stop();
     // Live streams end first (see buildApp). In-flight requests get a few
@@ -66,6 +72,7 @@ try {
     signInAccounts: firebaseSignInAccounts,
     logger: app.log,
   });
+  tripAlerts = startTripAlerts(app.log);
 } catch (error) {
   app.log.fatal({ err: error }, 'API failed to start');
   await database.$disconnect();

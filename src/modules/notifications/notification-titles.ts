@@ -18,4 +18,5 @@ export const notificationTitles: Record<NotificationType, string> = {
   SETTLEMENT_REJECTED: 'Settlement rejected',
   SETTLEMENT_CANCELLED: 'Settlement cancelled',
   PROFILE_PHOTO_REMOVED: 'Your profile photo was removed',
+  MATCHING_TRIP_PUBLISHED: 'A new trip matches your saved alert',
 };

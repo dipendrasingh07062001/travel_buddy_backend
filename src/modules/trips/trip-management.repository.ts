@@ -99,6 +99,18 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         where: { id },
         include: publicTripInclude,
       });
+      if (data.status === 'PUBLISHED' && data.publishedAt && trip.publishedAt) {
+        await transaction.tripPublicationAlert.createMany({
+          data: [
+            {
+              tripId: trip.id,
+              communityId: trip.communityId,
+              publishedAt: trip.publishedAt,
+            },
+          ],
+          skipDuplicates: true,
+        });
+      }
       const statusChanged = data.status !== undefined;
       const planChanged = Object.keys(data).some((field) =>
         [

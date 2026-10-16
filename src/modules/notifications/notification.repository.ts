@@ -14,6 +14,7 @@ interface NotificationEvent {
   tripId?: string;
   actorId?: string;
   createdAt?: Date;
+  pushEligible?: boolean;
 }
 
 // Called inside the source action's transaction so an alert is never saved
@@ -35,6 +36,7 @@ export async function createNotifications(
       tripId: event.tripId ?? null,
       actorId: event.actorId ?? null,
       createdAt: event.createdAt ?? new Date(),
+      ...(event.pushEligible === false && { pushStatus: 'SKIPPED' as const }),
     })),
     skipDuplicates: true,
   });

@@ -218,6 +218,7 @@ async function eraseAccount(
       await tx.authAccount.deleteMany({ where: { userId } });
       await tx.authIdentity.deleteMany({ where: { userId } });
       await tx.pushDevice.deleteMany({ where: { userId } });
+      await tx.tripAlertSubscription.deleteMany({ where: { userId } });
       await tx.notification.deleteMany({ where: { recipientId: userId } });
       await tx.communityFollow.deleteMany({ where: { userId } });
       await tx.userBlock.deleteMany({
