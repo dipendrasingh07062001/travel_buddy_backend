@@ -1,4 +1,4 @@
-import { database } from '../../database/client.js';
+import { database, databaseSchema } from '../../database/client.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
@@ -11,6 +11,12 @@ import {
 } from './connection.types.js';
 
 class RetryAcceptance extends Error {}
+
+const maximumRequestsPerDay = 20;
+const requestWindowMilliseconds = 24 * 60 * 60 * 1000;
+const quotaUsersTable = Prisma.raw(
+  `"${databaseSchema.replace(/"/g, '""')}"."users"`,
+);
 
 async function acceptOnce(
   id: string,
@@ -243,12 +249,6 @@ export const prismaConnectionRepository: ConnectionRepository = {
     return membership?.status ?? null;
   },
 
-  countRecentByRequester(requesterId, since) {
-    return database.connectionRequest.count({
-      where: { requesterId, createdAt: { gte: since } },
-    });
-  },
-
   async isBlockedEitherDirection(userAId, userBId) {
     return (
       (await database.userBlock.count({
@@ -262,22 +262,48 @@ export const prismaConnectionRepository: ConnectionRepository = {
     );
   },
 
-  create(input) {
-    return database.$transaction(async (transaction) => {
-      const request = await transaction.connectionRequest.create({
-        data: input,
-        include: connectionRequestInclude,
-      });
-      await createNotifications(transaction, {
-        recipientIds: [request.recipientId],
-        type: 'CONNECTION_REQUEST_RECEIVED',
-        eventKey: `connection-request:${request.id}:received`,
-        sourceId: request.id,
-        tripId: request.tripId,
-        actorId: request.requesterId,
-      });
-      return request;
-    });
+  createWithinDailyLimit(input) {
+    return database.$transaction(
+      async (transaction) => {
+        await transaction.$executeRaw`SET LOCAL statement_timeout = '5s'`;
+        // One quota decision per requester, across trips and API instances.
+        // NO KEY UPDATE still permits the FK key-share locks taken when two
+        // travellers request each other's trips at the same time.
+        await transaction.$queryRaw`SELECT id FROM ${quotaUsersTable} WHERE id = ${input.requesterId}::uuid FOR NO KEY UPDATE`;
+
+        // Read the database clock after waiting for the lock. Transaction-start
+        // time and API-machine clocks could otherwise make this window stale.
+        const [clock] = await transaction.$queryRaw<{ now: Date }[]>`
+          SELECT clock_timestamp() AS now
+        `;
+        if (!clock) throw new Error('Database clock unavailable.');
+        const since = new Date(clock.now.getTime() - requestWindowMilliseconds);
+        const recent = await transaction.connectionRequest.count({
+          where: { requesterId: input.requesterId, createdAt: { gte: since } },
+        });
+        if (recent >= maximumRequestsPerDay) return null;
+
+        const request = await transaction.connectionRequest.create({
+          data: { ...input, createdAt: clock.now },
+          include: connectionRequestInclude,
+        });
+        await createNotifications(transaction, {
+          recipientIds: [request.recipientId],
+          type: 'CONNECTION_REQUEST_RECEIVED',
+          eventKey: `connection-request:${request.id}:received`,
+          sourceId: request.id,
+          tripId: request.tripId,
+          actorId: request.requesterId,
+          createdAt: clock.now,
+        });
+        return request;
+      },
+      {
+        // Each count must see the previous lock holder's committed insert.
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 15_000,
+      },
+    );
   },
 
   async list(userId, query) {

@@ -421,6 +421,14 @@ available group capacity.
 Self-requests, duplicate requests, and more than 20 new requests in a rolling
 24-hour period are rejected.
 
+The daily quota is enforced per requester inside PostgreSQL, including when
+requests reach different API instances at the same time. All request statuses
+count until their creation time falls outside the rolling window; declining,
+withdrawing, or blocking a request does not restore a quota slot. Quota rejection
+returns `429 CONNECTION_REQUEST_LIMIT` without saving a request or notification.
+See [concurrency rules and tests](docs/connection-request-limits.md). No new
+database migration or client request/response change is required for this fix.
+
 Users list their received or sent requests with
 `GET /api/v1/me/connection-requests?box=received` or `box=sent`. The trip owner
 can accept or decline a pending request. The requester can withdraw it.

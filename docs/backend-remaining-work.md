@@ -6,9 +6,8 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Administrator metrics: private counts/status breakdowns and rolling creation
-  windows. See [definitions and access rules](admin-metrics.md). Backend API only;
-  this does not implement an admin dashboard or behavioural/marketing analytics.
+- Atomic connection-request quota: serialize the rolling 20-per-requester limit
+  with request/notification creation in PostgreSQL. See [rules and tests](connection-request-limits.md).
 - No new database migration, provider or API key is required for this milestone.
 
 ## Already implemented
@@ -16,6 +15,9 @@ Frontend/UI implementation belongs to the Flutter developer.
 - Trip-change history: structured, private, transactional history of material
   trip-plan/status/group changes. See [contract](trip-change-history.md).
   Its migration is part of the existing 34-migration baseline.
+- Administrator metrics: private operational counts/status breakdowns and rolling
+  creation windows. See [definitions and access rules](admin-metrics.md). This is
+  not an admin dashboard or the PRD's full product-success measurement.
 
 ## Feature/decision work still open
 

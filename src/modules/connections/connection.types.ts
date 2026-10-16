@@ -107,9 +107,12 @@ export interface ConnectionRepository {
     tripId: string,
     userId: string,
   ): Promise<TripMembershipStatus | null>;
-  countRecentByRequester(requesterId: string, since: Date): Promise<number>;
   isBlockedEitherDirection(userAId: string, userBId: string): Promise<boolean>;
-  create(input: CreateConnectionRequestInput): Promise<ConnectionRequestRecord>;
+  // Atomically enforces the requester's rolling 24-hour quota and creates the
+  // request plus its notification. Null means that the quota was reached.
+  createWithinDailyLimit(
+    input: CreateConnectionRequestInput,
+  ): Promise<ConnectionRequestRecord | null>;
   list(
     userId: string,
     query: ListConnectionRequestsQuery,

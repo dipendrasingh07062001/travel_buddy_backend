@@ -12,14 +12,11 @@ export interface CreateConnectionRequestBody {
   relatedTripId?: string;
 }
 
-const maximumRequestsPerDay = 20;
-
 export async function sendConnectionRequest(
   user: AuthenticatedUser,
   tripId: string,
   body: CreateConnectionRequestBody,
   repository: ConnectionRepository,
-  now = new Date(),
 ): Promise<ConnectionRequestRecord> {
   requireCompleteProfile(user, 'requesting a connection');
   const message = body.message.trim();
@@ -99,26 +96,22 @@ export async function sendConnectionRequest(
     );
   }
 
-  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  if (
-    (await repository.countRecentByRequester(user.id, since)) >=
-    maximumRequestsPerDay
-  ) {
-    throw new AppError(
-      429,
-      'CONNECTION_REQUEST_LIMIT',
-      'You have reached the connection-request limit for the last 24 hours.',
-    );
-  }
-
   try {
-    return await repository.create({
+    const request = await repository.createWithinDailyLimit({
       tripId,
       requesterId: user.id,
       recipientId: trip.ownerId,
       relatedTripId: body.relatedTripId ?? null,
       message,
     });
+    if (!request) {
+      throw new AppError(
+        429,
+        'CONNECTION_REQUEST_LIMIT',
+        'You have reached the connection-request limit for the last 24 hours.',
+      );
+    }
+    return request;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
