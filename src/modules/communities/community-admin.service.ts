@@ -1,4 +1,5 @@
 import { AppError } from '../../errors/app-error.js';
+import { requireSafePublicText } from '../../privacy/public-text.js';
 import type {
   CommunityMetadata,
   CommunityMetadataPatch,
@@ -25,6 +26,7 @@ export function cleanSlug(raw: string): string {
       'Use a lowercase URL slug containing letters, numbers and single hyphens.',
     );
   }
+  requireSafePublicText(slug);
   return slug;
 }
 
@@ -37,6 +39,7 @@ function cleanName(raw: string): string {
       'A community name must contain 2 to 120 characters.',
     );
   }
+  requireSafePublicText(name);
   return name;
 }
 
@@ -50,6 +53,7 @@ function cleanRegion(raw: string | null): string | null {
       'A region must contain 2 to 120 characters, or be null.',
     );
   }
+  requireSafePublicText(region);
   return region;
 }
 
@@ -75,6 +79,7 @@ function cleanDescription(raw: string | null): string | null {
       'A description cannot exceed 2000 characters.',
     );
   }
+  requireSafePublicText(description);
   return description || null;
 }
 

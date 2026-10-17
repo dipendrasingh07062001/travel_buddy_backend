@@ -1,17 +1,33 @@
+import { publicText } from '../../privacy/public-text.js';
 import type {
   CommunityPostRecord,
   CommunitySummaryRecord,
   FollowedCommunityRecord,
 } from './community.types.js';
 
+export function presentPublicDestination(
+  community: Pick<
+    CommunitySummaryRecord,
+    'id' | 'slug' | 'name' | 'region' | 'countryCode'
+  >,
+) {
+  return {
+    id: community.id,
+    slug: community.slug,
+    name: publicText(community.name),
+    region: publicText(community.region),
+    countryCode: community.countryCode.trim(),
+  };
+}
+
 export function presentCommunity(community: CommunitySummaryRecord) {
   return {
     id: community.id,
     slug: community.slug,
-    name: community.name,
-    region: community.region,
+    name: publicText(community.name),
+    region: publicText(community.region),
     countryCode: community.countryCode.trim(),
-    description: community.description,
+    description: publicText(community.description),
     activity: {
       followers: community.followerCount,
       upcomingTrips: community.upcomingTripCount,
@@ -25,9 +41,12 @@ export function presentCommunityPost(post: CommunityPostRecord) {
     id: post.id,
     communityId: post.communityId,
     type: post.type,
-    title: post.title,
-    body: post.body,
-    author: post.author,
+    title: publicText(post.title),
+    body: publicText(post.body),
+    author: {
+      id: post.author.id,
+      displayName: publicText(post.author.displayName),
+    },
     publishedAt: post.publishedAt.toISOString(),
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),

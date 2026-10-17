@@ -1,3 +1,5 @@
+import { publicText } from '../../privacy/public-text.js';
+import { presentPublicDestination } from '../communities/community.presenter.js';
 import type {
   ProfileTripActivity,
   ProfilePostActivity,
@@ -7,8 +9,8 @@ import type {
 export function presentProfileTrip(trip: ProfileTripActivity) {
   return {
     id: trip.id,
-    originCity: trip.originCity,
-    destination: trip.community,
+    originCity: publicText(trip.originCity),
+    destination: presentPublicDestination(trip.community),
     startDate: trip.startDate.toISOString().slice(0, 10),
     endDate: trip.endDate.toISOString().slice(0, 10),
     durationDays: trip.durationDays,
@@ -20,16 +22,16 @@ export function presentProfilePost(post: ProfilePostActivity) {
   return {
     id: post.id,
     type: post.type,
-    title: post.title,
-    community: post.community,
+    title: publicText(post.title),
+    community: presentPublicDestination(post.community),
     publishedAt: post.publishedAt?.toISOString() ?? null,
   };
 }
 export function presentProfileComment(comment: ProfileCommentActivity) {
   return {
     id: comment.id,
-    post: { id: comment.post.id, title: comment.post.title },
-    community: comment.post.community,
+    post: { id: comment.post.id, title: publicText(comment.post.title) },
+    community: presentPublicDestination(comment.post.community),
     createdAt: comment.createdAt.toISOString(),
     editedAt: comment.editedAt?.toISOString() ?? null,
   };

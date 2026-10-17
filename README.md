@@ -337,6 +337,16 @@ GET /api/v1/me/trip-memberships?view=active&tripStatus=COMPLETED
 GET /api/v1/me/trip-memberships?view=history&page=1&pageSize=20
 ```
 
+## Public text privacy
+
+Public-facing profile/trip/community text rejects supported contact and sensitive
+personal-detail patterns with `400 PUBLIC_TEXT_PRIVACY_VIOLATION`, without echoing
+the value. Public presenters replace matching legacy text with
+`[Hidden for privacy]`; private owner profile/trip data and authorized review
+originals remain stored. This is not a universal PII detector or a substitute for
+reporting/moderation. See [covered fields, private-data boundaries and tests](docs/public-text-privacy.md).
+No new API key, migration or production backfill is required.
+
 ## Trip-change history
 
 Owners and current members can read recorded changes to trip plans, status and
@@ -1201,6 +1211,7 @@ isolated PostgreSQL service for every pull request.
 src/
   config/       Environment parsing and validation
   database/     Database connection infrastructure
+  privacy/      Shared public-text disclosure guards and safe projections
   modules/      Product modules and HTTP routes
   realtime/     Live event stream and PostgreSQL LISTEN/NOTIFY bus
   storage/      Cloudflare R2 client and upload processing
