@@ -1,17 +1,20 @@
 # Backend remaining work
 
-Status recorded 2026-10-16. This is a working engineering checklist, not a
+Status recorded 2026-10-17. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Atomic connection-request quota: serialize the rolling 20-per-requester limit
-  with request/notification creation in PostgreSQL. See [rules and tests](connection-request-limits.md).
+- Public-text privacy: reject supported disclosures in public-facing writes and
+  mask matching legacy text in public responses without rewriting stored content.
+  See [scope, behavior and limits](public-text-privacy.md).
 - No new database migration, provider or API key is required for this milestone.
 
 ## Already implemented
 
+- Atomic connection-request quota: serialize the rolling 20-per-requester limit
+  with request/notification creation in PostgreSQL. See [rules and tests](connection-request-limits.md).
 - Trip-change history: structured, private, transactional history of material
   trip-plan/status/group changes. See [contract](trip-change-history.md).
   Its migration is part of the existing 34-migration baseline.
@@ -21,7 +24,7 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Feature/decision work still open
 
-- The initial operational admin counts are covered by the current milestone.
+- The initial operational admin counts are already implemented.
   Daily/monthly engagement, conversion funnels or historical series are not
   included; confirm a product need and privacy/retention decisions before adding
   tracking. They are not silently treated as required MVP features.
@@ -44,6 +47,6 @@ Firebase/FCM and storage checks, approved policy URLs/versions, production
 hosting/secrets/HTTPS/CORS, backups and restore, monitoring, security/load tests
 and final API integration. These require separate verification, not just PRs.
 
-No new external key is required for these admin metrics. Keep all service-account
+No new external key is required for these public-text safeguards. Keep all service-account
 files and provider secrets outside Git and chat. Complete feature work first,
 then prepare the agreed provider/setup list together as requested by the founders.

@@ -1,5 +1,6 @@
 import { database } from '../../database/client.js';
 import { AppError } from '../../errors/app-error.js';
+import { containsSensitivePublicText } from '../../privacy/public-text.js';
 import { Prisma, type IdentityType } from '../../generated/prisma/client.js';
 import { firebaseSignInGuardTarget } from '../account-deletion/account-cleanup.js';
 import type {
@@ -96,9 +97,15 @@ export const prismaAuthRepository: AuthRepository = {
     }
 
     try {
+      const displayName = identity.displayName?.trim() || null;
       const user = await database.user.create({
         data: {
-          displayName: identity.displayName?.trim().slice(0, 100) || null,
+          // Provider names can be email addresses or other contact details.
+          // Do not reject sign-in; let onboarding request a safe display name.
+          displayName:
+            displayName && !containsSensitivePublicText(displayName)
+              ? displayName.slice(0, 100)
+              : null,
           authAccounts: {
             create: {
               provider: 'FIREBASE',

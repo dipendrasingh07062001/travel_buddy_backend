@@ -1,4 +1,5 @@
 import { AppError } from '../../errors/app-error.js';
+import { requireSafePublicText } from '../../privacy/public-text.js';
 import type { CommunityPostType } from '../../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { requireCompleteProfile } from '../profiles/profile-completeness.js';
@@ -39,6 +40,7 @@ function cleanTitle(value: string): string {
       'The post title must contain at least 5 non-space characters.',
     );
   }
+  requireSafePublicText(title);
   return title;
 }
 
@@ -51,6 +53,7 @@ function cleanPostBody(value: string): string {
       'The post body must contain at least 20 non-space characters.',
     );
   }
+  requireSafePublicText(body);
   return body;
 }
 
@@ -63,6 +66,7 @@ function cleanCommentBody(value: string): string {
       'The comment must contain at least 2 non-space characters.',
     );
   }
+  requireSafePublicText(body);
   return body;
 }
 

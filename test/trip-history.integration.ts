@@ -60,7 +60,7 @@ async function create(published = false, desiredGroupSize = 4) {
     budgetMin: 1000,
     budgetMax: 2000,
     desiredGroupSize,
-    description: 'PRIVATE original email owner@example.invalid',
+    description: 'PRIVATE original narrative for the history regression.',
     transport: 'BUS',
   });
   expect(response.statusCode).toBe(201);
@@ -130,6 +130,12 @@ afterAll(async () => {
 describe('transactional, private trip history', () => {
   it('records creation and real plan edits without retaining description text', async () => {
     const id = await create();
+    // Model pre-guard data without bypassing the new public API validation.
+    // History must still avoid copying legacy contact details on correction.
+    await database.trip.update({
+      where: { id },
+      data: { description: 'PRIVATE legacy email owner@example.invalid' },
+    });
     expect((await read(id)).json().data[0]).toMatchObject({
       version: 1,
       action: 'CREATED',
@@ -161,6 +167,9 @@ describe('transactional, private trip history', () => {
     });
     expect(response.body).not.toContain('PRIVATE');
     expect(JSON.stringify(await stored(id))).not.toContain('PRIVATE');
+    expect(JSON.stringify(await stored(id))).not.toContain(
+      'owner@example.invalid',
+    );
   });
 
   it('does not expose drafts or published history to guests, outsiders, pending applicants or staff', async () => {

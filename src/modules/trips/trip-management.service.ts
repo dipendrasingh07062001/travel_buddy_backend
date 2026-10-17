@@ -1,4 +1,5 @@
 import { AppError } from '../../errors/app-error.js';
+import { requireSafePublicText } from '../../privacy/public-text.js';
 import type {
   Prisma,
   TripStatus,
@@ -155,6 +156,8 @@ export async function createTrip(
   body: CreateTripBody,
   repository: TripManagementRepository,
 ): Promise<PublicTripRecord> {
+  requireSafePublicText(body.originCity);
+  requireSafePublicText(body.description);
   await validateCommunity(repository, body.communityId);
   const startDate = parseDate(body.startDate, 'startDate');
   const endDate = parseDate(body.endDate, 'endDate');
@@ -192,6 +195,8 @@ export async function updateTrip(
   const trip = requireOwner(await repository.findById(tripId), ownerId);
   requireVersion(trip, body.expectedVersion);
   requireStatus(trip, editableStatuses);
+  requireSafePublicText(body.originCity);
+  requireSafePublicText(body.description);
   if (body.communityId !== undefined) {
     await validateCommunity(repository, body.communityId);
   }
@@ -294,6 +299,9 @@ export async function transitionTrip(
   requireStatus(trip, transition.from);
   if (action === 'publish') {
     requireCompleteProfile(owner, 'publishing a trip');
+    // Recheck stored drafts and paused records created before these guards.
+    requireSafePublicText(trip.originCity);
+    requireSafePublicText(trip.description);
   }
 
   const today = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);

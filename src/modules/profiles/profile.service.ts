@@ -1,4 +1,5 @@
 import { AppError } from '../../errors/app-error.js';
+import { requireSafePublicText } from '../../privacy/public-text.js';
 import type { ProfileVisibility } from '../../generated/prisma/client.js';
 import type { UpdateProfileInput } from './profile.types.js';
 
@@ -88,6 +89,16 @@ export function normalizeProfileUpdate(
   if (body.communityActivityVisibility !== undefined) {
     result.communityActivityVisibility = body.communityActivityVisibility;
   }
+
+  for (const value of [
+    result.displayName,
+    result.homeCity,
+    result.homeRegion,
+    result.biography,
+    ...(result.languages ?? []),
+    ...(result.travelInterests ?? []),
+  ])
+    requireSafePublicText(value);
 
   return result;
 }

@@ -1,3 +1,5 @@
+import { publicText } from '../../privacy/public-text.js';
+import { presentPublicDestination } from '../communities/community.presenter.js';
 import type { PublicTripRecord } from './trip.types.js';
 
 function dateOnly(value: Date): string {
@@ -7,8 +9,8 @@ function dateOnly(value: Date): string {
 export function presentTrip(trip: PublicTripRecord) {
   return {
     id: trip.id,
-    originCity: trip.originCity,
-    destination: trip.community,
+    originCity: publicText(trip.originCity),
+    destination: presentPublicDestination(trip.community),
     startDate: dateOnly(trip.startDate),
     endDate: dateOnly(trip.endDate),
     flexibilityDays: trip.flexibilityDays,
@@ -27,9 +29,12 @@ export function presentTrip(trip: PublicTripRecord) {
       ),
     },
     transport: trip.transport,
-    description: trip.description,
+    description: publicText(trip.description),
     status: trip.status,
-    owner: trip.owner,
+    owner: {
+      id: trip.owner.id,
+      displayName: publicText(trip.owner.displayName),
+    },
     publishedAt: trip.publishedAt?.toISOString() ?? null,
   };
 }
@@ -37,6 +42,9 @@ export function presentTrip(trip: PublicTripRecord) {
 export function presentOwnedTrip(trip: PublicTripRecord) {
   return {
     ...presentTrip(trip),
+    // The authenticated owner needs the original text to correct older data.
+    originCity: trip.originCity,
+    description: trip.description,
     version: trip.version,
     moderationRemovedAt: trip.moderationRemovedAt?.toISOString() ?? null,
     createdAt: trip.createdAt.toISOString(),
