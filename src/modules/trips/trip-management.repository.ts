@@ -4,6 +4,7 @@ import { lockActiveCommunity } from '../communities/community-lock.js';
 import { AppError } from '../../errors/app-error.js';
 import {
   alertLimitWindowMs,
+  lockOwnerAlertBudget,
   maximumAlertingPublicationsPerOwner,
 } from '../trip-alerts/trip-alert.limits.js';
 import { publicTripInclude } from './trip.types.js';
@@ -119,7 +120,9 @@ export const prismaTripManagementRepository: TripManagementRepository = {
       );
       if (data.status === 'PUBLISHED' && data.publishedAt && trip.publishedAt) {
         // Beyond the owner's daily alert budget the trip is still published
-        // and searchable; it just does not alert saved searches.
+        // and searchable; it just does not alert saved searches. The lock
+        // makes the owner's concurrent publications count one at a time.
+        await lockOwnerAlertBudget(transaction, ownerId);
         const recentAlertingPublications =
           await transaction.tripPublicationAlert.count({
             where: {

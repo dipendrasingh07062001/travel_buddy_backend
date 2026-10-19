@@ -713,9 +713,12 @@ not replayed if its trip becomes eligible again later.
 
 Two daily limits stop one account, or many, from flooding saved searches. An
 account's first five trip publications in any 24 hours send alerts; later ones
-in that window are still published and searchable but alert nobody. And a
-person receives at most ten matching alerts in any 24 hours; further matches
-are skipped for them, not delayed.
+in that window are still published and searchable but alert nobody;
+simultaneous publications by one account are counted one at a time, so they
+cannot all slip under the limit together. And a person receives at most ten
+matching alerts in any 24 hours; further matches are skipped for them, not
+delayed. Both numbers are provisional defaults in
+`src/modules/trip-alerts/trip-alert.limits.ts`.
 
 Overlapping saved searches still produce **at most one notification per user
 per trip**. The generic `MATCHING_TRIP_PUBLISHED` notification uses the trip ID
