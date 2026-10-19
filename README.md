@@ -671,7 +671,8 @@ Example creation body:
 explicit `enabled` boolean are required. Nothing is enabled automatically.
 All other filters are optional; omit them rather than sending `null`. For PUT,
 also include the version you last read as `expectedVersion`. Money is in INR,
-nonnegative, at most two decimal places; responses use decimal strings. Date
+nonnegative, at most two decimal places (more returns
+`400 INVALID_TRIP_ALERT_BUDGET`); responses use decimal strings. Date
 windows overlap inclusively with the trip dates (not just its departure day),
 budget intervals overlap inclusively, duration is 1–365 inclusive calendar
 days, origin is a case-insensitive **literal** substring, and transport is an
