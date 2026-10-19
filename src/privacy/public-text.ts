@@ -16,9 +16,49 @@ function inspectionText(value: string): string {
 }
 
 function isDate(value: string): boolean {
-  return /^(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4})$/.test(
+  return /^(?:\d{4}[-/. ]\d{1,2}[-/. ]\d{1,2}|\d{1,2}[-/. ]\d{1,2}[-/. ]\d{4})$/.test(
     value,
   );
+}
+
+// Spaces and dashes (hyphen, en/em dash, minus) people put between digits.
+const digitGap = String.raw`[ \t‐-―−-]{1,3}`;
+// Words people put between a label and the number: "number is", "me on".
+const labelFiller = String.raw`(?:[ \t]{0,3}(?:number|no\.?|num|is|me|on|at|-|:|=|#)){0,4}[ \t]{0,3}`;
+
+// An Indian mobile number, with an optional 91, 0091 or domestic 0 prefix.
+const mobile = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])(?:(?:00)?91(?:${digitGap})?|0(?:${digitGap})?)?[6-9](?:(?:${digitGap})?\d){9}(?![\p{L}\p{N}]|(?:${digitGap})?\d)`,
+  'gu',
+);
+const labelledPhone = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])(?:phone|mobile|mob|cell|ph|whatsapp|contact|call|text[ \t]+me|tel|my[ \t]+number)${labelFiller}(\+?\d(?:[ ()\t.‐-―−-]{0,3}\d){6,14})(?![\p{L}\p{N}])`,
+  'giu',
+);
+const aadhaar = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])(?:aadhaar|aadhar)(?:[ \t]{0,3}card)?${labelFiller}[2-9](?:[ \t-]?\d){11}(?!\d)`,
+  'iu',
+);
+const identity = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])(?:passport|national[ \t]*id|government[ \t]*id)${labelFiller}([a-z0-9][a-z0-9-]{5,23})`,
+  'giu',
+);
+
+// "60000-80000" looks like a split phone number. It is read as a price range
+// when it rises and money is mentioned just before it in the same sentence,
+// or right after it. A falling pair such as 98765-43210 is still a phone.
+const numberRange = /^(\d{4,7})[ \t]{0,3}[‐-―−-][ \t]{0,3}(\d{4,7})$/u;
+const moneyBefore =
+  /(?:(?<![a-z])(?:budget|price|cost|costs|fare|fees?|rs\.?|inr|rupees|usd|eur)(?![a-z])[^.!?\n]{0,30}|[₹$€][ \t]*)$/iu;
+const moneyAfter =
+  /^[ \t]*(?:inr|rupees|rs(?![a-z])|usd|eur|each|per[ \t]+(?:person|head|pax))/iu;
+
+function isPriceRange(text: string, start: number, token: string): boolean {
+  const range = numberRange.exec(token);
+  if (!range || Number(range[2]) <= Number(range[1])) return false;
+  const before = text.slice(Math.max(0, start - 40), start);
+  const after = text.slice(start + token.length, start + token.length + 20);
+  return moneyBefore.test(before) || moneyAfter.test(after);
 }
 
 // These are bounded, high-confidence disclosure patterns, not identity/phone
@@ -27,7 +67,11 @@ export function containsSensitivePublicText(value: string): boolean {
   if (value.length > maximumInspectedLength) return true;
   const text = inspectionText(value);
   if (
-    /[\p{L}\p{N}._%+-]{1,64}@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/u.test(text) ||
+    // The domain must end in letters, so times like "Dinner@8.30" are not
+    // read as addresses.
+    /[\p{L}\p{N}._%+-]{1,64}@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/u.test(
+      text,
+    ) ||
     /(?<![\p{L}\p{N}])\+\d(?:[ ()\t-]{0,3}\d){7,14}(?![\p{L}\p{N}]|[ ()\t-]{0,3}\d)/u.test(
       text,
     ) ||
@@ -36,9 +80,7 @@ export function containsSensitivePublicText(value: string): boolean {
       text,
     ) ||
     /(?<![a-z0-9])[a-z]{5}\d{4}[a-z](?![a-z0-9])/iu.test(text) ||
-    /\b(?:aadhaar|aadhar)\s*(?:(?:number|no\.?)\s*)?[:#=-]?\s*[2-9](?:[ -]?\d){11}(?!\d)/iu.test(
-      text,
-    ) ||
+    aadhaar.test(text) ||
     /\b(?:home|residential)\s+address\s*(?::|=|\bis\b)\s*(?:#?\d|(?:flat|house|apartment)\s*(?:(?:no\.?|number|#)\s*)?\d)/iu.test(
       text,
     ) ||
@@ -48,33 +90,12 @@ export function containsSensitivePublicText(value: string): boolean {
   )
     return true;
 
-  const mobile =
-    /(?<![\p{L}\p{N}])(?:(?:00)?91[ -]?)?[6-9](?:[ -]?\d){9}(?![\p{L}\p{N}]|[ -]?\d)/gu;
   for (const match of text.matchAll(mobile)) {
-    const token = match[0];
-    const before = text.slice(Math.max(0, match.index - 32), match.index);
-    const after = text.slice(
-      match.index + token.length,
-      match.index + token.length + 12,
-    );
-    // A clearly labeled price range is ambiguous, not automatically a phone.
-    if (
-      /^\d{4,7}-\d{4,7}$/.test(token) &&
-      (/\b(?:budget|price|cost)\s*[:=]?\s*$/iu.test(before) ||
-        /[₹$€]\s*$/u.test(before) ||
-        /^\s*(?:INR|rupees|USD|EUR)\b/iu.test(after))
-    )
-      continue;
-    return true;
+    if (!isPriceRange(text, match.index, match[0])) return true;
   }
-
-  const phone =
-    /\b(?:phone|mobile|whatsapp|contact|call(?:\s+me)?|tel)\s*(?:(?:number|no\.?)\s*)?[:=]?\s*(\+?\d(?:[ ()\t.-]{0,3}\d){6,14})(?![\p{L}\p{N}])/giu;
-  for (const match of text.matchAll(phone)) {
+  for (const match of text.matchAll(labelledPhone)) {
     if (!isDate(match[1]!)) return true;
   }
-  const identity =
-    /\b(?:passport|national\s*id|government\s*id)\s*(?:(?:number|no\.?)\s*)?[:#=-]?\s*([a-z0-9][a-z0-9-]{5,23})/giu;
   for (const match of text.matchAll(identity)) {
     const token = match[1]!;
     if (!isDate(token) && (token.match(/\d/g)?.length ?? 0) >= 4) return true;
