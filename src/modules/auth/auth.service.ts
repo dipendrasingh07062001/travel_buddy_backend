@@ -28,12 +28,23 @@ function bearerToken(authorization: string | undefined): string {
   return match[1];
 }
 
+// Sensitive actions (sign-in, account deletion and data requests, data
+// export, contact refresh and all staff routes) ask Firebase for the
+// account's current state. Everything else verifies the token locally, so a
+// disabled or revoked Firebase login keeps working there until its token
+// expires, at most an hour. Local suspension applies on every request.
+export interface IdentityCheck {
+  fresh?: boolean;
+}
+
 async function verifyBearerIdentity(
   request: FastifyRequest,
   verifier: TokenVerifier,
+  fresh: boolean,
 ): Promise<VerifiedIdentity> {
   const identity = await verifier.verify(
     bearerToken(request.headers.authorization),
+    { checkRevoked: fresh },
   );
   if (!identity.subject || identity.subject.length > 128) {
     throw new AppError(
@@ -47,7 +58,12 @@ async function verifyBearerIdentity(
 
 // The rate limiter verifies the token to key limits by account, so the result
 // is cached per request to avoid verifying it a second time in the handler.
+// Fresh checks have their own cache: a local result never satisfies one.
 const verifiedIdentities = new WeakMap<
+  FastifyRequest,
+  Promise<VerifiedIdentity>
+>();
+const freshIdentities = new WeakMap<
   FastifyRequest,
   Promise<VerifiedIdentity>
 >();
@@ -55,11 +71,14 @@ const verifiedIdentities = new WeakMap<
 export function verifyRequestIdentity(
   request: FastifyRequest,
   verifier: TokenVerifier,
+  check: IdentityCheck = {},
 ): Promise<VerifiedIdentity> {
-  let identity = verifiedIdentities.get(request);
+  const fresh = check.fresh === true;
+  const cache = fresh ? freshIdentities : verifiedIdentities;
+  let identity = cache.get(request);
   if (!identity) {
-    identity = verifyBearerIdentity(request, verifier);
-    verifiedIdentities.set(request, identity);
+    identity = verifyBearerIdentity(request, verifier, fresh);
+    cache.set(request, identity);
   }
   return identity;
 }
@@ -85,19 +104,22 @@ export function requireActiveUser(user: AuthenticatedUser): AuthenticatedUser {
 export async function authenticateRequest(
   request: FastifyRequest,
   dependencies: AuthRouteDependencies,
+  check: IdentityCheck = {},
 ): Promise<AuthenticatedUser> {
   return requireActiveUser(
-    await authenticateRequestIncludingSuspended(request, dependencies),
+    await authenticateRequestIncludingSuspended(request, dependencies, check),
   );
 }
 
 export async function authenticateRequestIncludingSuspended(
   request: FastifyRequest,
   dependencies: AuthRouteDependencies,
+  check: IdentityCheck = {},
 ): Promise<AuthenticatedUser> {
   const identity = await verifyRequestIdentity(
     request,
     dependencies.tokenVerifier,
+    check,
   );
   const user = await dependencies.repository.findFirebaseUser(identity.subject);
   if (!user) {

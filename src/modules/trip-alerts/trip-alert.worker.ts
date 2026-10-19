@@ -3,6 +3,11 @@ import { database, databaseSchema } from '../../database/client.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
+import {
+  alertLimitWindowMs,
+  lockRecipientAlertLimits,
+  maximumMatchingAlertsPerRecipient,
+} from './trip-alert.limits.js';
 import { matchesTripAlert } from './trip-alert.matcher.js';
 
 const defaultBatchSize = 100;
@@ -18,6 +23,8 @@ export interface TripAlertBatchResult {
   tripId: string | null;
   examined: number;
   matchedRecipients: number;
+  // Matched, but already at their daily matching-alert limit.
+  limitedRecipients: number;
   hasMore: boolean;
 }
 
@@ -38,6 +45,7 @@ export async function processTripAlertBatch(
           tripId: null,
           examined: 0,
           matchedRecipients: 0,
+          limitedRecipients: 0,
           hasMore: false,
         };
         const [job] = await tx.$queryRaw<
@@ -108,13 +116,40 @@ export async function processTripAlertBatch(
             },
           },
         });
-        const recipients = [
+        const matched = [
           ...new Set(
             subscriptions
               .filter((item) => matchesTripAlert(item, trip))
               .map((item) => item.userId),
           ),
         ];
+        // Workers handling other trips or destinations may be alerting the
+        // same people right now. Each recipient's count and insert happen
+        // under that recipient's lock, so the daily limit holds across them.
+        // Every matching alert created in the window counts, read or not.
+        await lockRecipientAlertLimits(tx, matched);
+        const recentAlerts =
+          matched.length === 0
+            ? []
+            : await tx.notification.groupBy({
+                by: ['recipientId'],
+                where: {
+                  recipientId: { in: matched },
+                  type: 'MATCHING_TRIP_PUBLISHED',
+                  createdAt: {
+                    gt: new Date(now.getTime() - alertLimitWindowMs),
+                  },
+                },
+                _count: { _all: true },
+              });
+        const atLimit = new Set(
+          recentAlerts
+            .filter(
+              (row) => row._count._all >= maximumMatchingAlertsPerRecipient,
+            )
+            .map((row) => row.recipientId),
+        );
+        const recipients = matched.filter((id) => !atLimit.has(id));
         await createNotifications(tx, {
           recipientIds: recipients,
           type: 'MATCHING_TRIP_PUBLISHED',
@@ -127,6 +162,7 @@ export async function processTripAlertBatch(
         });
         result.examined = candidates.length;
         result.matchedRecipients = recipients.length;
+        result.limitedRecipients = matched.length - recipients.length;
         result.hasMore = candidates.length === batchSize;
         await tx.tripPublicationAlert.update({
           where: { tripId: trip.id },

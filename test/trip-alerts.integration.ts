@@ -18,6 +18,10 @@ import { createAccountDataExport } from '../src/modules/data-export/data-export.
 import * as notificationRepository from '../src/modules/notifications/notification.repository.js';
 import { prismaTripAlertRepository } from '../src/modules/trip-alerts/trip-alert.repository.js';
 import { normalizeTripAlert } from '../src/modules/trip-alerts/trip-alert.service.js';
+import {
+  lockOwnerAlertBudget,
+  lockRecipientAlertLimits,
+} from '../src/modules/trip-alerts/trip-alert.limits.js';
 import { processTripAlertBatch } from '../src/modules/trip-alerts/trip-alert.worker.js';
 import { utcStartOfToday } from '../src/modules/trips/trip.types.js';
 
@@ -668,5 +672,238 @@ describe('durable matching-trip delivery', () => {
     await expect(
       prismaTripAlertRepository.create(ids.alice, input()),
     ).rejects.toMatchObject({ code: 'ACCOUNT_DISABLED' });
+  });
+});
+
+// Matching alerts the person already received, the given hours ago.
+function seedMatchingAlerts(role: Role, count: number, hoursAgo = 2) {
+  return database.notification.createMany({
+    data: Array.from({ length: count }, () => {
+      const sourceId = randomUUID();
+      return {
+        recipientId: ids[role],
+        type: 'MATCHING_TRIP_PUBLISHED' as const,
+        eventKey: `trip:${sourceId}:matching-published`,
+        sourceId,
+        createdAt: new Date(Date.now() - hoursAgo * 3_600_000),
+        pushStatus: 'SKIPPED' as const,
+      };
+    }),
+  });
+}
+
+// Earlier alerting publications by the owner, at the given ages.
+async function seedAlertingPublications(...hoursAgo: number[]) {
+  for (const hours of hoursAgo) {
+    const trip = await createTrip();
+    await database.tripPublicationAlert.create({
+      data: {
+        tripId: trip.id,
+        communityId,
+        publishedAt: new Date(Date.now() - hours * 3_600_000),
+        completedAt: new Date(),
+      },
+    });
+  }
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+// Holds a quota lock in another transaction until released.
+async function holdLock(
+  take: (transaction: Prisma.TransactionClient) => Promise<void>,
+) {
+  const taken = deferred();
+  const release = deferred();
+  const finished = database.$transaction(
+    async (transaction) => {
+      await take(transaction);
+      taken.resolve();
+      await release.promise;
+    },
+    { timeout: 20_000 },
+  );
+  await taken.promise;
+  return async () => {
+    release.resolve();
+    await finished;
+  };
+}
+
+// Waits until this many transactions are blocked on a lock.
+async function waitForLockWaiters(count: number) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const [row] = await database.$queryRaw<{ waiting: number }[]>`
+      SELECT count(*)::int AS waiting FROM pg_locks WHERE NOT granted
+    `;
+    if ((row?.waiting ?? 0) >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Fewer than ${count} transactions reached a lock wait.`);
+}
+
+const settledWithin = (promise: Promise<unknown>, ms: number) =>
+  Promise.race([
+    promise.then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms)),
+  ]);
+
+describe('matching-trip alert limits', () => {
+  it('keeps concurrent publications by one account within its alert budget', async () => {
+    await seedAlertingPublications(1, 2, 3, 4);
+    const drafts = [await createTrip(), await createTrip()];
+    // Hold back alert-job inserts until both publications have reached that
+    // point, which is when an unserialized budget check lets both through.
+    const release = await holdLock(async (transaction) => {
+      await transaction.$executeRaw`LOCK TABLE "trip_publication_alerts" IN SHARE MODE`;
+    });
+    const publishing = Promise.all(
+      drafts.map((trip) =>
+        api('POST', `/trips/${trip.id}/publish`, 'owner', {
+          expectedVersion: 1,
+        }),
+      ),
+    );
+    try {
+      await waitForLockWaiters(2);
+    } finally {
+      await release();
+    }
+
+    expect((await publishing).map((response) => response.statusCode)).toEqual([
+      200, 200,
+    ]);
+    expect(
+      await database.tripPublicationAlert.count({
+        where: { tripId: { in: drafts.map((trip) => trip.id) } },
+      }),
+    ).toBe(1);
+  });
+
+  it('makes a publication wait while another holds the owner budget', async () => {
+    const draft = await createTrip();
+    const release = await holdLock((transaction) =>
+      lockOwnerAlertBudget(transaction, ids.owner),
+    );
+    const publishing = api('POST', `/trips/${draft.id}/publish`, 'owner', {
+      expectedVersion: 1,
+    });
+    try {
+      expect(await settledWithin(publishing, 300)).toBe(false);
+    } finally {
+      await release();
+    }
+    expect((await publishing).statusCode).toBe(200);
+  });
+
+  it('counts only publications from the last 24 hours', async () => {
+    await seedAlertingPublications(24.02, 24.02, 24.02, 24.02, 24.02);
+    const outside = await publish();
+    expect(
+      await database.tripPublicationAlert.count({
+        where: { tripId: outside.id },
+      }),
+    ).toBe(1);
+
+    await seedAlertingPublications(23.98, 23.98, 23.98, 23.98);
+    const inside = await publish();
+    expect(
+      await database.tripPublicationAlert.count({
+        where: { tripId: inside.id },
+      }),
+    ).toBe(0);
+  });
+
+  it('alerts for only the first five trips an account publishes in a day', async () => {
+    await subscribe();
+    const trips = [];
+    for (let index = 0; index < 6; index += 1) trips.push(await publish());
+
+    expect(
+      await database.trip.count({
+        where: {
+          id: { in: trips.map((trip) => trip.id) },
+          status: 'PUBLISHED',
+        },
+      }),
+    ).toBe(6);
+    expect(
+      await database.tripPublicationAlert.count({
+        where: { tripId: { in: trips.map((trip) => trip.id) } },
+      }),
+    ).toBe(5);
+    await drain();
+    expect(await matchingNotifications()).toHaveLength(5);
+  });
+
+  it('keeps the daily limit when workers alert the same person from two destinations at once', async () => {
+    await seedMatchingAlerts('alice', 9);
+    await subscribe('alice');
+    await subscribe('alice', { communityId: otherCommunityId });
+    const trips = [
+      await publish(),
+      await publish({ communityId: otherCommunityId }),
+    ];
+    // Hold back notification inserts until both workers reach them, which
+    // is when an unserialized limit check lets both through.
+    const release = await holdLock(async (transaction) => {
+      await transaction.$executeRaw`LOCK TABLE "notifications" IN SHARE MODE`;
+    });
+    const working = Promise.all([
+      processTripAlertBatch(),
+      processTripAlertBatch(),
+    ]);
+    try {
+      await waitForLockWaiters(2);
+    } finally {
+      await release();
+    }
+    const results = await working;
+
+    expect(results.map((result) => result.tripId).sort()).toEqual(
+      trips.map((trip) => trip.id).sort(),
+    );
+    expect(await matchingNotifications('alice')).toHaveLength(10);
+  });
+
+  it('makes a worker wait while another holds a recipient limit', async () => {
+    await subscribe('alice');
+    await publish();
+    const release = await holdLock((transaction) =>
+      lockRecipientAlertLimits(transaction, [ids.alice]),
+    );
+    const working = processTripAlertBatch();
+    try {
+      expect(await settledWithin(working, 300)).toBe(false);
+    } finally {
+      await release();
+    }
+    expect((await working).matchedRecipients).toBe(1);
+  });
+
+  it('stops alerting a person who already had ten matching alerts today', async () => {
+    await seedMatchingAlerts('alice', 10);
+    await seedMatchingAlerts('bob', 10, 25);
+    await subscribe('alice');
+    await subscribe('bob');
+    const trip = await publish();
+
+    const [result] = await drain();
+    expect(result).toMatchObject({
+      matchedRecipients: 1,
+      limitedRecipients: 1,
+    });
+    const latest = (role: Role) =>
+      database.notification.count({
+        where: { recipientId: ids[role], tripId: trip.id },
+      });
+    expect(await latest('alice')).toBe(0);
+    expect(await latest('bob')).toBe(1);
   });
 });

@@ -41,9 +41,12 @@ const batchSize = 50;
 const abandonedClaimMs = 5 * 60 * 1000;
 const initialRetryMs = 10 * 60 * 1000;
 const maximumRetryMs = 24 * 60 * 60 * 1000;
-// ID tokens last one hour. A request verified just before provider deletion
-// must not recreate the local account after its cleanup job is acknowledged.
-const signInGuardMs = 60 * 60 * 1000;
+// ID tokens last one hour, so a token issued before provider deletion stays
+// valid for up to an hour afterwards. Bootstrap asks Firebase whether the
+// account still exists, but a check that finished just before the deletion
+// would pass. The guard blocks bootstrap for that hour, plus a margin for
+// clock differences, so such a request cannot recreate the local account.
+const signInGuardMs = 65 * 60 * 1000;
 
 export function firebaseSignInGuardTarget(subject: string): string {
   return createHash('sha256').update(subject).digest('hex');
@@ -128,19 +131,29 @@ export async function processAccountCleanupBatch(
           where: { id: task.id, claimToken },
         });
         if (deleted.count === 1 && task.kind === 'FIREBASE_ACCOUNT') {
-          const target = firebaseSignInGuardTarget(task.target);
-          const nextAttemptAt = new Date(now.getTime() + signInGuardMs);
-          await tx.accountCleanupTask.upsert({
-            where: { kind_target: { kind: 'FIREBASE_SIGN_IN_GUARD', target } },
-            create: {
-              userId: task.userId,
-              kind: 'FIREBASE_SIGN_IN_GUARD',
-              target,
-              createdAt: now,
-              nextAttemptAt,
-            },
-            update: { nextAttemptAt, claimToken: null, claimedAt: null },
-          });
+          // Counted from when Firebase confirmed the deletion, not from the
+          // batch start: earlier tasks or a slow provider can take minutes,
+          // and old tokens stay valid for an hour after the deletion itself.
+          // A later confirmation only ever extends an existing guard.
+          const confirmedAt = new Date(Math.max(now.getTime(), Date.now()));
+          const guardUntil = new Date(confirmedAt.getTime() + signInGuardMs);
+          await tx.$executeRaw`
+            INSERT INTO "account_cleanup_tasks"
+              ("id", "user_id", "kind", "target", "next_attempt_at", "created_at")
+            VALUES (
+              ${randomUUID()}::uuid, ${task.userId}::uuid,
+              'FIREBASE_SIGN_IN_GUARD'::"AccountCleanupKind",
+              ${firebaseSignInGuardTarget(task.target)},
+              ${guardUntil}, ${confirmedAt}
+            )
+            ON CONFLICT ("kind", "target") DO UPDATE SET
+              "next_attempt_at" = GREATEST(
+                "account_cleanup_tasks"."next_attempt_at",
+                EXCLUDED."next_attempt_at"
+              ),
+              "claim_token" = NULL,
+              "claimed_at" = NULL
+          `;
         }
         return deleted;
       });

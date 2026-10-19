@@ -78,24 +78,32 @@ the application's existing trim/list rules.
 
 Supported patterns include:
 
-- Conventional email addresses containing a dotted domain, including common
-  full-width and invisible-character variants.
+- Conventional email addresses whose domain ends in letters, including common
+  full-width and invisible-character variants. Times written like
+  `Dinner@8.30` are not addresses.
 - Explicit `+` international phone formats, Indian mobile-shaped numbers with
-  optional `91`/`0091` prefix, phone-labeled numbers and numeric `tel:`, `sms:` and
-  supported WhatsApp contact links. These are shapes, not verified phone numbers.
-  Dotted number formats require an explicit phone label or `tel:`/`sms:` prefix;
-  unlabelled dotted numbers are ambiguous with decimal prices and coordinates.
+  optional `91`/`0091` or domestic `0` prefix (digits may be split by up to three
+  spaces or dashes, including en/em dashes), phone-labeled numbers and numeric
+  `tel:`, `sms:` and supported WhatsApp contact links. Labels may be followed by
+  filler words, as in "my number is", "whatsapp me on" or "phone -". These are
+  shapes, not verified phone numbers. Dotted number formats require an explicit
+  phone label or `tel:`/`sms:` prefix; unlabelled dotted numbers are ambiguous
+  with decimal prices and coordinates.
 - PAN-shaped tokens, labeled Aadhaar-shaped numbers and labeled passport or
-  national/government-ID tokens containing sufficient digits. No identity
-  document validity or ownership is inferred.
+  national/government-ID tokens containing sufficient digits, including after
+  words like "is" or "number is". No identity document validity or ownership
+  is inferred.
 - Explicit `home address`/`residential address` labels followed by a house/flat
   number, and explicit live/current/private-location labels followed by a URL,
   geo URI or coordinate pair.
 
 Ordinary dates, times, group sizes, train references, public travel URLs,
-destination names and public meeting coordinates are not blanket-banned. Clearly
-labeled price ranges are treated as ambiguous rather than automatically as phone
-numbers. A reference that resembles an ID or phone can still be a false positive;
+destination names and public meeting coordinates are not blanket-banned. A rising
+pair such as `60000-80000` is read as a price range, not a phone number, when a
+money word (budget, price, cost, fare, fee, Rs, INR, rupees, ₹, $, €) appears
+shortly before it in the same sentence or a currency or "each"/"per person"
+follows it. A falling pair such as `98765-43210` is always treated as a phone
+number. A reference that resembles an ID or phone can still be a false positive;
 authors should rephrase the public text or use the existing support/report path.
 
 These patterns cannot reliably distinguish every private street address from a

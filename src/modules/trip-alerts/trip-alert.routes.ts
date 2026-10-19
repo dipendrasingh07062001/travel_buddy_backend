@@ -20,18 +20,10 @@ const properties = {
   origin: { type: 'string', minLength: 1, maxLength: 120, pattern: '\\S' },
   departureFrom: { type: 'string', format: 'date' },
   departureTo: { type: 'string', format: 'date' },
-  minBudget: {
-    type: 'number',
-    minimum: 0,
-    maximum: 9999999999.99,
-    multipleOf: 0.01,
-  },
-  maxBudget: {
-    type: 'number',
-    minimum: 0,
-    maximum: 9999999999.99,
-    multipleOf: 0.01,
-  },
+  // At most two decimal places, checked in normalizeTripAlert: JSON Schema's
+  // multipleOf: 0.01 rejects values like 19.99 through floating-point error.
+  minBudget: { type: 'number', minimum: 0, maximum: 9999999999.99 },
+  maxBudget: { type: 'number', minimum: 0, maximum: 9999999999.99 },
   minDuration: { type: 'integer', minimum: 1, maximum: 365 },
   maxDuration: { type: 'integer', minimum: 1, maximum: 365 },
   transport: { type: 'string', enum: tripTransportValues },

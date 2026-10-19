@@ -166,7 +166,9 @@ export async function registerDataRequestRoutes(
       },
     },
     async (request, reply) => {
-      const user = await authenticateRequestIncludingSuspended(request, auth);
+      const user = await authenticateRequestIncludingSuspended(request, auth, {
+        fresh: true,
+      });
       if (request.body.type === 'ACCOUNT_DELETION') {
         if (request.body.confirm !== true) {
           throw new AppError(
@@ -178,6 +180,7 @@ export async function registerDataRequestRoutes(
         const { authTime } = await verifyRequestIdentity(
           request,
           auth.tokenVerifier,
+          { fresh: true },
         );
         const signedInAt = authTime?.getTime();
         const now = Date.now();
@@ -240,7 +243,9 @@ export async function registerDataRequestRoutes(
       },
     },
     async (request) => {
-      const user = await authenticateRequestIncludingSuspended(request, auth);
+      const user = await authenticateRequestIncludingSuspended(request, auth, {
+        fresh: true,
+      });
       const cancelled = await cancelDataRequest(
         user.id,
         request.params.requestId,
@@ -268,7 +273,7 @@ export async function registerDataRequestRoutes(
       },
     },
     async (request) => {
-      const user = await authenticateRequest(request, auth);
+      const user = await authenticateRequest(request, auth, { fresh: true });
       requireAdmin(await requireStaff(user.id));
       const { page = 1, pageSize = 20, status } = request.query;
       const result = await listAdminDataRequests(status, page, pageSize);

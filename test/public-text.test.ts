@@ -40,6 +40,17 @@ const disclosures = [
   'My live location: https://maps.example.invalid/private-location',
   'Current location is 12.9716, 77.5946',
   'Private location: geo:12.9716,77.5946',
+  // Common ways of writing numbers that earlier rules missed.
+  'Call me on 09876543210',
+  'Mob: 09876543210',
+  '98765  43210',
+  '98765–43210',
+  'My number is 415 555 0123',
+  'whatsapp me on 0412 345 678',
+  'phone - 09876543210',
+  'my aadhaar is 2345 6789 0123',
+  'my passport number is K1234567',
+  'Budget 5000. Call 98765-43210',
 ];
 
 const travelText = [
@@ -67,6 +78,14 @@ const travelText = [
   'Home address: house rules apply, no private address provided.',
   'हिंदी और English में यात्रा की योजना बनाएं।',
   'दिल्ली से मनाली, ३ लोग और ५ दिन।',
+  // Times and price ranges that earlier rules wrongly rejected.
+  'Dinner@8.30 near the ghats',
+  'Bus leaves@6.45 from Manali',
+  'Budget INR 60000-80000 per person.',
+  'Rs. 60000-80000 each',
+  'Budget is 70000-85000',
+  'Budget around 60000-90000',
+  'Call on 26 10 2026 to confirm the plan.',
 ];
 
 describe('public-text disclosure safeguards', () => {

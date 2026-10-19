@@ -16,11 +16,16 @@ const rejectedTokenCodes = new Set([
 ]);
 
 export const firebaseTokenVerifier: TokenVerifier = {
-  async verify(token): Promise<VerifiedIdentity> {
+  async verify(token, options): Promise<VerifiedIdentity> {
     try {
-      // Also checks the provider account still exists and is not disabled or
-      // revoked. An unexpired token must not recreate an erased account.
-      const decoded = await getAuth(firebaseApp()).verifyIdToken(token, true);
+      // The signature and expiry are checked against Google's public keys.
+      // With checkRevoked, Firebase is also asked whether the account still
+      // exists, is enabled and has not had its sessions revoked; that needs
+      // Admin credentials. Any failure to ask fails closed with a 503.
+      const decoded = await getAuth(firebaseApp()).verifyIdToken(
+        token,
+        options?.checkRevoked === true,
+      );
       return {
         subject: decoded.uid,
         ...(decoded.name && { displayName: decoded.name }),

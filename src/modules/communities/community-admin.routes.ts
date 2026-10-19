@@ -134,7 +134,8 @@ async function adminIdentity(
   request: FastifyRequest,
   auth: AuthRouteDependencies,
 ): Promise<string> {
-  const user = await authenticateRequest(request, auth);
+  // Staff actions always check that Firebase still has the account enabled.
+  const user = await authenticateRequest(request, auth, { fresh: true });
   requireAdmin(await requireStaff(user.id));
   return user.id;
 }

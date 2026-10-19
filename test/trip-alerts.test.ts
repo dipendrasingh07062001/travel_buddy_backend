@@ -253,6 +253,19 @@ describe('saved-alert HTTP contract', () => {
       ],
     ]);
   });
+  it.each([19.99, 1234.56, 0.29, 9999999999.99])(
+    'accepts a budget with two decimal places: %s',
+    async (minBudget) => {
+      const response = await api('POST', '', { ...body, minBudget });
+      expect(response.statusCode, response.body).toBe(201);
+      expect(calls.at(-1)?.[2]).toMatchObject({ minBudget });
+    },
+  );
+  it('rejects a budget with more than two decimal places', async () => {
+    const response = await api('POST', '', { ...body, maxBudget: 19.999 });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('INVALID_TRIP_ALERT_BUDGET');
+  });
   it('fully replaces criteria and explicitly pauses an alert', async () => {
     const response = await api('PUT', `/${id}`, {
       ...body,

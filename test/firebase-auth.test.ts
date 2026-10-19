@@ -18,14 +18,20 @@ import { firebaseTokenVerifier } from '../src/modules/auth/firebase-token-verifi
 beforeEach(() => vi.resetAllMocks());
 
 describe('Firebase account deletion protections', () => {
-  it('checks revoked/deleted accounts and preserves the original sign-in time', async () => {
+  it('verifies ordinary tokens locally and preserves the original sign-in time', async () => {
     verifyIdToken.mockResolvedValue({
       uid: 'person',
       auth_time: 1_700_000_000,
     });
     const identity = await firebaseTokenVerifier.verify('id-token');
-    expect(verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    expect(verifyIdToken).toHaveBeenCalledWith('id-token', false);
     expect(identity.authTime).toEqual(new Date(1_700_000_000_000));
+  });
+
+  it('asks Firebase for the account state when a fresh check is requested', async () => {
+    verifyIdToken.mockResolvedValue({ uid: 'person', auth_time: 1 });
+    await firebaseTokenVerifier.verify('id-token', { checkRevoked: true });
+    expect(verifyIdToken).toHaveBeenCalledWith('id-token', true);
   });
 
   it.each([

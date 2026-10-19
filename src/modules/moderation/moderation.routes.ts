@@ -81,7 +81,8 @@ async function staffIdentity(
   request: FastifyRequest,
   auth: AuthRouteDependencies,
 ) {
-  const user = await authenticateRequest(request, auth);
+  // Staff actions always check that Firebase still has the account enabled.
+  const user = await authenticateRequest(request, auth, { fresh: true });
   const role = await requireStaff(user.id);
   return { userId: user.id, role };
 }

@@ -26,7 +26,9 @@ export async function registerDataExportRoutes(
       },
     },
     async (request, reply) => {
-      const user = await authenticateRequestIncludingSuspended(request, auth);
+      const user = await authenticateRequestIncludingSuspended(request, auth, {
+        fresh: true,
+      });
 
       const exportData = await createAccountDataExport(user.id);
       request.log.info({ userId: user.id }, 'Account data export generated');

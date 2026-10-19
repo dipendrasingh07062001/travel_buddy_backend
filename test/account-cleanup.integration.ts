@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { database } from '../src/database/client.js';
@@ -170,12 +178,86 @@ describe('durable account cleanup', () => {
     const expired = await processAccountCleanupBatch({
       storage: null,
       logger: app.log,
-      now: new Date(now.getTime() + 72 * minute),
+      now: new Date(now.getTime() + 80 * minute),
     });
     expect(expired.completed).toBe(1);
     expect(
       await database.accountCleanupTask.count({ where: { userId: user.id } }),
     ).toBe(0);
+  });
+
+  it('keeps sign-up blocked for the full hour after a slow batch confirms the Firebase deletion', async () => {
+    const user = await deletedUser();
+    const batchStart = Date.now();
+    await database.accountCleanupTask.create({
+      data: {
+        userId: user.id,
+        kind: 'FIREBASE_ACCOUNT',
+        target: subject,
+        nextAttemptAt: new Date(batchStart - minute),
+      },
+    });
+    const bootstrap = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/bootstrap',
+        headers: { authorization: 'Bearer token-issued-before-deletion' },
+      });
+    const guardUntil = async () =>
+      (
+        await database.accountCleanupTask.findFirstOrThrow({
+          where: { userId: user.id, kind: 'FIREBASE_SIGN_IN_GUARD' },
+        })
+      ).nextAttemptAt.getTime();
+
+    // Only the clock is simulated: Firebase confirms the deletion ten
+    // minutes into the batch, so a token issued just before stays valid
+    // until about minute 69.
+    vi.useFakeTimers({ toFake: ['Date'], now: batchStart });
+    try {
+      const result = await processAccountCleanupBatch({
+        storage: null,
+        logger: app.log,
+        signInAccounts: {
+          async remove() {
+            vi.setSystemTime(batchStart + 10 * minute);
+          },
+        },
+      });
+      expect(result.completed).toBe(1);
+      expect(await guardUntil()).toBe(batchStart + 75 * minute);
+
+      vi.setSystemTime(batchStart + 70 * minute);
+      const late = await bootstrap();
+      expect(late.statusCode).toBe(403);
+      expect(late.json().error.code).toBe('ACCOUNT_CLEANUP_PENDING');
+
+      // A confirmation from a clock that is behind (another API instance)
+      // never shortens it.
+      await database.accountCleanupTask.create({
+        data: {
+          userId: user.id,
+          kind: 'FIREBASE_ACCOUNT',
+          target: subject,
+          nextAttemptAt: new Date(batchStart),
+        },
+      });
+      vi.setSystemTime(batchStart + 5 * minute);
+      await processAccountCleanupBatch({
+        storage: null,
+        logger: app.log,
+        now: new Date(batchStart + 5 * minute),
+        signInAccounts: { async remove() {} },
+      });
+      expect(await guardUntil()).toBe(batchStart + 75 * minute);
+
+      vi.setSystemTime(batchStart + 76 * minute);
+      const afterGuard = await bootstrap();
+      expect(afterGuard.statusCode).toBe(201);
+      userIds.add(afterGuard.json().data.id as string);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('retries a provider outage even when file storage is available', async () => {

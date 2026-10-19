@@ -44,9 +44,11 @@ export async function registerAuthRoutes(
       },
     },
     async (request, reply) => {
+      // Signing in checks that Firebase still has the account enabled.
       const identity = await verifyRequestIdentity(
         request,
         dependencies.tokenVerifier,
+        { fresh: true },
       );
       const result =
         await dependencies.repository.bootstrapFirebaseUser(identity);
