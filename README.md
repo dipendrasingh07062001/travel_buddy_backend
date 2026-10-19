@@ -716,8 +716,9 @@ account's first five trip publications in any 24 hours send alerts; later ones
 in that window are still published and searchable but alert nobody;
 simultaneous publications by one account are counted one at a time, so they
 cannot all slip under the limit together. And a person receives at most ten
-matching alerts in any 24 hours; further matches are skipped for them, not
-delayed. Both numbers are provisional defaults in
+matching alerts in any 24 hours, read or unread, across all destinations and
+even with several API instances processing alerts at once; further matches
+are skipped for them, not delayed. Both numbers are provisional defaults in
 `src/modules/trip-alerts/trip-alert.limits.ts`.
 
 Overlapping saved searches still produce **at most one notification per user

@@ -5,6 +5,7 @@ import { createNotifications } from '../notifications/notification.repository.js
 import { utcStartOfToday } from '../trips/trip.types.js';
 import {
   alertLimitWindowMs,
+  lockRecipientAlertLimits,
   maximumMatchingAlertsPerRecipient,
 } from './trip-alert.limits.js';
 import { matchesTripAlert } from './trip-alert.matcher.js';
@@ -122,6 +123,11 @@ export async function processTripAlertBatch(
               .map((item) => item.userId),
           ),
         ];
+        // Workers handling other trips or destinations may be alerting the
+        // same people right now. Each recipient's count and insert happen
+        // under that recipient's lock, so the daily limit holds across them.
+        // Every matching alert created in the window counts, read or not.
+        await lockRecipientAlertLimits(tx, matched);
         const recentAlerts =
           matched.length === 0
             ? []

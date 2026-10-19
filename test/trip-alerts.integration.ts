@@ -18,7 +18,10 @@ import { createAccountDataExport } from '../src/modules/data-export/data-export.
 import * as notificationRepository from '../src/modules/notifications/notification.repository.js';
 import { prismaTripAlertRepository } from '../src/modules/trip-alerts/trip-alert.repository.js';
 import { normalizeTripAlert } from '../src/modules/trip-alerts/trip-alert.service.js';
-import { lockOwnerAlertBudget } from '../src/modules/trip-alerts/trip-alert.limits.js';
+import {
+  lockOwnerAlertBudget,
+  lockRecipientAlertLimits,
+} from '../src/modules/trip-alerts/trip-alert.limits.js';
 import { processTripAlertBatch } from '../src/modules/trip-alerts/trip-alert.worker.js';
 import { utcStartOfToday } from '../src/modules/trips/trip.types.js';
 
@@ -672,6 +675,23 @@ describe('durable matching-trip delivery', () => {
   });
 });
 
+// Matching alerts the person already received, the given hours ago.
+function seedMatchingAlerts(role: Role, count: number, hoursAgo = 2) {
+  return database.notification.createMany({
+    data: Array.from({ length: count }, () => {
+      const sourceId = randomUUID();
+      return {
+        recipientId: ids[role],
+        type: 'MATCHING_TRIP_PUBLISHED' as const,
+        eventKey: `trip:${sourceId}:matching-published`,
+        sourceId,
+        createdAt: new Date(Date.now() - hoursAgo * 3_600_000),
+        pushStatus: 'SKIPPED' as const,
+      };
+    }),
+  });
+}
+
 // Earlier alerting publications by the owner, at the given ages.
 async function seedAlertingPublications(...hoursAgo: number[]) {
   for (const hours of hoursAgo) {
@@ -822,23 +842,54 @@ describe('matching-trip alert limits', () => {
     expect(await matchingNotifications()).toHaveLength(5);
   });
 
+  it('keeps the daily limit when workers alert the same person from two destinations at once', async () => {
+    await seedMatchingAlerts('alice', 9);
+    await subscribe('alice');
+    await subscribe('alice', { communityId: otherCommunityId });
+    const trips = [
+      await publish(),
+      await publish({ communityId: otherCommunityId }),
+    ];
+    // Hold back notification inserts until both workers reach them, which
+    // is when an unserialized limit check lets both through.
+    const release = await holdLock(async (transaction) => {
+      await transaction.$executeRaw`LOCK TABLE "notifications" IN SHARE MODE`;
+    });
+    const working = Promise.all([
+      processTripAlertBatch(),
+      processTripAlertBatch(),
+    ]);
+    try {
+      await waitForLockWaiters(2);
+    } finally {
+      await release();
+    }
+    const results = await working;
+
+    expect(results.map((result) => result.tripId).sort()).toEqual(
+      trips.map((trip) => trip.id).sort(),
+    );
+    expect(await matchingNotifications('alice')).toHaveLength(10);
+  });
+
+  it('makes a worker wait while another holds a recipient limit', async () => {
+    await subscribe('alice');
+    await publish();
+    const release = await holdLock((transaction) =>
+      lockRecipientAlertLimits(transaction, [ids.alice]),
+    );
+    const working = processTripAlertBatch();
+    try {
+      expect(await settledWithin(working, 300)).toBe(false);
+    } finally {
+      await release();
+    }
+    expect((await working).matchedRecipients).toBe(1);
+  });
+
   it('stops alerting a person who already had ten matching alerts today', async () => {
-    const earlier = (role: Role, hoursAgo: number) =>
-      database.notification.createMany({
-        data: Array.from({ length: 10 }, () => {
-          const sourceId = randomUUID();
-          return {
-            recipientId: ids[role],
-            type: 'MATCHING_TRIP_PUBLISHED' as const,
-            eventKey: `trip:${sourceId}:matching-published`,
-            sourceId,
-            createdAt: new Date(Date.now() - hoursAgo * 3_600_000),
-            pushStatus: 'SKIPPED' as const,
-          };
-        }),
-      });
-    await earlier('alice', 2);
-    await earlier('bob', 25);
+    await seedMatchingAlerts('alice', 10);
+    await seedMatchingAlerts('bob', 10, 25);
     await subscribe('alice');
     await subscribe('bob');
     const trip = await publish();
