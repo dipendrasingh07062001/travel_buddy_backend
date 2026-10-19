@@ -1055,8 +1055,10 @@ moderation audit trail themselves remain.
 External deletion tasks live in `account_cleanup_tasks`. Raw Firebase UIDs and
 storage keys are retained only while their deletion task is unfinished. After
 Firebase deletion succeeds, a hash of the old UID blocks account bootstrap for
-65 minutes: the old account's tokens stay valid for up to an hour after
-deletion, plus a margin for clock differences.
+65 minutes, counted from when Firebase confirms the deletion: the old
+account's tokens stay valid for up to an hour after deletion, plus a margin for
+clock differences. A later confirmation can extend the block but never shorten
+it.
 This `FIREBASE_SIGN_IN_GUARD` then expires automatically. Evidence-file deletion
 is queued before moderation references are
 cleared, so failed file deletion does not lose its retry target. A data request
