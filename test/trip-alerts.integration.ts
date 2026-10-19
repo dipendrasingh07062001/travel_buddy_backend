@@ -670,3 +670,61 @@ describe('durable matching-trip delivery', () => {
     ).rejects.toMatchObject({ code: 'ACCOUNT_DISABLED' });
   });
 });
+
+describe('matching-trip alert limits', () => {
+  it('alerts for only the first five trips an account publishes in a day', async () => {
+    await subscribe();
+    const trips = [];
+    for (let index = 0; index < 6; index += 1) trips.push(await publish());
+
+    expect(
+      await database.trip.count({
+        where: {
+          id: { in: trips.map((trip) => trip.id) },
+          status: 'PUBLISHED',
+        },
+      }),
+    ).toBe(6);
+    expect(
+      await database.tripPublicationAlert.count({
+        where: { tripId: { in: trips.map((trip) => trip.id) } },
+      }),
+    ).toBe(5);
+    await drain();
+    expect(await matchingNotifications()).toHaveLength(5);
+  });
+
+  it('stops alerting a person who already had ten matching alerts today', async () => {
+    const earlier = (role: Role, hoursAgo: number) =>
+      database.notification.createMany({
+        data: Array.from({ length: 10 }, () => {
+          const sourceId = randomUUID();
+          return {
+            recipientId: ids[role],
+            type: 'MATCHING_TRIP_PUBLISHED' as const,
+            eventKey: `trip:${sourceId}:matching-published`,
+            sourceId,
+            createdAt: new Date(Date.now() - hoursAgo * 3_600_000),
+            pushStatus: 'SKIPPED' as const,
+          };
+        }),
+      });
+    await earlier('alice', 2);
+    await earlier('bob', 25);
+    await subscribe('alice');
+    await subscribe('bob');
+    const trip = await publish();
+
+    const [result] = await drain();
+    expect(result).toMatchObject({
+      matchedRecipients: 1,
+      limitedRecipients: 1,
+    });
+    const latest = (role: Role) =>
+      database.notification.count({
+        where: { recipientId: ids[role], tripId: trip.id },
+      });
+    expect(await latest('alice')).toBe(0);
+    expect(await latest('bob')).toBe(1);
+  });
+});

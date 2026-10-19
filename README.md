@@ -710,6 +710,12 @@ current active trip members, non-active accounts, and users blocked in either
 direction receive no new match alert. An ineligible queued event is completed,
 not replayed if its trip becomes eligible again later.
 
+Two daily limits stop one account, or many, from flooding saved searches. An
+account's first five trip publications in any 24 hours send alerts; later ones
+in that window are still published and searchable but alert nobody. And a
+person receives at most ten matching alerts in any 24 hours; further matches
+are skipped for them, not delayed.
+
 Overlapping saved searches still produce **at most one notification per user
 per trip**. The generic `MATCHING_TRIP_PUBLISHED` notification uses the trip ID
 as `sourceId` and `tripId`; no saved search name/criteria, description, contact

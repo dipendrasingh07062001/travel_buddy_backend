@@ -2,6 +2,10 @@ import { database } from '../../database/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { lockActiveCommunity } from '../communities/community-lock.js';
 import { AppError } from '../../errors/app-error.js';
+import {
+  alertLimitWindowMs,
+  maximumAlertingPublicationsPerOwner,
+} from '../trip-alerts/trip-alert.limits.js';
 import { publicTripInclude } from './trip.types.js';
 import type { TripManagementRepository } from './trip-management.types.js';
 import { recordTripChange, tripHistorySelect } from './trip-history.js';
@@ -114,16 +118,29 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         ownerId,
       );
       if (data.status === 'PUBLISHED' && data.publishedAt && trip.publishedAt) {
-        await transaction.tripPublicationAlert.createMany({
-          data: [
-            {
-              tripId: trip.id,
-              communityId: trip.communityId,
-              publishedAt: trip.publishedAt,
+        // Beyond the owner's daily alert budget the trip is still published
+        // and searchable; it just does not alert saved searches.
+        const recentAlertingPublications =
+          await transaction.tripPublicationAlert.count({
+            where: {
+              trip: { ownerId },
+              publishedAt: {
+                gt: new Date(trip.publishedAt.getTime() - alertLimitWindowMs),
+              },
             },
-          ],
-          skipDuplicates: true,
-        });
+          });
+        if (recentAlertingPublications < maximumAlertingPublicationsPerOwner) {
+          await transaction.tripPublicationAlert.createMany({
+            data: [
+              {
+                tripId: trip.id,
+                communityId: trip.communityId,
+                publishedAt: trip.publishedAt,
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
       }
       const statusChanged = data.status !== undefined;
       const planChanged = Object.keys(data).some((field) =>
