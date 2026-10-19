@@ -111,9 +111,13 @@ Authorization: Bearer <firebase-id-token>
 ```
 
 The backend verifies that token and links its Firebase UID to a local PostgreSQL
-user. Verification also checks whether Firebase has revoked the token, disabled
-the account, or deleted it; an unexpired token alone cannot restore an erased
-account. Call `POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
+user. Verification checks the token's signature and expiry locally, so it needs
+only `FIREBASE_PROJECT_ID` and adds no call to Google per request. It does not
+ask Firebase whether the account was disabled or deleted since the token was
+issued: a token stays usable until it expires, at most an hour later. An
+erased account cannot come back that way, because bootstrap stays blocked for
+that hour (see "Cleanup retries and operations"). Call
+`POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
 operation is idempotent and returns `201` only when it creates the local account.
 Subsequent calls return `200`. `GET /api/v1/me` returns the authenticated local
 profile.
@@ -1044,7 +1048,8 @@ moderation audit trail themselves remain.
 External deletion tasks live in `account_cleanup_tasks`. Raw Firebase UIDs and
 storage keys are retained only while their deletion task is unfinished. After
 Firebase deletion succeeds, a hash of the old UID blocks account bootstrap for
-one hour, covering requests whose token verification raced with deletion.
+65 minutes: the old account's tokens stay valid for up to an hour after
+deletion, plus a margin for clock differences.
 This `FIREBASE_SIGN_IN_GUARD` then expires automatically. Evidence-file deletion
 is queued before moderation references are
 cleared, so failed file deletion does not lose its retry target. A data request

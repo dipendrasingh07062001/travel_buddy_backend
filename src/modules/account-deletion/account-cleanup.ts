@@ -41,9 +41,12 @@ const batchSize = 50;
 const abandonedClaimMs = 5 * 60 * 1000;
 const initialRetryMs = 10 * 60 * 1000;
 const maximumRetryMs = 24 * 60 * 60 * 1000;
-// ID tokens last one hour. A request verified just before provider deletion
-// must not recreate the local account after its cleanup job is acknowledged.
-const signInGuardMs = 60 * 60 * 1000;
+// ID tokens last one hour and are verified without asking Firebase whether
+// the account still exists, so a token issued before provider deletion stays
+// valid for up to an hour afterwards. The guard blocks bootstrap for that
+// hour, plus a margin for clock differences, so it cannot recreate the local
+// account.
+const signInGuardMs = 65 * 60 * 1000;
 
 export function firebaseSignInGuardTarget(subject: string): string {
   return createHash('sha256').update(subject).digest('hex');

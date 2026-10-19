@@ -170,7 +170,7 @@ describe('durable account cleanup', () => {
     const expired = await processAccountCleanupBatch({
       storage: null,
       logger: app.log,
-      now: new Date(now.getTime() + 72 * minute),
+      now: new Date(now.getTime() + 80 * minute),
     });
     expect(expired.completed).toBe(1);
     expect(

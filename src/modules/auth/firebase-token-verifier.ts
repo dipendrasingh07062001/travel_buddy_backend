@@ -18,9 +18,12 @@ const rejectedTokenCodes = new Set([
 export const firebaseTokenVerifier: TokenVerifier = {
   async verify(token): Promise<VerifiedIdentity> {
     try {
-      // Also checks the provider account still exists and is not disabled or
-      // revoked. An unexpired token must not recreate an erased account.
-      const decoded = await getAuth(firebaseApp()).verifyIdToken(token, true);
+      // Checks the signature and expiry against Google's public keys, which
+      // needs only the project ID and no call per request. Revocation is not
+      // checked: that would need Google credentials and a Firebase lookup on
+      // every request. Tokens last at most an hour, and the sign-in guard in
+      // account-cleanup.ts covers that hour for erased accounts.
+      const decoded = await getAuth(firebaseApp()).verifyIdToken(token);
       return {
         subject: decoded.uid,
         ...(decoded.name && { displayName: decoded.name }),

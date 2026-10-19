@@ -18,13 +18,15 @@ import { firebaseTokenVerifier } from '../src/modules/auth/firebase-token-verifi
 beforeEach(() => vi.resetAllMocks());
 
 describe('Firebase account deletion protections', () => {
-  it('checks revoked/deleted accounts and preserves the original sign-in time', async () => {
+  it('verifies tokens without a per-request Firebase account lookup', async () => {
     verifyIdToken.mockResolvedValue({
       uid: 'person',
       auth_time: 1_700_000_000,
     });
     const identity = await firebaseTokenVerifier.verify('id-token');
-    expect(verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    // A revocation check would call Firebase on every request and need
+    // Google credentials just to sign in.
+    expect(verifyIdToken).toHaveBeenCalledWith('id-token');
     expect(identity.authTime).toEqual(new Date(1_700_000_000_000));
   });
 
