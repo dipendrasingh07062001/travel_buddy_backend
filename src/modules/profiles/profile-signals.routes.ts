@@ -95,7 +95,7 @@ export async function registerProfileSignalsRoutes(
       },
     },
     async (request, reply) => {
-      const user = await authenticateRequest(request, auth);
+      const user = await authenticateRequest(request, auth, { fresh: true });
       reply.header('Cache-Control', 'private, no-store');
       if (request.body !== undefined)
         throw new AppError(
@@ -103,7 +103,13 @@ export async function registerProfileSignalsRoutes(
           'VERIFICATION_BODY_NOT_ALLOWED',
           'Send no body. Verification records come only from authenticated Firebase claims.',
         );
-      const identity = await verifyRequestIdentity(request, auth.tokenVerifier);
+      const identity = await verifyRequestIdentity(
+        request,
+        auth.tokenVerifier,
+        {
+          fresh: true,
+        },
+      );
       const records = await repository.refresh(user.id, identity);
       return { data: presentVerificationSignals(records) };
     },

@@ -15,9 +15,10 @@ a dedicated milestone after feature work, then verify each service separately.
 - [ ] Production secret storage. Keep `.env`, service-account JSON and provider
       keys out of GitHub and chat; install secrets locally/on the deployment host.
 - [ ] Production Firebase project and Admin credentials/workload identity;
-      validate login and account-cleanup permissions. Login needs only the
-      project ID; a disabled Firebase account keeps working until its current
-      token expires (at most an hour).
+      both are required: sign-in, data requests/export and staff routes check
+      the Firebase account on each call and return 503 without credentials.
+      Validate login, a disabled account (blocked at once on those actions,
+      within an hour elsewhere) and account-cleanup permissions.
 - [ ] Actual-device FCM validation before turning on push notifications;
       in-app notifications already work independently of FCM.
 - [ ] Public/private object storage configuration (currently R2 integration),

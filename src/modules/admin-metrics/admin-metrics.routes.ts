@@ -104,7 +104,7 @@ export async function registerAdminMetricsRoutes(
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      const user = await authenticateRequest(request, auth);
+      const user = await authenticateRequest(request, auth, { fresh: true });
       return {
         data: await repository.readOverview(user.id, request.query.days ?? 30),
       };

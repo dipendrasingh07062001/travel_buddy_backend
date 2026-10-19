@@ -16,14 +16,16 @@ const rejectedTokenCodes = new Set([
 ]);
 
 export const firebaseTokenVerifier: TokenVerifier = {
-  async verify(token): Promise<VerifiedIdentity> {
+  async verify(token, options): Promise<VerifiedIdentity> {
     try {
-      // Checks the signature and expiry against Google's public keys, which
-      // needs only the project ID and no call per request. Revocation is not
-      // checked: that would need Google credentials and a Firebase lookup on
-      // every request. Tokens last at most an hour, and the sign-in guard in
-      // account-cleanup.ts covers that hour for erased accounts.
-      const decoded = await getAuth(firebaseApp()).verifyIdToken(token);
+      // The signature and expiry are checked against Google's public keys.
+      // With checkRevoked, Firebase is also asked whether the account still
+      // exists, is enabled and has not had its sessions revoked; that needs
+      // Admin credentials. Any failure to ask fails closed with a 503.
+      const decoded = await getAuth(firebaseApp()).verifyIdToken(
+        token,
+        options?.checkRevoked === true,
+      );
       return {
         subject: decoded.uid,
         ...(decoded.name && { displayName: decoded.name }),

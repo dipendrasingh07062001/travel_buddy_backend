@@ -13,8 +13,17 @@ export interface VerifiedIdentity {
   authTime?: Date;
 }
 
+export interface TokenVerificationOptions {
+  // Also ask the provider whether the account was disabled or deleted, or
+  // its sessions revoked, since the token was issued. Needs a provider call.
+  checkRevoked?: boolean;
+}
+
 export interface TokenVerifier {
-  verify(token: string): Promise<VerifiedIdentity>;
+  verify(
+    token: string,
+    options?: TokenVerificationOptions,
+  ): Promise<VerifiedIdentity>;
 }
 
 export interface AuthenticatedUser {

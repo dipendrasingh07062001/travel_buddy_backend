@@ -111,22 +111,37 @@ Authorization: Bearer <firebase-id-token>
 ```
 
 The backend verifies that token and links its Firebase UID to a local PostgreSQL
-user. Verification checks the token's signature and expiry locally, so it needs
-only `FIREBASE_PROJECT_ID` and adds no call to Google per request. It does not
-ask Firebase whether the account was disabled or deleted since the token was
-issued: a token stays usable until it expires, at most an hour later. An
-erased account cannot come back that way, because bootstrap stays blocked for
-that hour (see "Cleanup retries and operations"). Call
+user. Tokens are checked in two ways:
+
+- **Ordinary requests** check the token's signature and expiry locally, with
+  no call to Google per request (Google's public signing keys are fetched and
+  cached as needed).
+- **Sensitive actions** also ask Firebase whether the account still exists,
+  is enabled, and has not had its sessions revoked. These are sign-in
+  (`POST /auth/bootstrap`), creating and cancelling data and deletion requests,
+  `POST /me/data-export`, `POST /me/verification-signals/refresh`, and every
+  `/admin/...` route. If Firebase cannot be reached or the Admin credentials
+  are missing, they return `503 AUTHENTICATION_UNAVAILABLE`; they never fall
+  back to the local check, and a local check earlier in the same request does
+  not count.
+
+The remaining trade-off: after a login is disabled, deleted, or revoked in
+Firebase, ordinary requests keep working until that token expires, at most an
+hour later; sensitive actions stop at once. Travel Buddy's own account status
+(suspension, pending deletion) is checked on every request, so a ban made in
+Travel Buddy applies immediately everywhere. Call
 `POST /api/v1/auth/bootstrap` after the first Firebase sign-in. The
 operation is idempotent and returns `201` only when it creates the local account.
 Subsequent calls return `200`. `GET /api/v1/me` returns the authenticated local
 profile.
 
-Set `FIREBASE_PROJECT_ID` to the shared Firebase project ID. For local
-development, set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute path of a
-service-account JSON file kept outside this repository. In deployed
-environments, use the hosting platform's workload identity or secret manager.
-Never commit service-account credentials.
+Set `FIREBASE_PROJECT_ID` to the shared Firebase project ID. Firebase Admin
+credentials are **required** wherever people sign in: without them, sign-in,
+data requests, export, and staff routes return `503`. For local development,
+set `GOOGLE_APPLICATION_CREDENTIALS` to the absolute path of a service-account
+JSON file kept outside this repository. In deployed environments, use the
+hosting platform's workload identity or secret manager. Never commit
+service-account credentials.
 
 Automated HTTP tests inject a fake token verifier and therefore do not need
 Firebase credentials. Real Firebase requests require the project configuration.
@@ -1061,7 +1076,9 @@ storage keys are retained only while their deletion task is unfinished. After
 Firebase deletion succeeds, a hash of the old UID blocks account bootstrap for
 65 minutes, counted from when Firebase confirms the deletion: the old
 account's tokens stay valid for up to an hour after deletion, plus a margin for
-clock differences. A later confirmation can extend the block but never shorten
+clock differences. Bootstrap also asks Firebase whether the account still
+exists, so the guard mainly covers a sign-in whose check finished just before
+the deletion. A later confirmation can extend the block but never shorten
 it.
 This `FIREBASE_SIGN_IN_GUARD` then expires automatically. Evidence-file deletion
 is queued before moderation references are
