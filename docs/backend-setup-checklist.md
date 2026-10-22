@@ -47,6 +47,8 @@ a dedicated milestone after feature work, then verify each service separately.
       recovery. Add monitoring, redacted error reporting, alerts and an incident contact.
 - [ ] Run deployed API security/regression/load checks against agreed usage
       targets. If running multiple instances, configure a shared rate-limit store.
+      Recheck dependencies using the dated
+      [dependency security review](dependency-security.md).
 - [ ] Supply the Flutter developer the HTTPS API base URL and current OpenAPI
       contract; jointly verify integration. Flutter/UI implementation remains theirs.
 
