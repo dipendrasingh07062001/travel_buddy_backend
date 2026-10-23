@@ -143,6 +143,15 @@ JSON file kept outside this repository. In deployed environments, use the
 hosting platform's workload identity or secret manager. Never commit
 service-account credentials.
 
+Hosts without secret-file mounts can instead provide
+`FIREBASE_SERVICE_ACCOUNT_JSON` as one private environment variable containing
+the original service-account JSON. It takes precedence over ADC and must match
+`FIREBASE_PROJECT_ID`; malformed credentials fail closed with a generic `503`,
+without falling back to another key or logging the secret. Existing file-based
+and workload-identity setups remain supported when this variable is unset.
+See [Firebase hosting credentials](docs/firebase-hosted-credentials.md) for
+Railway secret variables, Docker read-only mounts and the live verification gate.
+
 Automated HTTP tests inject a fake token verifier and therefore do not need
 Firebase credentials. Real Firebase requests require the project configuration.
 
