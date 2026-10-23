@@ -8,3 +8,5 @@ src/generated/
 *.log
 *-firebase-adminsdk-*.json
 firebase-service-account*.json
+secrets/
+.config/

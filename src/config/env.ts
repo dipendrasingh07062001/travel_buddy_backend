@@ -84,6 +84,14 @@ const envSchema = z
       (value) => (value === '' ? undefined : value),
       z.string().trim().min(1).optional(),
     ),
+    // Optional hosting secret. Never serialize the environment object or log
+    // this value; credential parsing errors are sanitized by firebaseApp().
+    FIREBASE_SERVICE_ACCOUNT_JSON: z
+      .string()
+      .trim()
+      .min(1)
+      .max(65_536)
+      .optional(),
     R2_ACCOUNT_ID: optionalSetting(
       z.string().regex(/^[a-f0-9]{32}$/, 'Expected a 32-character account ID.'),
     ),
