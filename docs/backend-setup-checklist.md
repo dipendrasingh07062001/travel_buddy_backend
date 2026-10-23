@@ -15,6 +15,9 @@ a dedicated milestone after feature work, then verify each service separately.
 - [ ] Production secret storage. Keep `.env`, service-account JSON and provider
       keys out of GitHub and chat; install secrets locally/on the deployment host.
 - [ ] Production Firebase project and Admin credentials/workload identity;
+      see [hosted credential setup](firebase-hosted-credentials.md) for the
+      secret-variable and Docker file-mount options. Code support alone does not
+      mean a production secret or live Firebase access has been configured.
       both are required: sign-in, data requests/export and staff routes check
       the Firebase account on each call and return 503 without credentials.
       Validate login, a disabled account (blocked at once on those actions,
