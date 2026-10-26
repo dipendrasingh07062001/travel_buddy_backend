@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { database } from '../src/database/client.js';
 import type { TokenVerifier } from '../src/modules/auth/auth.types.js';
+import { acceptPolicyVersion } from '../src/modules/policies/policy.repository.js';
 import type { PolicyCatalog } from '../src/modules/policies/policy.service.js';
 
 const users = { alice: randomUUID(), bob: randomUUID() };
@@ -302,5 +303,30 @@ describe('versioned policy acceptance', () => {
         where: { userId: users.alice, policyType: 'TERMS' },
       }),
     ).toBe(2);
+  });
+
+  it('accepts simultaneous duplicate submissions without a conflict', async () => {
+    // Calls the repository directly: over HTTP, request handling staggers the
+    // inserts enough that a check-then-insert race only failed now and then.
+    const rounds = 20;
+    for (let round = 0; round < rounds; round += 1) {
+      const results = await Promise.allSettled(
+        Array.from({ length: 4 }, () =>
+          acceptPolicyVersion(users.bob, 'TERMS', `concurrent-${round}`),
+        ),
+      );
+      expect(results.filter((result) => result.status === 'rejected')).toEqual(
+        [],
+      );
+      const acceptedAt = results.map((result) =>
+        result.status === 'fulfilled'
+          ? result.value.acceptedAt.toISOString()
+          : null,
+      );
+      expect(new Set(acceptedAt).size).toBe(1);
+    }
+    expect(
+      await database.policyAcceptance.count({ where: { userId: users.bob } }),
+    ).toBe(rounds);
   });
 });

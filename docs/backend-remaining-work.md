@@ -42,6 +42,11 @@ Frontend/UI implementation belongs to the Flutter developer.
 - Community cover images: the Flutter design shows a photo on every community
   card, but communities have no image field yet. Needs an admin upload flow
   using the existing object storage; plan it as its own milestone.
+- Duplicate-submission audit: policy acceptance used a Prisma `upsert` that
+  reads before inserting, so simultaneous identical requests could fail with a
+  unique-key error (fixed with an atomic insert-or-ignore). Check the other
+  `upsert` calls (community follow, block, push device, profile, conversation
+  participants) for the same race before relying on them under double-taps.
 - Recheck PRD-to-API coverage at the end, including edge cases across features.
 
 ## Deferred external integrations and launch checks
