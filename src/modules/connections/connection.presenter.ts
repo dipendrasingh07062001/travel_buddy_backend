@@ -18,6 +18,9 @@ function tripReference(
     destination: trip.community,
     startDate: dateOnly(trip.startDate),
     endDate: dateOnly(trip.endDate),
+    dateMode: trip.dateMode,
+    weekendsOnly: trip.weekendsOnly,
+    durationDays: trip.durationDays,
     status: trip.status,
   };
 }

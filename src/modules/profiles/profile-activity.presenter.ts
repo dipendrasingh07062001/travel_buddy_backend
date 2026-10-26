@@ -13,6 +13,8 @@ export function presentProfileTrip(trip: ProfileTripActivity) {
     destination: presentPublicDestination(trip.community),
     startDate: trip.startDate.toISOString().slice(0, 10),
     endDate: trip.endDate.toISOString().slice(0, 10),
+    dateMode: trip.dateMode,
+    weekendsOnly: trip.weekendsOnly,
     durationDays: trip.durationDays,
     status: trip.status,
     publishedAt: trip.publishedAt?.toISOString() ?? null,

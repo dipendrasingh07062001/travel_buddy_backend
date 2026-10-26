@@ -14,6 +14,8 @@ export const roomSelect = {
       originCity: true,
       startDate: true,
       endDate: true,
+      dateMode: true,
+      weekendsOnly: true,
       flexibilityDays: true,
       durationDays: true,
       transport: true,

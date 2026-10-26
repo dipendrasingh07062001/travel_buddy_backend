@@ -108,6 +108,8 @@ export async function createAccountDataExport(userId: string) {
             originCity: true,
             startDate: true,
             endDate: true,
+            dateMode: true,
+            weekendsOnly: true,
             flexibilityDays: true,
             durationDays: true,
             budgetMin: true,

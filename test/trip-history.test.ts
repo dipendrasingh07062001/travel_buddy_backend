@@ -129,6 +129,8 @@ const trip: Trip = {
   originCity: 'Delhi',
   startDate: new Date('2026-12-01T00:00:00Z'),
   endDate: new Date('2026-12-05T00:00:00Z'),
+  dateMode: 'EXACT',
+  weekendsOnly: false,
   durationDays: 5,
   flexibilityDays: 0,
   budgetMin: new Prisma.Decimal('1200'),

@@ -79,7 +79,8 @@ between searching and approval.
 
 `date_overlap` requires both `departureFrom` and `departureTo`. It orders trips
 by the number of calendar days shared with that inclusive date window, highest
-first. Ties use the smallest sum of start-date and end-date differences from
+first, counting at most the trip's `durationDays` so a wide date window cannot
+outrank an exact trip that fits. Ties use the smallest sum of start-date and end-date differences from
 the requested bounds, then earliest departure, then trip UUID ascending. For
 example, for 10–14 April, a 10–14 April trip sorts ahead of 9–15 April: both
 overlap five days, but the first has closer boundaries. This compares the
@@ -308,8 +309,23 @@ Every edit or lifecycle request must include the latest version returned by the
 API, for example `{ "expectedVersion": 2 }`. A stale version returns
 `409 TRIP_VERSION_CONFLICT`; refresh the trip before retrying. This prevents one
 device from silently overwriting a newer change from another device. Only the
-owner may mutate a trip. The server derives `durationDays` from the dates and
-validates date, budget, group-size, community, ownership, and lifecycle rules.
+owner may mutate a trip. The server validates date, budget, group-size,
+community, ownership, and lifecycle rules.
+
+Trip dates are either exact or a window (PRD §7.1), set by `dateMode`:
+
+- `EXACT` (default): `startDate`–`endDate` are the trip, optionally flexible by
+  `flexibilityDays`. The server derives `durationDays` from the dates; sending
+  it returns `400`.
+- `WINDOW`: a trip of the required `durationDays` somewhere between `startDate`
+  and `endDate`, such as "any 3 days in December". The window spans at most 92
+  days, must fit the trip length, and has no `flexibilityDays`.
+- `weekendsOnly: true` (windows only): a weekend trip of at most 4 days; the
+  window must include a Saturday or Sunday.
+
+Switching `dateMode` drops settings of the old type: flexibility when moving to
+a window, `weekendsOnly` when moving to exact dates. Rule violations return
+`400 INVALID_TRIP_DATES`. See [date window rules](docs/trip-date-windows.md).
 
 ### My Trips and membership history
 
@@ -695,8 +711,8 @@ also include the version you last read as `expectedVersion`. Money is in INR,
 nonnegative, at most two decimal places (more returns
 `400 INVALID_TRIP_ALERT_BUDGET`); responses use decimal strings. Date
 windows overlap inclusively with the trip dates (not just its departure day),
-budget intervals overlap inclusively, duration is 1–365 inclusive calendar
-days, origin is a case-insensitive **literal** substring, and transport is an
+or with a date-window trip's whole range, budget intervals overlap inclusively,
+duration is 1–365 inclusive calendar days (a window trip's entered length), origin is a case-insensitive **literal** substring, and transport is an
 exact enum match. A requested budget bound does not match an unknown relevant
 trip-price bound. Currency conversion and flexibility-day expansion are not
 performed. An alert with only a destination matches any eligible trip there.

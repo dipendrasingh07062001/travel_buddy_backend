@@ -72,6 +72,8 @@ const room: RoomRecord = {
     originCity: 'Delhi',
     startDate: new Date('2026-10-10T00:00:00.000Z'),
     endDate: new Date('2026-10-15T00:00:00.000Z'),
+    dateMode: 'EXACT',
+    weekendsOnly: false,
     flexibilityDays: 2,
     durationDays: 6,
     transport: 'BUS',

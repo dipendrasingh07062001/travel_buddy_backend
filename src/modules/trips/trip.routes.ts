@@ -19,6 +19,7 @@ import type {
 import { presentOwnedTrip, presentTrip } from './trip.presenter.js';
 import { prismaTripRepository } from './trip.repository.js';
 import {
+  tripDateModeValues,
   tripStatusValues,
   tripTransportValues as transportValues,
   type ListTripsQuery,
@@ -46,6 +47,8 @@ export const publicTripSchema = {
     'destination',
     'startDate',
     'endDate',
+    'dateMode',
+    'weekendsOnly',
     'flexibilityDays',
     'durationDays',
     'budget',
@@ -72,6 +75,13 @@ export const publicTripSchema = {
     },
     startDate: { type: 'string', format: 'date' },
     endDate: { type: 'string', format: 'date' },
+    dateMode: {
+      type: 'string',
+      enum: tripDateModeValues,
+      description:
+        'EXACT: the dates are the trip. WINDOW: a trip of durationDays somewhere between startDate and endDate.',
+    },
+    weekendsOnly: { type: 'boolean' },
     flexibilityDays: { type: 'integer' },
     durationDays: { type: 'integer' },
     budget: {
@@ -143,6 +153,24 @@ const tripWriteProperties = {
   startDate: { type: 'string', format: 'date' },
   endDate: { type: 'string', format: 'date' },
   flexibilityDays: { type: 'integer', minimum: 0, maximum: 30 },
+  dateMode: {
+    type: 'string',
+    enum: tripDateModeValues,
+    description:
+      'Defaults to EXACT. A WINDOW spans at most 92 days, needs durationDays and has no flexibilityDays.',
+  },
+  weekendsOnly: {
+    type: 'boolean',
+    description:
+      'WINDOW only: the trip falls on a weekend (at most 4 days; the window must include a Saturday or Sunday).',
+  },
+  durationDays: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 92,
+    description:
+      'WINDOW only: the trip length. Exact trips calculate it from the dates.',
+  },
   budgetMin: nullableBudget,
   budgetMax: nullableBudget,
   currentGroupSize: { type: 'integer', minimum: 1, maximum: 100 },

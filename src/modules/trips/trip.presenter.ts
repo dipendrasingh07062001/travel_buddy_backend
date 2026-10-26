@@ -13,6 +13,8 @@ export function presentTrip(trip: PublicTripRecord) {
     destination: presentPublicDestination(trip.community),
     startDate: dateOnly(trip.startDate),
     endDate: dateOnly(trip.endDate),
+    dateMode: trip.dateMode,
+    weekendsOnly: trip.weekendsOnly,
     flexibilityDays: trip.flexibilityDays,
     durationDays: trip.durationDays,
     budget: {

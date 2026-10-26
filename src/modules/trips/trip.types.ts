@@ -11,6 +11,8 @@ export const tripStatusValues = [
   'CANCELLED',
 ] as const;
 
+export const tripDateModeValues = ['EXACT', 'WINDOW'] as const;
+
 export const tripTransportValues = [
   'BUS',
   'TRAIN',

@@ -19,6 +19,8 @@ export function presentRoom(room: RoomRecord, viewerId: string) {
       },
       startDate: room.trip.startDate.toISOString().slice(0, 10),
       endDate: room.trip.endDate.toISOString().slice(0, 10),
+      dateMode: room.trip.dateMode,
+      weekendsOnly: room.trip.weekendsOnly,
       flexibilityDays: room.trip.flexibilityDays,
       durationDays: room.trip.durationDays,
       transport: room.trip.transport,

@@ -71,6 +71,8 @@ const publicTrip: PublicTripRecord = {
   originCity: 'Delhi',
   startDate: new Date('2027-01-10T00:00:00.000Z'),
   endDate: new Date('2027-01-15T00:00:00.000Z'),
+  dateMode: 'EXACT',
+  weekendsOnly: false,
   flexibilityDays: 2,
   durationDays: 6,
   budgetMin: new Prisma.Decimal(12000),

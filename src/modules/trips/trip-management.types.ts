@@ -1,5 +1,6 @@
 import type {
   Prisma,
+  TripDateMode,
   TripStatus,
   TripTransport,
 } from '../../generated/prisma/client.js';
@@ -12,6 +13,8 @@ export interface CreateTripInput {
   startDate: Date;
   endDate: Date;
   flexibilityDays: number;
+  dateMode: TripDateMode;
+  weekendsOnly: boolean;
   durationDays: number;
   budgetMin: number | null;
   budgetMax: number | null;
