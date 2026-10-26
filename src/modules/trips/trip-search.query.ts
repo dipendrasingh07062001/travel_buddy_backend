@@ -36,7 +36,7 @@ export const tripSearchQueryProperties = {
     enum: ['newest', 'departure_asc', 'date_overlap'],
     default: 'newest',
     description:
-      'date_overlap requires both dates: most shared days, smallest total date-boundary distance, earliest departure, then trip ID.',
+      "date_overlap requires both dates: most shared days (counting at most the trip's length), smallest total date-boundary distance, earliest departure, then trip ID.",
   },
   page: {
     type: 'integer',

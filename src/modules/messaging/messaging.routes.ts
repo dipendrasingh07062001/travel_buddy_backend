@@ -4,6 +4,7 @@ import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicUserSchema } from '../profiles/profile.schemas.js';
 import { checklistItemSchema } from '../trip-room/trip-room.routes.js';
+import { tripDateModeValues } from '../trips/trip.types.js';
 import { presentMessage, presentRoom } from './messaging.presenter.js';
 import { prismaMessagingRepository } from './messaging.repository.js';
 import {
@@ -74,6 +75,8 @@ const roomSchema = {
         'destination',
         'startDate',
         'endDate',
+        'dateMode',
+        'weekendsOnly',
         'flexibilityDays',
         'durationDays',
         'transport',
@@ -96,6 +99,8 @@ const roomSchema = {
         },
         startDate: { type: 'string', format: 'date' },
         endDate: { type: 'string', format: 'date' },
+        dateMode: { type: 'string', enum: tripDateModeValues },
+        weekendsOnly: { type: 'boolean' },
         flexibilityDays: { type: 'integer' },
         durationDays: { type: 'integer' },
         transport: { type: 'string' },

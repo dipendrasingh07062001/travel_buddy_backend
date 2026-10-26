@@ -2,6 +2,7 @@ import { AppError } from '../../errors/app-error.js';
 import { requireSafePublicText } from '../../privacy/public-text.js';
 import type {
   Prisma,
+  TripDateMode,
   TripStatus,
   TripTransport,
 } from '../../generated/prisma/client.js';
@@ -19,6 +20,9 @@ export interface CreateTripBody {
   startDate: string;
   endDate: string;
   flexibilityDays?: number;
+  dateMode?: TripDateMode;
+  weekendsOnly?: boolean;
+  durationDays?: number;
   budgetMin?: number | null;
   budgetMax?: number | null;
   currency?: string;
@@ -35,12 +39,33 @@ export interface UpdateTripBody {
   startDate?: string;
   endDate?: string;
   flexibilityDays?: number;
+  dateMode?: TripDateMode;
+  weekendsOnly?: boolean;
+  durationDays?: number;
   budgetMin?: number | null;
   budgetMax?: number | null;
   currentGroupSize?: number;
   desiredGroupSize?: number;
   transport?: TripTransport;
   description?: string;
+}
+
+const datePlanFields = [
+  'startDate',
+  'endDate',
+  'flexibilityDays',
+  'dateMode',
+  'weekendsOnly',
+  'durationDays',
+] as const;
+const maximumWindowDays = 92;
+const maximumWeekendTripDays = 4;
+
+interface DatePlan {
+  dateMode: TripDateMode;
+  weekendsOnly: boolean;
+  flexibilityDays: number;
+  durationDays: number;
 }
 
 export interface VersionBody {
@@ -80,6 +105,86 @@ function durationDays(startDate: Date, endDate: Date): number {
     return invalid('INVALID_TRIP_DATES', 'A trip cannot exceed 365 days.');
   }
   return days;
+}
+
+// Same rule as the trips_date_mode_check constraint: counting Monday as 1 and
+// Sunday as 7, the range must reach day 6 to include a Saturday or Sunday.
+function includesWeekend(startDate: Date, days: number): boolean {
+  return (startDate.getUTCDay() || 7) + days - 1 >= 6;
+}
+
+// An exact trip's length is its date range. A window holds a trip of the
+// entered length somewhere inside the range, so it replaces day flexibility.
+function resolveDatePlan(
+  startDate: Date,
+  endDate: Date,
+  plan: Partial<DatePlan> & Pick<DatePlan, 'dateMode'>,
+): DatePlan {
+  const days = durationDays(startDate, endDate);
+  if (plan.dateMode === 'EXACT') {
+    if (plan.durationDays !== undefined) {
+      invalid(
+        'INVALID_TRIP_DATES',
+        'durationDays is calculated from the dates of an exact trip.',
+      );
+    }
+    if (plan.weekendsOnly) {
+      invalid(
+        'INVALID_TRIP_DATES',
+        'weekendsOnly applies only to a date window.',
+      );
+    }
+    return {
+      dateMode: 'EXACT',
+      weekendsOnly: false,
+      flexibilityDays: plan.flexibilityDays ?? 0,
+      durationDays: days,
+    };
+  }
+  if (days > maximumWindowDays) {
+    invalid(
+      'INVALID_TRIP_DATES',
+      `A date window cannot exceed ${maximumWindowDays} days.`,
+    );
+  }
+  if (plan.flexibilityDays) {
+    invalid(
+      'INVALID_TRIP_DATES',
+      'A date window already allows flexibility, so flexibilityDays must be 0.',
+    );
+  }
+  if (plan.durationDays === undefined) {
+    return invalid(
+      'INVALID_TRIP_DATES',
+      'durationDays is required for a date window.',
+    );
+  }
+  if (plan.durationDays > days) {
+    invalid(
+      'INVALID_TRIP_DATES',
+      'durationDays must fit inside the date window.',
+    );
+  }
+  if (plan.weekendsOnly) {
+    if (plan.durationDays > maximumWeekendTripDays) {
+      invalid(
+        'INVALID_TRIP_DATES',
+        `A weekend trip can last at most ${maximumWeekendTripDays} days.`,
+      );
+    }
+    if (!includesWeekend(startDate, days)) {
+      invalid(
+        'INVALID_TRIP_DATES',
+        'A weekend window must include a Saturday or Sunday.',
+      );
+    }
+  }
+  return {
+    dateMode: 'WINDOW',
+    weekendsOnly: plan.weekendsOnly ?? false,
+    flexibilityDays: 0,
+    durationDays: plan.durationDays,
+  };
 }
 
 function validateBudget(minimum: number | null, maximum: number | null): void {
@@ -173,8 +278,18 @@ export async function createTrip(
     originCity: body.originCity.trim(),
     startDate,
     endDate,
-    flexibilityDays: body.flexibilityDays ?? 0,
-    durationDays: durationDays(startDate, endDate),
+    ...resolveDatePlan(startDate, endDate, {
+      dateMode: body.dateMode ?? 'EXACT',
+      ...(body.weekendsOnly !== undefined && {
+        weekendsOnly: body.weekendsOnly,
+      }),
+      ...(body.flexibilityDays !== undefined && {
+        flexibilityDays: body.flexibilityDays,
+      }),
+      ...(body.durationDays !== undefined && {
+        durationDays: body.durationDays,
+      }),
+    }),
     budgetMin,
     budgetMax,
     currency: body.currency ?? 'INR',
@@ -220,6 +335,25 @@ export async function updateTrip(
   validateBudget(budgetMin, budgetMax);
   validateGroup(currentGroupSize, desiredGroupSize);
 
+  // Changing the date type drops settings that only belong to the old type.
+  const dateMode = body.dateMode ?? trip.dateMode;
+  const keepsMode = dateMode === trip.dateMode;
+  const weekendsOnly =
+    body.weekendsOnly ?? (keepsMode ? trip.weekendsOnly : undefined);
+  const flexibilityDays =
+    body.flexibilityDays ?? (keepsMode ? trip.flexibilityDays : undefined);
+  const windowDays =
+    body.durationDays ??
+    (keepsMode && dateMode === 'WINDOW' ? trip.durationDays : undefined);
+  const datePlan = datePlanFields.some((field) => body[field] !== undefined)
+    ? resolveDatePlan(startDate, endDate, {
+        dateMode,
+        ...(weekendsOnly !== undefined && { weekendsOnly }),
+        ...(flexibilityDays !== undefined && { flexibilityDays }),
+        ...(windowDays !== undefined && { durationDays: windowDays }),
+      })
+    : null;
+
   const data: Prisma.TripUncheckedUpdateManyInput = {
     ...(body.communityId !== undefined && { communityId: body.communityId }),
     ...(body.originCity !== undefined && {
@@ -230,12 +364,7 @@ export async function updateTrip(
     }),
     ...(body.startDate !== undefined && { startDate }),
     ...(body.endDate !== undefined && { endDate }),
-    ...((body.startDate !== undefined || body.endDate !== undefined) && {
-      durationDays: durationDays(startDate, endDate),
-    }),
-    ...(body.flexibilityDays !== undefined && {
-      flexibilityDays: body.flexibilityDays,
-    }),
+    ...datePlan,
     ...(body.budgetMin !== undefined && { budgetMin: body.budgetMin }),
     ...(body.budgetMax !== undefined && { budgetMax: body.budgetMax }),
     ...(body.currentGroupSize !== undefined && {

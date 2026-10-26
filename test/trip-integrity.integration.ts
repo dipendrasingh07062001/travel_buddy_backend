@@ -161,6 +161,7 @@ describe('trip integrity rules', () => {
       data: {
         startDate: new Date(`${isoDate(-10)}T00:00:00.000Z`),
         endDate: new Date(`${isoDate(-7)}T00:00:00.000Z`),
+        durationDays: 4,
       },
     });
 
@@ -188,6 +189,7 @@ describe('trip integrity rules', () => {
       data: {
         startDate: new Date(`${isoDate(-2)}T00:00:00.000Z`),
         endDate: new Date(`${isoDate(0)}T00:00:00.000Z`),
+        durationDays: 3,
       },
     });
 

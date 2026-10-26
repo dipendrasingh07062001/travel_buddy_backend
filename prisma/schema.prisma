@@ -99,6 +99,13 @@ enum TripStatus {
   CANCELLED
 }
 
+// EXACT: the dates are the trip. WINDOW: a shorter trip of durationDays
+// somewhere between startDate and endDate.
+enum TripDateMode {
+  EXACT
+  WINDOW
+}
+
 enum TripTransport {
   BUS
   TRAIN
@@ -464,6 +471,8 @@ model Trip {
   startDate                 DateTime              @map("start_date") @db.Date
   endDate                   DateTime              @map("end_date") @db.Date
   flexibilityDays           Int                   @default(0) @map("flexibility_days")
+  dateMode                  TripDateMode          @default(EXACT) @map("date_mode")
+  weekendsOnly              Boolean               @default(false) @map("weekends_only")
   durationDays              Int                   @map("duration_days")
   budgetMin                 Decimal?              @map("budget_min") @db.Decimal(12, 2)
   budgetMax                 Decimal?              @map("budget_max") @db.Decimal(12, 2)

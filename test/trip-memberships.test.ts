@@ -84,6 +84,8 @@ function item(status: 'ACTIVE' | 'LEFT' | 'REMOVED'): TripMembershipListItem {
     originCity: 'Delhi',
     startDate: now,
     endDate: now,
+    dateMode: 'EXACT',
+    weekendsOnly: false,
     flexibilityDays: 0,
     durationDays: 1,
     budgetMin: new Prisma.Decimal('1200.50'),

@@ -13,6 +13,8 @@ export const profileTripSelect = {
   originCity: true,
   startDate: true,
   endDate: true,
+  dateMode: true,
+  weekendsOnly: true,
   durationDays: true,
   status: true,
   publishedAt: true,

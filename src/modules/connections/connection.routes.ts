@@ -5,6 +5,7 @@ import type { ConnectionRequestStatus } from '../../generated/prisma/client.js';
 import { authenticateRequest } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicUserSchema } from '../profiles/profile.schemas.js';
+import { tripDateModeValues } from '../trips/trip.types.js';
 import {
   presentConnectionRequest,
   presentMembership,
@@ -47,7 +48,16 @@ const requestStatuses = [
 
 const tripReferenceSchema = {
   type: 'object',
-  required: ['id', 'destination', 'startDate', 'endDate', 'status'],
+  required: [
+    'id',
+    'destination',
+    'startDate',
+    'endDate',
+    'dateMode',
+    'weekendsOnly',
+    'durationDays',
+    'status',
+  ],
   properties: {
     id: { type: 'string', format: 'uuid' },
     destination: {
@@ -57,6 +67,9 @@ const tripReferenceSchema = {
     },
     startDate: { type: 'string', format: 'date' },
     endDate: { type: 'string', format: 'date' },
+    dateMode: { type: 'string', enum: tripDateModeValues },
+    weekendsOnly: { type: 'boolean' },
+    durationDays: { type: 'integer' },
     status: { type: 'string' },
   },
 } as const;

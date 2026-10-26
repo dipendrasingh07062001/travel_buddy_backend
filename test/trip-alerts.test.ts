@@ -43,6 +43,8 @@ const trip: Trip = {
   originCity: 'New Delhi',
   startDate: new Date('2030-02-10'),
   endDate: new Date('2030-02-15'),
+  dateMode: 'EXACT',
+  weekendsOnly: false,
   durationDays: 6,
   flexibilityDays: 0,
   currentGroupSize: 1,
@@ -126,6 +128,33 @@ describe('matching-trip criteria', () => {
     ).toBe(true);
     expect(matchesTripAlert(base, { ...trip, currency: 'USD' })).toBe(false);
   });
+  it('matches a date window by its range and entered trip length', () => {
+    const window: Trip = {
+      ...trip,
+      startDate: new Date('2030-12-01'),
+      endDate: new Date('2030-12-31'),
+      dateMode: 'WINDOW',
+      durationDays: 3,
+    };
+    const december = {
+      ...base,
+      departureFrom: new Date('2030-12-20'),
+      departureTo: new Date('2030-12-22'),
+    };
+    expect(matchesTripAlert({ ...december, maxDuration: 4 }, window)).toBe(
+      true,
+    );
+    expect(matchesTripAlert({ ...december, maxDuration: 2 }, window)).toBe(
+      false,
+    );
+    expect(
+      matchesTripAlert(
+        { ...base, departureFrom: new Date('2031-01-01') },
+        window,
+      ),
+    ).toBe(false);
+  });
+
   it('normalizes strings, preserves zero, and clears omitted criteria', () => {
     expect(
       normalizeTripAlert({

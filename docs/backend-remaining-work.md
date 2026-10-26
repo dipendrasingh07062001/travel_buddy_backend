@@ -6,6 +6,13 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Trip date windows (PRD §7.1): a trip can be exact dates or "any N days"
+  within a window of up to 92 days, optionally weekends only. See
+  [rules and search behaviour](trip-date-windows.md).
+- One migration (`20261026120000_trip_date_windows`); no provider or API key.
+
+## Already implemented
+
 - Trip-status filter (PRD §7.3): closed as a documented decision, not new code.
   Public search only ever returns `PUBLISHED` and `FULL` trips, so the PRD's
   "trip status" and "group availability" filters choose between the same two
@@ -14,10 +21,6 @@ Frontend/UI implementation belongs to the Flutter developer.
   view was not added: no product need was identified, and a second overlapping
   filter would allow contradictory combinations. Revisit if the Flutter filter
   design needs it.
-- No code, migration, provider or API key change.
-
-## Already implemented
-
 - Home discovery: recent public posts across all communities and a transparent
   `activity` sort for communities. See [contract and rules](home-discovery.md).
 - Public-text privacy: reject supported disclosures in public-facing writes and

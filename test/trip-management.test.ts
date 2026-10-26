@@ -325,3 +325,267 @@ describe('authenticated trip management HTTP contract', () => {
     });
   });
 });
+
+describe('trip date windows', () => {
+  const headers = { authorization: 'Bearer owner-token' };
+  const basePayload = {
+    communityId,
+    originCity: 'Delhi',
+    desiredGroupSize: 4,
+    description: 'A flexible group trip to the hills with relaxed plans.',
+  };
+
+  async function createTrip(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/trips',
+      headers,
+      payload: { ...basePayload, ...payload },
+    });
+  }
+
+  async function editTrip(id: string, payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/trips/${id}`,
+      headers,
+      payload: { expectedVersion: trips.get(id)!.version, ...payload },
+    });
+  }
+
+  it('keeps exact dates as the default', async () => {
+    const response = await createTrip({
+      startDate: '2027-05-10',
+      endDate: '2027-05-12',
+      flexibilityDays: 1,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data).toMatchObject({
+      dateMode: 'EXACT',
+      weekendsOnly: false,
+      flexibilityDays: 1,
+      durationDays: 3,
+    });
+  });
+
+  it('stores the entered length of a trip inside a month window', async () => {
+    const response = await createTrip({
+      startDate: '2027-12-01',
+      endDate: '2027-12-31',
+      dateMode: 'WINDOW',
+      durationDays: 3,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data).toMatchObject({
+      startDate: '2027-12-01',
+      endDate: '2027-12-31',
+      dateMode: 'WINDOW',
+      weekendsOnly: false,
+      flexibilityDays: 0,
+      durationDays: 3,
+    });
+  });
+
+  it('accepts a weekend window of up to four days', async () => {
+    const response = await createTrip({
+      startDate: '2027-03-01',
+      endDate: '2027-03-31',
+      dateMode: 'WINDOW',
+      weekendsOnly: true,
+      durationDays: 4,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data).toMatchObject({
+      dateMode: 'WINDOW',
+      weekendsOnly: true,
+      durationDays: 4,
+    });
+  });
+
+  // 1 March 2027 is a Monday and 5 March a Friday.
+  it.each([
+    [
+      'a window without a length',
+      { startDate: '2027-12-01', endDate: '2027-12-31', dateMode: 'WINDOW' },
+      'durationDays is required for a date window.',
+    ],
+    [
+      'a length longer than the window',
+      {
+        startDate: '2027-12-01',
+        endDate: '2027-12-03',
+        dateMode: 'WINDOW',
+        durationDays: 5,
+      },
+      'durationDays must fit inside the date window.',
+    ],
+    [
+      'a window over 92 days',
+      {
+        startDate: '2027-01-01',
+        endDate: '2027-04-30',
+        dateMode: 'WINDOW',
+        durationDays: 3,
+      },
+      'A date window cannot exceed 92 days.',
+    ],
+    [
+      'day flexibility on a window',
+      {
+        startDate: '2027-12-01',
+        endDate: '2027-12-31',
+        dateMode: 'WINDOW',
+        durationDays: 3,
+        flexibilityDays: 2,
+      },
+      'A date window already allows flexibility, so flexibilityDays must be 0.',
+    ],
+    [
+      'a weekend trip longer than four days',
+      {
+        startDate: '2027-03-01',
+        endDate: '2027-03-31',
+        dateMode: 'WINDOW',
+        weekendsOnly: true,
+        durationDays: 5,
+      },
+      'A weekend trip can last at most 4 days.',
+    ],
+    [
+      'a weekend window without a Saturday or Sunday',
+      {
+        startDate: '2027-03-01',
+        endDate: '2027-03-05',
+        dateMode: 'WINDOW',
+        weekendsOnly: true,
+        durationDays: 2,
+      },
+      'A weekend window must include a Saturday or Sunday.',
+    ],
+    [
+      'weekends only on exact dates',
+      { startDate: '2027-03-06', endDate: '2027-03-07', weekendsOnly: true },
+      'weekendsOnly applies only to a date window.',
+    ],
+    [
+      'a length on exact dates',
+      { startDate: '2027-03-06', endDate: '2027-03-07', durationDays: 2 },
+      'durationDays is calculated from the dates of an exact trip.',
+    ],
+  ])('rejects %s', async (_case, payload, message) => {
+    const response = await createTrip(payload);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatchObject({
+      code: 'INVALID_TRIP_DATES',
+      message,
+    });
+  });
+
+  it('rejects an unknown date type', async () => {
+    const response = await createTrip({
+      startDate: '2027-12-01',
+      endDate: '2027-12-31',
+      dateMode: 'MONTH',
+      durationDays: 3,
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('switches exact dates to a window and drops day flexibility', async () => {
+    const created = await createTrip({
+      startDate: '2027-06-01',
+      endDate: '2027-06-20',
+      flexibilityDays: 2,
+    });
+    const id = created.json().data.id;
+
+    const withoutLength = await editTrip(id, { dateMode: 'WINDOW' });
+    expect(withoutLength.statusCode).toBe(400);
+    expect(withoutLength.json().error.message).toBe(
+      'durationDays is required for a date window.',
+    );
+
+    const switched = await editTrip(id, {
+      dateMode: 'WINDOW',
+      durationDays: 4,
+    });
+    expect(switched.statusCode).toBe(200);
+    expect(switched.json().data).toMatchObject({
+      startDate: '2027-06-01',
+      endDate: '2027-06-20',
+      dateMode: 'WINDOW',
+      flexibilityDays: 0,
+      durationDays: 4,
+    });
+  });
+
+  it('keeps a window length when only the dates move', async () => {
+    const created = await createTrip({
+      startDate: '2027-12-01',
+      endDate: '2027-12-31',
+      dateMode: 'WINDOW',
+      durationDays: 5,
+    });
+    const id = created.json().data.id;
+
+    const moved = await editTrip(id, {
+      startDate: '2027-11-15',
+      endDate: '2027-12-15',
+    });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json().data).toMatchObject({
+      startDate: '2027-11-15',
+      endDate: '2027-12-15',
+      dateMode: 'WINDOW',
+      durationDays: 5,
+    });
+
+    const tooShort = await editTrip(id, { endDate: '2027-11-17' });
+    expect(tooShort.statusCode).toBe(400);
+    expect(tooShort.json().error.message).toBe(
+      'durationDays must fit inside the date window.',
+    );
+  });
+
+  it('switches a weekend window back to exact dates', async () => {
+    const created = await createTrip({
+      startDate: '2027-03-01',
+      endDate: '2027-03-31',
+      dateMode: 'WINDOW',
+      weekendsOnly: true,
+      durationDays: 2,
+    });
+    const id = created.json().data.id;
+
+    const exact = await editTrip(id, {
+      dateMode: 'EXACT',
+      startDate: '2027-03-06',
+      endDate: '2027-03-07',
+    });
+    expect(exact.statusCode).toBe(200);
+    expect(exact.json().data).toMatchObject({
+      dateMode: 'EXACT',
+      weekendsOnly: false,
+      flexibilityDays: 0,
+      durationDays: 2,
+    });
+  });
+
+  it('leaves the date plan alone when other fields change', async () => {
+    const created = await createTrip({
+      startDate: '2027-12-01',
+      endDate: '2027-12-31',
+      dateMode: 'WINDOW',
+      durationDays: 3,
+    });
+    const id = created.json().data.id;
+
+    const edited = await editTrip(id, { desiredGroupSize: 6 });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().data).toMatchObject({
+      dateMode: 'WINDOW',
+      durationDays: 3,
+      group: { desiredSize: 6 },
+    });
+  });
+});

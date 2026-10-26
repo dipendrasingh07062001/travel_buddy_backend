@@ -23,9 +23,12 @@ function searchOrder(query: ResolvedListTripsQuery): Prisma.Sql {
     const from = query.departureFrom;
     const to = query.departureTo;
     if (!from || !to) throw new Error('A validated date window is required.');
+    // Shared days count at most the trip's own length, so a wide date window
+    // cannot outrank an exact trip that fits the search. For exact trips the
+    // length equals the range, so the cap changes nothing.
     return Prisma.sql`
-      GREATEST(0, LEAST("end_date", ${to}::date)
-        - GREATEST("start_date", ${from}::date) + 1) DESC,
+      LEAST("duration_days", GREATEST(0, LEAST("end_date", ${to}::date)
+        - GREATEST("start_date", ${from}::date) + 1)) DESC,
       (ABS("start_date" - ${from}::date) + ABS("end_date" - ${to}::date)) ASC,
       "start_date" ASC, "id" ASC
     `;
@@ -88,7 +91,8 @@ export const prismaTripRepository: TripRepository = {
       async (tx) => {
         const [page] = await tx.$queryRaw<SearchPage[]>`
           WITH matching_trips AS NOT MATERIALIZED (
-          SELECT t."id", t."start_date", t."end_date", t."published_at"
+          SELECT t."id", t."start_date", t."end_date", t."duration_days",
+            t."published_at"
           FROM ${identifier('trips')} t
           JOIN ${identifier('users')} u ON u."id" = t."owner_id"
           JOIN ${identifier('communities')} c ON c."id" = t."community_id"
