@@ -1,17 +1,25 @@
 # Backend remaining work
 
-Status recorded 2026-10-17. This is a working engineering checklist, not a
+Status recorded 2026-10-26. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Home discovery: recent public posts across all communities and a transparent
-  `activity` sort for communities. See [contract and rules](home-discovery.md).
-- No new database migration, provider or API key is required for this milestone.
+- Trip-status filter (PRD §7.3): closed as a documented decision, not new code.
+  Public search only ever returns `PUBLISHED` and `FULL` trips, so the PRD's
+  "trip status" and "group availability" filters choose between the same two
+  states. `availableOnly=true` (open trips with a free place) covers both, and
+  each result's `status` lets clients show a "Full" badge. A full-trips-only
+  view was not added: no product need was identified, and a second overlapping
+  filter would allow contradictory combinations. Revisit if the Flutter filter
+  design needs it.
+- No code, migration, provider or API key change.
 
 ## Already implemented
 
+- Home discovery: recent public posts across all communities and a transparent
+  `activity` sort for communities. See [contract and rules](home-discovery.md).
 - Public-text privacy: reject supported disclosures in public-facing writes and
   mask matching legacy text in public responses without rewriting stored content.
   See [scope, behavior and limits](public-text-privacy.md).
@@ -36,9 +44,6 @@ Frontend/UI implementation belongs to the Flutter developer.
 - Account/policy notice coverage: decide which notices are mandatory versus
   optional and approved content/version rules. Existing policy acceptance and
   opt-in email preferences do not settle these decisions.
-- Explicit public trip-status filter for trip search (PRD §7.3). The
-  cross-community recent posts list is done; a mixed trips-and-posts timeline
-  is not needed because the home design uses separate sections.
 - Community cover images: the Flutter design shows a photo on every community
   card, but communities have no image field yet. Needs an admin upload flow
   using the existing object storage; plan it as its own milestone.
