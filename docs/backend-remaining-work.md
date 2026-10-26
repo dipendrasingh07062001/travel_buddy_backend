@@ -1,18 +1,23 @@
 # Backend remaining work
 
-Status recorded 2026-10-26. This is a working engineering checklist, not a
+Status recorded 2026-10-27. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Trip date windows (PRD §7.1): a trip can be exact dates or "any N days"
-  within a window of up to 92 days, optionally weekends only. See
-  [rules and search behaviour](trip-date-windows.md).
-- One migration (`20261026120000_trip_date_windows`); no provider or API key.
+- Moderation notices (PRD §12): removing a trip, post, comment or message, and
+  suspending or restoring an account, notify the affected user in-app. Suspended
+  accounts get `403 ACCOUNT_SUSPENDED`. Notices carry no reason text or staff
+  identity. See [moderation notices](../README.md#moderation-notices).
+- One migration (`20261027090000_moderation_notices`) adding notification
+  types; no provider or API key.
 
 ## Already implemented
 
+- Trip date windows (PRD §7.1): a trip can be exact dates or "any N days"
+  within a window of up to 92 days, optionally weekends only. See
+  [rules and search behaviour](trip-date-windows.md).
 - Trip-status filter (PRD §7.3): closed as a documented decision, not new code.
   Public search only ever returns `PUBLISHED` and `FULL` trips, so the PRD's
   "trip status" and "group availability" filters choose between the same two
@@ -42,8 +47,12 @@ Frontend/UI implementation belongs to the Flutter developer.
   included; confirm a product need and privacy/retention decisions before adding
   tracking. They are not silently treated as required MVP features.
 - Moderation follow-up: founders must agree severity/escalation, appeals and
-  response expectations. Existing report review/removal is not a complete
-  operational moderation policy. Implement any agreed workflow gaps separately.
+  response expectations, including whether moderation notices explain the
+  reason. Existing report review/removal is not a complete operational
+  moderation policy. Implement any agreed workflow gaps separately.
+- Partial feature restrictions (PRD §6.4): moderators can only suspend an
+  account outright; restricting single features (such as sending requests or
+  posting) for a period is not built yet.
 - Account/policy notice coverage: decide which notices are mandatory versus
   optional and approved content/version rules. Existing policy acceptance and
   opt-in email preferences do not settle these decisions.

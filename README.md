@@ -657,7 +657,8 @@ for the signed-in account:
 
 The inbox covers connection requests and decisions, trip plan/status changes,
 new group messages, expense creation/edits/voiding, external settlement
-requests/decisions, and profile photos removed by moderation. Notification
+requests/decisions, and [moderation actions](#moderation-notices) on the
+user's own content or account. Notification
 titles are generic; message text, financial
 amounts and private profile details are not copied into notifications. A user
 can read or mark only their own records. Muted trip rooms and blocked senders do
@@ -974,6 +975,34 @@ eligible members. Connection requests and user accounts are not removable
 content; use account suspension or dismiss those reports. Suspending an account
 blocks its authenticated API access and hides its public profile, trips, and
 community content. Administrator accounts cannot be suspended through the API.
+
+### Moderation notices
+
+The affected account receives an in-app notification in the same transaction
+as the moderation action (PRD §12):
+
+| Action                    | Notification type           | `sourceId`           | `tripId`           |
+| ------------------------- | --------------------------- | -------------------- | ------------------ |
+| Trip removed              | `TRIP_REMOVED`              | trip ID              | trip ID            |
+| Community post removed    | `COMMUNITY_POST_REMOVED`    | post ID              | `null`             |
+| Community comment removed | `COMMUNITY_COMMENT_REMOVED` | comment ID           | `null`             |
+| Trip-room message removed | `MESSAGE_REMOVED`           | message ID           | the message's trip |
+| Profile photo removed     | `PROFILE_PHOTO_REMOVED`     | report or action ID  | `null`             |
+| Account suspended         | `ACCOUNT_SUSPENDED`         | moderation action ID | `null`             |
+| Account restored          | `ACCOUNT_RESTORED`          | moderation action ID | `null`             |
+
+Notices have generic titles and no `actorId`. They never name the moderator or
+the reporter, or repeat the moderator's internal reason; explaining reasons and
+appeals awaits the founders' moderation policy. Dismissed reports send nothing
+to the reported account. A removed trip notifies only its owner, because members
+keep the private room. Suspension and restore notices are per action, so each
+repeat is announced.
+
+A suspended account cannot open the inbox, so authenticated routes return
+`403 ACCOUNT_SUSPENDED` ("This account is suspended. You can still download your
+data or make a data request.") instead of the generic `ACCOUNT_DISABLED`, which
+remains for other inactive accounts. These notices use the optional `safety`
+email category until a mandatory-notice policy is approved.
 
 ### Profile photo moderation
 

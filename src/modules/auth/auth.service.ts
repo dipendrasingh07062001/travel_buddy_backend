@@ -91,6 +91,14 @@ export function requireActiveUser(user: AuthenticatedUser): AuthenticatedUser {
       'This account is scheduled for deletion. Cancel the deletion request to use it again.',
     );
   }
+  // A suspended user cannot open the inbox, so this response is their notice.
+  if (user.status === 'SUSPENDED') {
+    throw new AppError(
+      403,
+      'ACCOUNT_SUSPENDED',
+      'This account is suspended. You can still download your data or make a data request.',
+    );
+  }
   if (user.status !== 'ACTIVE') {
     throw new AppError(
       403,

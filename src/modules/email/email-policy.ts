@@ -23,6 +23,12 @@ export function emailCategory(type: NotificationType): EmailCategory | null {
     case 'SETTLEMENT_CANCELLED':
       return 'FINANCES';
     case 'PROFILE_PHOTO_REMOVED':
+    case 'TRIP_REMOVED':
+    case 'COMMUNITY_POST_REMOVED':
+    case 'COMMUNITY_COMMENT_REMOVED':
+    case 'MESSAGE_REMOVED':
+    case 'ACCOUNT_SUSPENDED':
+    case 'ACCOUNT_RESTORED':
       return 'SAFETY';
     case 'MESSAGE_RECEIVED':
     case 'MATCHING_TRIP_PUBLISHED':

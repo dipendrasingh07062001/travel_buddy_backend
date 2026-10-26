@@ -176,6 +176,10 @@ describe('Firebase authentication HTTP contract', () => {
     });
 
     expect(response.statusCode).toBe(403);
-    expect(response.json().error.code).toBe('ACCOUNT_DISABLED');
+    expect(response.json().error).toMatchObject({
+      code: 'ACCOUNT_SUSPENDED',
+      message:
+        'This account is suspended. You can still download your data or make a data request.',
+    });
   });
 });
