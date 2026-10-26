@@ -19,4 +19,10 @@ export const notificationTitles: Record<NotificationType, string> = {
   SETTLEMENT_CANCELLED: 'Settlement cancelled',
   PROFILE_PHOTO_REMOVED: 'Your profile photo was removed',
   MATCHING_TRIP_PUBLISHED: 'A new trip matches your saved alert',
+  TRIP_REMOVED: 'Your trip was removed',
+  COMMUNITY_POST_REMOVED: 'Your community post was removed',
+  COMMUNITY_COMMENT_REMOVED: 'Your comment was removed',
+  MESSAGE_REMOVED: 'Your trip message was removed',
+  ACCOUNT_SUSPENDED: 'Your account was suspended',
+  ACCOUNT_RESTORED: 'Your account access was restored',
 };

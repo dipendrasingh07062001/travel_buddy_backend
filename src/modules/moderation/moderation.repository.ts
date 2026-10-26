@@ -2,6 +2,8 @@ import { database } from '../../database/client.js';
 import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 import { AppError } from '../../errors/app-error.js';
 import type {
+  ModerationAction,
+  NotificationType,
   Prisma,
   Report,
   ReportStatus,
@@ -16,6 +18,46 @@ import { createNotifications } from '../notifications/notification.repository.js
 
 type Transaction = Prisma.TransactionClient;
 type Resolution = 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT';
+
+interface ModerationNotice {
+  type: NotificationType;
+  recipientId: string;
+  sourceId: string;
+  eventKey: string;
+  tripId?: string;
+}
+
+// One notice per suspension or restore action, so a later suspension of the
+// same account still gets its own notice.
+function accountNotice(
+  action: Pick<ModerationAction, 'id' | 'action' | 'targetId'>,
+): ModerationNotice {
+  const suspended = action.action === 'USER_SUSPENDED';
+  return {
+    type: suspended ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_RESTORED',
+    recipientId: action.targetId,
+    sourceId: action.id,
+    eventKey: `moderation-action:${action.id}`,
+  };
+}
+
+// Tells the affected user what happened, in the moderation transaction. The
+// notice never carries the moderator (no actorId), the reporter or the
+// moderator's internal reason.
+function notifyAffectedUser(
+  tx: Transaction,
+  notice: ModerationNotice,
+  createdAt = new Date(),
+) {
+  return createNotifications(tx, {
+    recipientIds: [notice.recipientId],
+    type: notice.type,
+    eventKey: notice.eventKey,
+    sourceId: notice.sourceId,
+    ...(notice.tripId && { tripId: notice.tripId }),
+    createdAt,
+  });
+}
 
 function targetId(report: Report): string {
   const id =
@@ -382,6 +424,8 @@ async function removeContent(
 ): Promise<{ removedPhotoKey: string | null }> {
   let count = 0;
   let removedPhotoKey: string | null = null;
+  // Profile photos send their own notice, which predates these.
+  let notice: ModerationNotice | null = null;
   switch (report.targetType) {
     case 'PROFILE_PHOTO':
       // Only the reported photo is removed; a replacement the user has
@@ -399,7 +443,7 @@ async function removeContent(
       await tx.$queryRaw`SELECT id FROM trips WHERE id = ${report.reportedTripId!}::uuid FOR UPDATE`;
       const before = await tx.trip.findUnique({
         where: { id: report.reportedTripId! },
-        select: tripHistorySelect,
+        select: { ...tripHistorySelect, ownerId: true },
       });
       count = (
         await tx.trip.updateMany({
@@ -420,25 +464,58 @@ async function removeContent(
           actorId,
           now,
         );
+        notice = {
+          type: 'TRIP_REMOVED',
+          recipientId: before.ownerId,
+          sourceId: before.id,
+          eventKey: `trip:${before.id}:moderation-removed`,
+          tripId: before.id,
+        };
       }
       break;
     }
-    case 'COMMUNITY_POST':
+    case 'COMMUNITY_POST': {
+      const post = await tx.communityPost.findUnique({
+        where: { id: report.reportedCommunityPostId! },
+        select: { id: true, authorId: true },
+      });
       count = (
         await tx.communityPost.updateMany({
           where: { id: report.reportedCommunityPostId!, removedAt: null },
           data: { status: 'REMOVED', removedAt: now },
         })
       ).count;
+      if (post) {
+        notice = {
+          type: 'COMMUNITY_POST_REMOVED',
+          recipientId: post.authorId,
+          sourceId: post.id,
+          eventKey: `community-post:${post.id}:moderation-removed`,
+        };
+      }
       break;
-    case 'COMMUNITY_COMMENT':
+    }
+    case 'COMMUNITY_COMMENT': {
+      const comment = await tx.communityComment.findUnique({
+        where: { id: report.reportedCommunityCommentId! },
+        select: { id: true, authorId: true },
+      });
       count = (
         await tx.communityComment.updateMany({
           where: { id: report.reportedCommunityCommentId!, removedAt: null },
           data: { status: 'REMOVED', removedAt: now },
         })
       ).count;
+      if (comment) {
+        notice = {
+          type: 'COMMUNITY_COMMENT_REMOVED',
+          recipientId: comment.authorId,
+          sourceId: comment.id,
+          eventKey: `community-comment:${comment.id}:moderation-removed`,
+        };
+      }
       break;
+    }
     case 'MESSAGE': {
       const message = await tx.message.findUnique({
         where: { id: report.reportedMessageId! },
@@ -466,6 +543,13 @@ async function removeContent(
             messageId: message.id,
             tripId: message.conversation.tripId,
           });
+          notice = {
+            type: 'MESSAGE_REMOVED',
+            recipientId: message.senderId,
+            sourceId: message.id,
+            eventKey: `message:${message.id}:moderation-removed`,
+            tripId: message.conversation.tripId,
+          };
         }
       }
       break;
@@ -484,6 +568,7 @@ async function removeContent(
       'The reported content is already removed or unavailable.',
     );
   }
+  if (notice) await notifyAffectedUser(tx, notice, now);
   return { removedPhotoKey };
 }
 
@@ -571,7 +656,7 @@ export async function resolveReport(
         new Date(),
       ));
     }
-    await tx.moderationAction.create({
+    const recorded = await tx.moderationAction.create({
       data: {
         actorId,
         reportId,
@@ -581,6 +666,9 @@ export async function resolveReport(
         reason,
       },
     });
+    if (action === 'USER_SUSPENDED') {
+      await notifyAffectedUser(tx, accountNotice(recorded));
+    }
     return {
       report: await tx.report.findUniqueOrThrow({ where: { id: reportId } }),
       // The caller deletes this public file once the transaction commits.
@@ -660,7 +748,7 @@ export async function suspendAccountDirect(
 ) {
   return database.$transaction(async (tx) => {
     await suspendUser(tx, userId, actorId, actorRole);
-    await tx.moderationAction.create({
+    const recorded = await tx.moderationAction.create({
       data: {
         actorId,
         action: 'USER_SUSPENDED',
@@ -669,6 +757,7 @@ export async function suspendAccountDirect(
         reason,
       },
     });
+    await notifyAffectedUser(tx, accountNotice(recorded));
     return tx.user.findUniqueOrThrow({
       where: { id: userId },
       select: { id: true, status: true },
@@ -702,7 +791,7 @@ export async function restoreAccount(
         ? { statusBeforeDeletion: 'ACTIVE' }
         : { status: 'ACTIVE' },
     });
-    await tx.moderationAction.create({
+    const recorded = await tx.moderationAction.create({
       data: {
         actorId,
         action: 'USER_RESTORED',
@@ -711,6 +800,7 @@ export async function restoreAccount(
         reason,
       },
     });
+    await notifyAffectedUser(tx, accountNotice(recorded));
     return tx.user.findUniqueOrThrow({
       where: { id: userId },
       select: { id: true, status: true },

@@ -165,6 +165,44 @@ async function report(
   return response.json().data.id as string;
 }
 
+const moderationNoticeTypes = [
+  'TRIP_REMOVED',
+  'COMMUNITY_POST_REMOVED',
+  'COMMUNITY_COMMENT_REMOVED',
+  'MESSAGE_REMOVED',
+  'ACCOUNT_SUSPENDED',
+  'ACCOUNT_RESTORED',
+] as const;
+
+function moderationNotices(account: keyof typeof ids) {
+  return database.notification.findMany({
+    where: {
+      recipientId: ids[account],
+      type: { in: [...moderationNoticeTypes] },
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { type: true, sourceId: true, tripId: true, actorId: true },
+  });
+}
+
+async function resolveReport(
+  reportId: string,
+  resolution: 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT',
+  reason: string,
+) {
+  await app.inject({
+    method: 'POST',
+    url: `/api/v1/admin/reports/${reportId}/start-review`,
+    headers: headers('moderator'),
+  });
+  return app.inject({
+    method: 'POST',
+    url: `/api/v1/admin/reports/${reportId}/resolve`,
+    headers: headers('moderator'),
+    payload: { resolution, reason },
+  });
+}
+
 describe('moderation and enforcement', () => {
   it('denies non-staff and restricts audit access to administrators', async () => {
     const guest = await app.inject({
@@ -242,6 +280,26 @@ describe('moderation and enforcement', () => {
     });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json().data.status).toBe('ACTIONED');
+    // The owner learns what was removed; the reporter, a trip member, does
+    // not, and nothing names the moderator or repeats their reason.
+    expect(await moderationNotices('owner')).toEqual([
+      { type: 'TRIP_REMOVED', sourceId: tripId, tripId, actorId: null },
+    ]);
+    expect(await moderationNotices('reporter')).toEqual([]);
+    const inbox = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/notifications',
+      headers: headers('owner'),
+    });
+    expect(inbox.json().data).toContainEqual(
+      expect.objectContaining({
+        type: 'TRIP_REMOVED',
+        title: 'Your trip was removed',
+        sourceId: tripId,
+        actorId: null,
+      }),
+    );
+    expect(JSON.stringify(inbox.json())).not.toContain('commercial spam');
     const tripHistory = await database.tripChange.findMany({
       where: { tripId },
     });
@@ -311,6 +369,12 @@ describe('moderation and enforcement', () => {
     });
     expect(stored.status).toBe('REMOVED');
     expect(stored.removedAt).not.toBeNull();
+    expect(await moderationNotices('owner')).toContainEqual({
+      type: 'COMMUNITY_COMMENT_REMOVED',
+      sourceId: commentId,
+      tripId: null,
+      actorId: null,
+    });
   });
 
   it('removes a reported community post while retaining the record', async () => {
@@ -340,6 +404,12 @@ describe('moderation and enforcement', () => {
       url: `/api/v1/community-posts/${postId}`,
     });
     expect(publicPost.statusCode).toBe(404);
+    expect(await moderationNotices('owner')).toContainEqual({
+      type: 'COMMUNITY_POST_REMOVED',
+      sourceId: postId,
+      tripId: null,
+      actorId: null,
+    });
   });
 
   it('redacts a reported private message and preserves its revision', async () => {
@@ -381,6 +451,13 @@ describe('moderation and enforcement', () => {
     });
     expect(visible.statusCode).toBe(200);
     expect(visible.json().data[0].body).toBeNull();
+    expect(await moderationNotices('owner')).toContainEqual({
+      type: 'MESSAGE_REMOVED',
+      sourceId: messageId,
+      tripId,
+      actorId: null,
+    });
+    expect(await moderationNotices('reporter')).toEqual([]);
   });
 
   it('suspends a reported account and permits only an admin to restore it', async () => {
@@ -406,7 +483,16 @@ describe('moderation and enforcement', () => {
       headers: headers('owner'),
     });
     expect(disabled.statusCode).toBe(403);
-    expect(disabled.json().error.code).toBe('ACCOUNT_DISABLED');
+    expect(disabled.json().error.code).toBe('ACCOUNT_SUSPENDED');
+    const suspension = await database.moderationAction.findFirstOrThrow({
+      where: { reportId, action: 'USER_SUSPENDED' },
+    });
+    expect(await moderationNotices('owner')).toContainEqual({
+      type: 'ACCOUNT_SUSPENDED',
+      sourceId: suspension.id,
+      tripId: null,
+      actorId: null,
+    });
 
     const staffRestore = await app.inject({
       method: 'POST',
@@ -428,6 +514,22 @@ describe('moderation and enforcement', () => {
       headers: headers('owner'),
     });
     expect(restored.statusCode).toBe(200);
+    const restoration = await database.moderationAction.findFirstOrThrow({
+      where: { targetId: ids.owner, action: 'USER_RESTORED' },
+    });
+    const inbox = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/notifications',
+      headers: headers('owner'),
+    });
+    expect(inbox.json().data).toContainEqual(
+      expect.objectContaining({
+        type: 'ACCOUNT_RESTORED',
+        title: 'Your account access was restored',
+        sourceId: restoration.id,
+        actorId: null,
+      }),
+    );
   });
 
   it('rejects privilege abuse and whitespace-only moderation reasons', async () => {
@@ -454,5 +556,49 @@ describe('moderation and enforcement', () => {
     });
     expect(blank.statusCode).toBe(400);
     expect(blank.json().error.code).toBe('INVALID_MODERATION_REASON');
+  });
+
+  it('does not tell a reported account about a dismissed report', async () => {
+    const before = await moderationNotices('owner');
+    const reportId = await report('USER', ids.owner);
+    const resolved = await resolveReport(
+      reportId,
+      'DISMISS',
+      'No policy violation was found.',
+    );
+    expect(resolved.statusCode).toBe(200);
+    expect(resolved.json().data.status).toBe('DISMISSED');
+    expect(await moderationNotices('owner')).toEqual(before);
+  });
+
+  it('sends one notice for each direct suspension and restore', async () => {
+    const before = await moderationNotices('owner');
+    for (let round = 0; round < 2; round += 1) {
+      const suspended = await app.inject({
+        method: 'POST',
+        url: `/api/v1/admin/users/${ids.owner}/suspend`,
+        headers: headers('moderator'),
+        payload: { reason: 'Direct suspension for repeated spam.' },
+      });
+      expect(suspended.statusCode).toBe(200);
+      const restored = await app.inject({
+        method: 'POST',
+        url: `/api/v1/admin/users/${ids.owner}/restore`,
+        headers: headers('admin'),
+        payload: { reason: 'Suspension period ended after review.' },
+      });
+      expect(restored.statusCode).toBe(200);
+    }
+    const after = await moderationNotices('owner');
+    expect(after.slice(before.length).map((notice) => notice.type)).toEqual([
+      'ACCOUNT_SUSPENDED',
+      'ACCOUNT_RESTORED',
+      'ACCOUNT_SUSPENDED',
+      'ACCOUNT_RESTORED',
+    ]);
+    expect(new Set(after.map((notice) => notice.sourceId)).size).toBe(
+      after.length,
+    );
+    expect(after.every((notice) => notice.actorId === null)).toBe(true);
   });
 });
