@@ -8,15 +8,20 @@ export function listPolicyAcceptances(userId: string) {
   });
 }
 
-export function acceptPolicyVersion(
+// Prisma's upsert here reads before inserting, so simultaneous duplicate
+// submissions raced into a unique-key error. ON CONFLICT DO NOTHING is atomic,
+// and reading afterwards returns the first acceptance and its timestamp.
+export async function acceptPolicyVersion(
   userId: string,
   policyType: PolicyType,
   version: string,
 ) {
-  return database.policyAcceptance.upsert({
+  await database.policyAcceptance.createMany({
+    data: { userId, policyType, version },
+    skipDuplicates: true,
+  });
+  return database.policyAcceptance.findUniqueOrThrow({
     where: { userId_policyType_version: { userId, policyType, version } },
-    create: { userId, policyType, version },
-    update: {},
     select: { policyType: true, version: true, acceptedAt: true },
   });
 }
