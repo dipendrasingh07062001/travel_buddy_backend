@@ -4,6 +4,7 @@ import type {
   CommunityRepository,
   ListCommunitiesQuery,
   ListCommunityPostsQuery,
+  ListRecentCommunityPostsQuery,
 } from './community.types.js';
 
 export async function requireActiveCommunity(
@@ -23,6 +24,7 @@ export function listCommunities(
 ) {
   const search = query.search?.trim();
   return repository.listActive({
+    sort: query.sort,
     page: query.page,
     pageSize: query.pageSize,
     ...(search && { search }),
@@ -36,6 +38,16 @@ export async function listCommunityPosts(
 ) {
   const community = await requireActiveCommunity(slug, repository);
   return repository.listPublishedPosts(community.id, query);
+}
+
+export async function listRecentCommunityPosts(
+  { community: slug, ...query }: ListRecentCommunityPostsQuery,
+  repository: CommunityRepository,
+) {
+  const community = slug
+    ? await requireActiveCommunity(slug, repository)
+    : null;
+  return repository.listPublishedPosts(community?.id ?? null, query);
 }
 
 export async function listCommunityTrips(

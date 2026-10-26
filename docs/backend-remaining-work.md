@@ -6,13 +6,15 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Public-text privacy: reject supported disclosures in public-facing writes and
-  mask matching legacy text in public responses without rewriting stored content.
-  See [scope, behavior and limits](public-text-privacy.md).
+- Home discovery: recent public posts across all communities and a transparent
+  `activity` sort for communities. See [contract and rules](home-discovery.md).
 - No new database migration, provider or API key is required for this milestone.
 
 ## Already implemented
 
+- Public-text privacy: reject supported disclosures in public-facing writes and
+  mask matching legacy text in public responses without rewriting stored content.
+  See [scope, behavior and limits](public-text-privacy.md).
 - Atomic connection-request quota: serialize the rolling 20-per-requester limit
   with request/notification creation in PostgreSQL. See [rules and tests](connection-request-limits.md).
 - Trip-change history: structured, private, transactional history of material
@@ -34,9 +36,12 @@ Frontend/UI implementation belongs to the Flutter developer.
 - Account/policy notice coverage: decide which notices are mandatory versus
   optional and approved content/version rules. Existing policy acceptance and
   opt-in email preferences do not settle these decisions.
-- Confirm smaller discovery requirements against the final contract: explicit
-  public trip-status filters and a cross-community recent feed, if required.
-  Do not add speculative endpoints without confirming the product need.
+- Explicit public trip-status filter for trip search (PRD §7.3). The
+  cross-community recent posts list is done; a mixed trips-and-posts timeline
+  is not needed because the home design uses separate sections.
+- Community cover images: the Flutter design shows a photo on every community
+  card, but communities have no image field yet. Needs an admin upload flow
+  using the existing object storage; plan it as its own milestone.
 - Recheck PRD-to-API coverage at the end, including edge cases across features.
 
 ## Deferred external integrations and launch checks

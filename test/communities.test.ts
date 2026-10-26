@@ -52,6 +52,13 @@ const post: CommunityPostRecord = {
   title: 'Local transport options',
   body: 'What are the practical transport options around Manali?',
   author: { id: userId, displayName: currentUser.displayName },
+  community: {
+    id: communityId,
+    slug: 'manali',
+    name: 'Manali',
+    region: 'Himachal Pradesh',
+    countryCode: 'IN',
+  },
   publishedAt: new Date('2026-09-20T08:00:00.000Z'),
   createdAt: new Date('2026-09-20T07:00:00.000Z'),
   updatedAt: new Date('2026-09-20T08:00:00.000Z'),
@@ -105,9 +112,13 @@ const authRepository: AuthRepository = {
 };
 
 const follows = new Map<string, CommunityFollowRecord>();
+let capturedCommunityQuery:
+  Parameters<CommunityRepository['listActive']>[0] | undefined;
+let capturedPostCommunityId: string | null | undefined;
 
 const communityRepository: CommunityRepository = {
   async listActive(query) {
+    capturedCommunityQuery = query;
     const matches = !query.search || community.name.includes(query.search);
     return {
       communities: matches ? [community] : [],
@@ -117,7 +128,8 @@ const communityRepository: CommunityRepository = {
   async findActiveBySlug(slug) {
     return slug === community.slug ? community : null;
   },
-  async listPublishedPosts(_id, query) {
+  async listPublishedPosts(id, query) {
+    capturedPostCommunityId = id;
     const posts = !query.type || query.type === post.type ? [post] : [];
     return { posts, totalItems: posts.length };
   },
@@ -186,6 +198,30 @@ describe('community HTTP contract', () => {
       activity: { followers: 2, upcomingTrips: 1, posts: 1 },
     });
     expect(response.json().pagination.totalItems).toBe(1);
+    expect(capturedCommunityQuery?.sort).toBe('name');
+  });
+
+  it('forwards the transparent activity sort', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/communities?sort=activity&pageSize=6',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(capturedCommunityQuery).toMatchObject({
+      sort: 'activity',
+      page: 1,
+      pageSize: 6,
+    });
+  });
+
+  it('rejects an unknown community sort', async () => {
+    capturedCommunityQuery = undefined;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/communities?sort=followers',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(capturedCommunityQuery).toBeUndefined();
   });
 
   it('returns a stable not-found error for unknown communities', async () => {
@@ -268,7 +304,69 @@ describe('community HTTP contract', () => {
       type: 'QUESTION',
       author: { id: userId },
     });
+    expect(matching.json().data[0]).not.toHaveProperty('community');
     expect(empty.json().data).toEqual([]);
+  });
+
+  it('lets guests browse recent posts across every community', async () => {
+    capturedPostCommunityId = undefined;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/community-posts',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(capturedPostCommunityId).toBeNull();
+    expect(response.json().data[0]).toMatchObject({
+      id: post.id,
+      communityId,
+      community: {
+        id: communityId,
+        slug: 'manali',
+        name: 'Manali',
+        region: 'Himachal Pradesh',
+        countryCode: 'IN',
+      },
+    });
+    expect(response.json().pagination).toEqual({
+      page: 1,
+      pageSize: 20,
+      totalItems: 1,
+      totalPages: 1,
+    });
+  });
+
+  it('limits recent posts to one destination and type', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/community-posts?community=MANALI&type=EXPERIENCE',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(capturedPostCommunityId).toBe(communityId);
+    expect(response.json().data).toEqual([]);
+  });
+
+  it('returns not found for an unknown destination filter', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/community-posts?community=unknown-place',
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('COMMUNITY_NOT_FOUND');
+  });
+
+  it.each([
+    'community=not%20a%20slug',
+    'type=REVIEW',
+    'page=0',
+    'pageSize=101',
+  ])('rejects an invalid recent post query: %s', async (query) => {
+    capturedPostCommunityId = undefined;
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/community-posts?${query}`,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(capturedPostCommunityId).toBeUndefined();
   });
 
   it('requires authentication and follows idempotently', async () => {

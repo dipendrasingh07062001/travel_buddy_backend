@@ -30,6 +30,15 @@ const publicPostSelect = {
   createdAt: true,
   updatedAt: true,
   author: { select: { id: true, displayName: true } },
+  community: {
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      region: true,
+      countryCode: true,
+    },
+  },
 } satisfies Prisma.CommunityPostSelect;
 
 function visiblePostAuthor(viewerId?: string): Prisma.UserWhereInput {
@@ -115,6 +124,29 @@ export const prismaCommunityRepository: CommunityRepository = {
         ],
       }),
     };
+    if (query.sort === 'activity') {
+      // Communities are curated by administrators, so ranking the full active
+      // set in memory stays small and reuses the exact counts shown publicly.
+      // The sort is stable, so ties keep the name order.
+      const ranked = (
+        await addActivityCounts(
+          await database.community.findMany({
+            where,
+            select: communitySelect,
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          }),
+        )
+      ).sort(
+        (left, right) =>
+          right.upcomingTripCount - left.upcomingTripCount ||
+          right.postCount - left.postCount,
+      );
+      const start = (query.page - 1) * query.pageSize;
+      return {
+        communities: ranked.slice(start, start + query.pageSize),
+        totalItems: ranked.length,
+      };
+    }
     const [communities, totalItems] = await database.$transaction([
       database.community.findMany({
         where,
@@ -157,7 +189,8 @@ export const prismaCommunityRepository: CommunityRepository = {
 
   async listPublishedPosts(communityId, query) {
     const where: Prisma.CommunityPostWhereInput = {
-      communityId,
+      ...(communityId && { communityId }),
+      community: { status: 'ACTIVE' },
       status: 'PUBLISHED',
       removedAt: null,
       ...(query.type && { type: query.type }),

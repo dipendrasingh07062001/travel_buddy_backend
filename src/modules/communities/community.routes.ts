@@ -18,6 +18,7 @@ import {
   presentCommunity,
   presentCommunityPost,
   presentFollowedCommunity,
+  presentRecentCommunityPost,
 } from './community.presenter.js';
 import { prismaCommunityRepository } from './community.repository.js';
 import {
@@ -25,13 +26,17 @@ import {
   listCommunities,
   listCommunityPosts,
   listCommunityTrips,
+  listRecentCommunityPosts,
   requireActiveCommunity,
   unfollowCommunity,
 } from './community.service.js';
-import type {
-  CommunityRouteDependencies,
-  ListCommunitiesQuery,
-  ListCommunityPostsQuery,
+import {
+  communitySortValues,
+  type CommunityRouteDependencies,
+  type CommunitySort,
+  type ListCommunitiesQuery,
+  type ListCommunityPostsQuery,
+  type ListRecentCommunityPostsQuery,
 } from './community.types.js';
 
 interface SlugParams {
@@ -49,10 +54,15 @@ interface PageQuery {
 
 interface CommunityListQuery extends PageQuery {
   search?: string;
+  sort?: CommunitySort;
 }
 
 interface CommunityPostListQuery extends PageQuery {
   type?: CommunityPostType;
+}
+
+interface RecentPostListQuery extends CommunityPostListQuery {
+  community?: string;
 }
 
 type CommunityTripListQuery = Omit<ListTripsQuery, 'destination'>;
@@ -137,6 +147,15 @@ const communityPostSchema = {
   },
 } as const;
 
+const recentCommunityPostSchema = {
+  ...communityPostSchema,
+  required: [...communityPostSchema.required, 'community'],
+  properties: {
+    ...communityPostSchema.properties,
+    community: publicTripSchema.properties.destination,
+  },
+} as const;
+
 const slugParamsSchema = {
   type: 'object',
   required: ['slug'],
@@ -178,6 +197,13 @@ export async function registerCommunityRoutes(
           additionalProperties: false,
           properties: {
             search: { type: 'string', minLength: 1, maxLength: 120 },
+            sort: {
+              type: 'string',
+              enum: communitySortValues,
+              default: 'name',
+              description:
+                'activity: most upcoming public trips, then most public posts (the counts shown in activity), then name.',
+            },
             ...paginationQuerySchema,
           },
         },
@@ -196,6 +222,7 @@ export async function registerCommunityRoutes(
     async (request) => {
       const query: ListCommunitiesQuery = {
         ...(request.query.search && { search: request.query.search }),
+        sort: request.query.sort ?? 'name',
         page: request.query.page ?? 1,
         pageSize: request.query.pageSize ?? 20,
       };
@@ -317,6 +344,52 @@ export async function registerCommunityRoutes(
       );
       return {
         data: result.posts.map(presentCommunityPost),
+        pagination: pagination(query.page, query.pageSize, result.totalItems),
+      };
+    },
+  );
+
+  app.get<{ Querystring: RecentPostListQuery }>(
+    '/community-posts',
+    {
+      schema: {
+        tags: ['Communities'],
+        summary: 'Browse recent public posts across destination communities',
+        description:
+          'Newest first. Pass a community slug to limit the list to one destination.',
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            community: slugParamsSchema.properties.slug,
+            type: { type: 'string', enum: postTypes },
+            ...paginationQuerySchema,
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            required: ['data', 'pagination'],
+            properties: {
+              data: { type: 'array', items: recentCommunityPostSchema },
+              pagination: paginationSchema,
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const viewer = await authenticateRequestIfPresent(request, auth);
+      const query: ListRecentCommunityPostsQuery = {
+        ...(viewer && { viewerId: viewer.id }),
+        ...(request.query.community && { community: request.query.community }),
+        ...(request.query.type && { type: request.query.type }),
+        page: request.query.page ?? 1,
+        pageSize: request.query.pageSize ?? 20,
+      };
+      const result = await listRecentCommunityPosts(query, repository);
+      return {
+        data: result.posts.map(presentRecentCommunityPost),
         pagination: pagination(query.page, query.pageSize, result.totalItems),
       };
     },
