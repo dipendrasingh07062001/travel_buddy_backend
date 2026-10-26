@@ -23,6 +23,10 @@ export interface CommunityPostRecord {
     id: string;
     displayName: string | null;
   };
+  community: Pick<
+    CommunitySummaryRecord,
+    'id' | 'slug' | 'name' | 'region' | 'countryCode'
+  >;
   publishedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -39,8 +43,12 @@ export interface FollowedCommunityRecord {
   community: CommunitySummaryRecord;
 }
 
+export const communitySortValues = ['name', 'activity'] as const;
+export type CommunitySort = (typeof communitySortValues)[number];
+
 export interface ListCommunitiesQuery {
   search?: string;
+  sort: CommunitySort;
   page: number;
   pageSize: number;
 }
@@ -50,6 +58,11 @@ export interface ListCommunityPostsQuery {
   type?: CommunityPostType;
   page: number;
   pageSize: number;
+}
+
+export interface ListRecentCommunityPostsQuery extends ListCommunityPostsQuery {
+  // Optional destination filter: a community slug (merged slugs resolve).
+  community?: string;
 }
 
 export interface ListFollowedCommunitiesQuery {
@@ -62,8 +75,9 @@ export interface CommunityRepository {
     query: ListCommunitiesQuery,
   ): Promise<{ communities: CommunitySummaryRecord[]; totalItems: number }>;
   findActiveBySlug(slug: string): Promise<CommunitySummaryRecord | null>;
+  // A null community lists posts from every active community.
   listPublishedPosts(
-    communityId: string,
+    communityId: string | null,
     query: ListCommunityPostsQuery,
   ): Promise<{ posts: CommunityPostRecord[]; totalItems: number }>;
   follow(

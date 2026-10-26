@@ -386,11 +386,15 @@ Guests can browse active destination hubs and their public activity:
 - `GET /api/v1/communities/:slug`
 - `GET /api/v1/communities/:slug/trips`
 - `GET /api/v1/communities/:slug/posts`
+- `GET /api/v1/community-posts`
 
-The list supports case-insensitive `search`, `page`, and `pageSize`. Community
-trip results reuse the objective public-trip filters. Community posts can be
-filtered by `DISCUSSION`, `QUESTION`, or `EXPERIENCE`; only published posts from
-active accounts whose community activity is public are returned.
+The list supports case-insensitive `search`, `sort` (`name` by default, or
+`activity`), `page`, and `pageSize`. Community trip results reuse the objective
+public-trip filters. Community posts can be filtered by `DISCUSSION`,
+`QUESTION`, or `EXPERIENCE`; only published posts from active accounts whose
+community activity is public are returned. `GET /api/v1/community-posts` lists
+those posts across all active communities, newest first, with an optional
+`community` slug filter. See [home discovery rules](docs/home-discovery.md).
 
 Authenticated users follow communities with these idempotent operations:
 

@@ -53,6 +53,14 @@ export function presentCommunityPost(post: CommunityPostRecord) {
   };
 }
 
+// Cross-community lists name the destination so a card can show its source.
+export function presentRecentCommunityPost(post: CommunityPostRecord) {
+  return {
+    ...presentCommunityPost(post),
+    community: presentPublicDestination(post.community),
+  };
+}
+
 export function presentFollowedCommunity(follow: FollowedCommunityRecord) {
   return {
     followedAt: follow.followedAt.toISOString(),
