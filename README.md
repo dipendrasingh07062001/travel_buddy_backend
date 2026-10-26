@@ -59,7 +59,9 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 - `availableOnly`: `true` returns only `PUBLISHED` trips with
   `currentGroupSize < desiredGroupSize`; defaults to `false`, which also
   includes `FULL` trips. A trip manually marked full is excluded even if its
-  recorded group count is below capacity.
+  recorded group count is below capacity. This is also the PRD's trip-status
+  filter: only `PUBLISHED` and `FULL` trips are ever public, so there is no
+  separate `status` parameter. Each result's `status` shows whether it is full.
 - `transport`: `BUS`, `TRAIN`, `FLIGHT`, `CAR`, `MOTORCYCLE`, `OTHER`, or
   `UNDECIDED`
 - `sort`: `newest` (default), `departure_asc`, or `date_overlap`
