@@ -3,7 +3,6 @@ import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
 import { AppError } from '../../errors/app-error.js';
 import type {
   ModerationAction,
-  NotificationType,
   Prisma,
   Report,
   ReportStatus,
@@ -15,17 +14,19 @@ import {
   type ObjectStorage,
 } from '../../storage/object-storage.js';
 import { createNotifications } from '../notifications/notification.repository.js';
+import {
+  notifyAffectedUser,
+  requireModeratableAccount,
+  type ModerationNotice,
+  type Transaction,
+} from './moderation-shared.js';
+import {
+  applyRestriction,
+  type RestrictionInput,
+} from './restriction.repository.js';
 
-type Transaction = Prisma.TransactionClient;
-type Resolution = 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT';
-
-interface ModerationNotice {
-  type: NotificationType;
-  recipientId: string;
-  sourceId: string;
-  eventKey: string;
-  tripId?: string;
-}
+type Resolution =
+  'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT' | 'RESTRICT_FEATURE';
 
 // One notice per suspension or restore action, so a later suspension of the
 // same account still gets its own notice.
@@ -39,24 +40,6 @@ function accountNotice(
     sourceId: action.id,
     eventKey: `moderation-action:${action.id}`,
   };
-}
-
-// Tells the affected user what happened, in the moderation transaction. The
-// notice never carries the moderator (no actorId), the reporter or the
-// moderator's internal reason.
-function notifyAffectedUser(
-  tx: Transaction,
-  notice: ModerationNotice,
-  createdAt = new Date(),
-) {
-  return createNotifications(tx, {
-    recipientIds: [notice.recipientId],
-    type: notice.type,
-    eventKey: notice.eventKey,
-    sourceId: notice.sourceId,
-    ...(notice.tripId && { tripId: notice.tripId }),
-    createdAt,
-  });
 }
 
 function targetId(report: Report): string {
@@ -336,27 +319,6 @@ async function reportedAccountId(
   );
 }
 
-// Staff cannot act on their own account or on administrators, and only
-// administrators can act on moderators.
-function requireModeratableAccount(
-  userId: string,
-  targetRole: StaffRole,
-  actorId: string,
-  actorRole: StaffRole,
-): void {
-  if (
-    userId === actorId ||
-    targetRole === 'ADMIN' ||
-    (targetRole === 'MODERATOR' && actorRole !== 'ADMIN')
-  ) {
-    throw new AppError(
-      403,
-      'STAFF_TARGET_PROTECTED',
-      'Staff cannot take this action on this account.',
-    );
-  }
-}
-
 async function suspendUser(
   tx: Transaction,
   userId: string,
@@ -602,7 +564,15 @@ export async function resolveReport(
   actorRole: StaffRole,
   resolution: Resolution,
   reason: string,
+  restriction?: RestrictionInput,
 ) {
+  if ((resolution === 'RESTRICT_FEATURE') !== (restriction !== undefined)) {
+    throw new AppError(
+      400,
+      'INVALID_RESOLUTION',
+      'Send restriction details only with the RESTRICT_FEATURE resolution, which requires them.',
+    );
+  }
   return database.$transaction(async (tx) => {
     const report = await tx.report.findUnique({ where: { id: reportId } });
     if (!report)
@@ -637,7 +607,11 @@ export async function resolveReport(
       );
 
     let removedPhotoKey: string | null = null;
-    let action: 'REPORT_DISMISSED' | 'USER_SUSPENDED' | 'CONTENT_REMOVED';
+    let action:
+      | 'REPORT_DISMISSED'
+      | 'USER_SUSPENDED'
+      | 'CONTENT_REMOVED'
+      | 'FEATURE_RESTRICTED';
     let actionTargetType = report.targetType;
     let actionTargetId = targetId(report);
     if (resolution === 'DISMISS') {
@@ -647,6 +621,18 @@ export async function resolveReport(
       actionTargetType = 'USER';
       actionTargetId = await reportedAccountId(tx, report);
       await suspendUser(tx, actionTargetId, actorId, actorRole);
+    } else if (resolution === 'RESTRICT_FEATURE') {
+      action = 'FEATURE_RESTRICTED';
+      actionTargetType = 'USER';
+      actionTargetId = await reportedAccountId(tx, report);
+      await applyRestriction(tx, {
+        ...restriction!,
+        userId: actionTargetId,
+        actorId,
+        actorRole,
+        reason,
+        reportId,
+      });
     } else {
       action = 'CONTENT_REMOVED';
       ({ removedPhotoKey } = await removeContent(

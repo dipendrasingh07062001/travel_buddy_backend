@@ -25,4 +25,6 @@ export const notificationTitles: Record<NotificationType, string> = {
   MESSAGE_REMOVED: 'Your trip message was removed',
   ACCOUNT_SUSPENDED: 'Your account was suspended',
   ACCOUNT_RESTORED: 'Your account access was restored',
+  FEATURE_RESTRICTED: 'A feature on your account was restricted',
+  FEATURE_RESTRICTION_LIFTED: 'A restriction on your account was lifted',
 };

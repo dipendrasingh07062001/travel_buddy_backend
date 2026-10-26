@@ -1,6 +1,7 @@
 import { database } from '../../database/client.js';
 import type { TripStatus } from '../../generated/prisma/client.js';
 import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
+import { requireFeatureAllowed } from '../moderation/restriction.repository.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import {
   messageInclude,
@@ -89,6 +90,7 @@ export const prismaMessagingRepository: MessagingRepository = {
 
   createMessage(tripId, senderId, body, now) {
     return database.$transaction(async (transaction) => {
+      await requireFeatureAllowed(transaction, senderId, 'MESSAGING', now);
       const room = await transaction.conversation.findFirst({
         where: {
           tripId,
@@ -174,6 +176,10 @@ export const prismaMessagingRepository: MessagingRepository = {
 
   changeMessage(messageId, senderId, action, body, now) {
     return database.$transaction(async (transaction) => {
+      // Deleting one's own message stays possible while messaging is restricted.
+      if (action === 'EDIT') {
+        await requireFeatureAllowed(transaction, senderId, 'MESSAGING', now);
+      }
       const message = await transaction.message.findFirst({
         where: {
           id: messageId,

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   tx: {
     $executeRaw: vi.fn(),
     $queryRaw: vi.fn(),
+    accountRestriction: { findFirst: vi.fn() },
     connectionRequest: { count: vi.fn(), create: vi.fn() },
   },
 }));
@@ -40,6 +41,7 @@ beforeEach(() => {
   mocks.tx.$queryRaw
     .mockResolvedValueOnce([{ id: input.requesterId }])
     .mockResolvedValueOnce([{ now }]);
+  mocks.tx.accountRestriction.findFirst.mockResolvedValue(null);
   mocks.tx.connectionRequest.count.mockResolvedValue(19);
   mocks.tx.connectionRequest.create.mockResolvedValue(request);
 });
@@ -107,6 +109,27 @@ describe('atomic connection-request quota repository contract', () => {
     await expect(create()).rejects.toThrow('Database clock unavailable.');
     expect(mocks.tx.connectionRequest.count).not.toHaveBeenCalled();
     expect(mocks.tx.connectionRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a restricted requester before counting or writing', async () => {
+    const endsAt = new Date('2026-10-20T00:00:00.000Z');
+    mocks.tx.accountRestriction.findFirst.mockResolvedValue({ endsAt });
+    await expect(create()).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'FEATURE_RESTRICTED',
+    });
+    expect(mocks.tx.accountRestriction.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId: input.requesterId,
+        feature: 'CONNECTION_REQUESTS',
+        liftedAt: null,
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+      },
+      select: { endsAt: true },
+    });
+    expect(mocks.tx.connectionRequest.count).not.toHaveBeenCalled();
+    expect(mocks.tx.connectionRequest.create).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
   });
 
   it('propagates notification failure so the database transaction rolls back', async () => {

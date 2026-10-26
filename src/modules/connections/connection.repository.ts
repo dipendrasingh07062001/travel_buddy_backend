@@ -1,5 +1,6 @@
 import { database, databaseSchema } from '../../database/client.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { requireFeatureAllowed } from '../moderation/restriction.repository.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { utcStartOfToday } from '../trips/trip.types.js';
 import { recordTripChange, tripHistorySelect } from '../trips/trip-history.js';
@@ -277,6 +278,12 @@ export const prismaConnectionRepository: ConnectionRepository = {
           SELECT clock_timestamp() AS now
         `;
         if (!clock) throw new Error('Database clock unavailable.');
+        await requireFeatureAllowed(
+          transaction,
+          input.requesterId,
+          'CONNECTION_REQUESTS',
+          clock.now,
+        );
         const since = new Date(clock.now.getTime() - requestWindowMilliseconds);
         const recent = await transaction.connectionRequest.count({
           where: { requesterId: input.requesterId, createdAt: { gte: since } },

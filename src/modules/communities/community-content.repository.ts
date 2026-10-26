@@ -1,5 +1,6 @@
 import { database } from '../../database/client.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { requireFeatureAllowed } from '../moderation/restriction.repository.js';
 import { lockActiveCommunity } from './community-lock.js';
 import type { CommunityContentRepository } from './community-content.types.js';
 
@@ -66,6 +67,12 @@ function withPublishedAt<T extends { publishedAt: Date | null }>(
 export const prismaCommunityContentRepository: CommunityContentRepository = {
   createPost(input) {
     return database.$transaction(async (transaction) => {
+      await requireFeatureAllowed(
+        transaction,
+        input.authorId,
+        'COMMUNITY_POSTING',
+        input.now,
+      );
       if (!(await lockActiveCommunity(transaction, input.communityId)))
         return null;
       const post = await transaction.communityPost.create({
@@ -94,6 +101,12 @@ export const prismaCommunityContentRepository: CommunityContentRepository = {
 
   updateOwnPost(input) {
     return database.$transaction(async (transaction) => {
+      await requireFeatureAllowed(
+        transaction,
+        input.authorId,
+        'COMMUNITY_POSTING',
+        input.now,
+      );
       const current = await transaction.communityPost.findFirst({
         where: {
           id: input.postId,
@@ -155,6 +168,7 @@ export const prismaCommunityContentRepository: CommunityContentRepository = {
 
   createComment(postId, authorId, body) {
     return database.$transaction(async (transaction) => {
+      await requireFeatureAllowed(transaction, authorId, 'COMMUNITY_POSTING');
       if (
         (await transaction.communityPost.count({
           where: publicPostWhere(postId, authorId),
@@ -171,6 +185,12 @@ export const prismaCommunityContentRepository: CommunityContentRepository = {
 
   updateOwnComment(commentId, authorId, body, now) {
     return database.$transaction(async (transaction) => {
+      await requireFeatureAllowed(
+        transaction,
+        authorId,
+        'COMMUNITY_POSTING',
+        now,
+      );
       const current = await transaction.communityComment.findFirst({
         where: {
           id: commentId,

@@ -29,6 +29,8 @@ export function emailCategory(type: NotificationType): EmailCategory | null {
     case 'MESSAGE_REMOVED':
     case 'ACCOUNT_SUSPENDED':
     case 'ACCOUNT_RESTORED':
+    case 'FEATURE_RESTRICTED':
+    case 'FEATURE_RESTRICTION_LIFTED':
       return 'SAFETY';
     case 'MESSAGE_RECEIVED':
     case 'MATCHING_TRIP_PUBLISHED':

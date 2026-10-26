@@ -34,6 +34,7 @@ import {
 import { registerMessagingRoutes } from './modules/messaging/messaging.routes.js';
 import type { MessagingRouteDependencies } from './modules/messaging/messaging.types.js';
 import { registerModerationRoutes } from './modules/moderation/moderation.routes.js';
+import { registerRestrictionRoutes } from './modules/moderation/restriction.routes.js';
 import { registerNotificationRoutes } from './modules/notifications/notification.routes.js';
 import { registerEmailPreferenceRoutes } from './modules/email/email-preference.routes.js';
 import type { EmailPreferenceDependencies } from './modules/email/email.types.js';
@@ -206,6 +207,7 @@ export function buildApp(options: BuildAppOptions = {}) {
         storage,
       );
       await registerModerationRoutes(api, authDependencies, storage);
+      await registerRestrictionRoutes(api, authDependencies);
       await registerAdminMetricsRoutes(
         api,
         authDependencies,
