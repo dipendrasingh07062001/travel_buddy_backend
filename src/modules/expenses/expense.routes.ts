@@ -94,6 +94,7 @@ const expenseView = {
     'version',
     'createdBy',
     'paidBy',
+    'rounding',
     'shares',
     'createdAt',
     'updatedAt',
@@ -113,12 +114,35 @@ const expenseView = {
     version: { type: 'integer' },
     createdBy: person,
     paidBy: person,
+    rounding: {
+      description:
+        'For an equal split that does not divide evenly: everyone owes baseSharePaise and the remainderPaise left over were added one each to participants in ascending member ID order. null for custom splits and even divisions.',
+      anyOf: [
+        {
+          type: 'object',
+          required: ['remainderPaise', 'baseSharePaise'],
+          properties: {
+            remainderPaise: { type: 'integer', minimum: 1 },
+            baseSharePaise: { type: 'integer', minimum: 0 },
+          },
+        },
+        { type: 'null' },
+      ],
+    },
     shares: {
       type: 'array',
       items: {
         type: 'object',
-        required: ['user', 'amountPaise'],
-        properties: { user: person, amountPaise: { type: 'integer' } },
+        required: ['user', 'amountPaise', 'roundingPaise'],
+        properties: {
+          user: person,
+          amountPaise: { type: 'integer' },
+          roundingPaise: {
+            type: 'integer',
+            description:
+              '1 when this share includes a leftover paisa of an equal split, otherwise 0.',
+          },
+        },
       },
     },
     createdAt: { type: 'string', format: 'date-time' },

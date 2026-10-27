@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calculateBalances,
+  equalSplitRounding,
   prepareExpense,
   prepareSettlementMethod,
 } from '../src/modules/expenses/expense.service.js';
@@ -94,6 +95,31 @@ describe('expense calculations', () => {
     expect(prepareExpense({ ...base, note: null }).note).toBeNull();
     // Leaving it out lets an edit keep the current note.
     expect(prepareExpense(base).note).toBeUndefined();
+  });
+});
+
+describe('equal-split rounding disclosure', () => {
+  it('reports the base share and leftover paise that the split assigned', () => {
+    const prepared = prepareExpense(base);
+    const rounding = equalSplitRounding('EQUAL', 1001, 3);
+    expect(rounding).toEqual({ remainderPaise: 2, baseSharePaise: 333 });
+    // Matches what prepareExpense stored: two shares took one paisa each.
+    expect(
+      prepared.shares.map(
+        (share) => share.amountPaise - rounding!.baseSharePaise,
+      ),
+    ).toEqual([1, 1, 0]);
+    expect(equalSplitRounding('EQUAL', 10_000, 3)).toEqual({
+      remainderPaise: 1,
+      baseSharePaise: 3333,
+    });
+  });
+
+  it('reports nothing for even divisions and custom splits', () => {
+    // The PRD worked example: ₹6,000 between three is ₹2,000 each.
+    expect(equalSplitRounding('EQUAL', 600_000, 3)).toBeNull();
+    expect(equalSplitRounding('CUSTOM', 1001, 3)).toBeNull();
+    expect(equalSplitRounding('EQUAL', 1001, 0)).toBeNull();
   });
 });
 
