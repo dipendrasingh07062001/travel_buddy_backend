@@ -485,41 +485,46 @@ model CommunityComment {
 }
 
 model Trip {
-  id                        String                @id @default(uuid()) @db.Uuid
-  ownerId                   String                @map("owner_id") @db.Uuid
-  communityId               String                @map("community_id") @db.Uuid
-  originCity                String                @map("origin_city") @db.VarChar(120)
-  startDate                 DateTime              @map("start_date") @db.Date
-  endDate                   DateTime              @map("end_date") @db.Date
-  flexibilityDays           Int                   @default(0) @map("flexibility_days")
-  dateMode                  TripDateMode          @default(EXACT) @map("date_mode")
-  weekendsOnly              Boolean               @default(false) @map("weekends_only")
-  durationDays              Int                   @map("duration_days")
-  budgetMin                 Decimal?              @map("budget_min") @db.Decimal(12, 2)
-  budgetMax                 Decimal?              @map("budget_max") @db.Decimal(12, 2)
-  currency                  String                @default("INR") @db.Char(3)
-  currentGroupSize          Int                   @default(1) @map("current_group_size")
-  desiredGroupSize          Int                   @map("desired_group_size")
-  transport                 TripTransport         @default(UNDECIDED)
-  description               String
-  status                    TripStatus            @default(DRAFT)
-  version                   Int                   @default(1)
-  publishedAt               DateTime?             @map("published_at") @db.Timestamptz(6)
-  moderationRemovedAt       DateTime?             @map("moderation_removed_at") @db.Timestamptz(6)
-  owner                     User                  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  community                 Community             @relation(fields: [communityId], references: [id], onDelete: Restrict)
-  connectionRequests        ConnectionRequest[]   @relation("ConnectionTargetTrip")
-  relatedConnectionRequests ConnectionRequest[]   @relation("ConnectionRelatedTrip")
-  memberships               TripMembership[]
-  reports                   Report[]
-  conversation              Conversation?
-  checklistItems            TripChecklistItem[]
-  expenses                  Expense[]
-  settlements               Settlement[]
-  publicationAlert          TripPublicationAlert?
-  changes                   TripChange[]
-  createdAt                 DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                 DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                         String                @id @default(uuid()) @db.Uuid
+  ownerId                    String                @map("owner_id") @db.Uuid
+  communityId                String                @map("community_id") @db.Uuid
+  originCity                 String                @map("origin_city") @db.VarChar(120)
+  startDate                  DateTime              @map("start_date") @db.Date
+  endDate                    DateTime              @map("end_date") @db.Date
+  flexibilityDays            Int                   @default(0) @map("flexibility_days")
+  dateMode                   TripDateMode          @default(EXACT) @map("date_mode")
+  weekendsOnly               Boolean               @default(false) @map("weekends_only")
+  durationDays               Int                   @map("duration_days")
+  budgetMin                  Decimal?              @map("budget_min") @db.Decimal(12, 2)
+  budgetMax                  Decimal?              @map("budget_max") @db.Decimal(12, 2)
+  currency                   String                @default("INR") @db.Char(3)
+  currentGroupSize           Int                   @default(1) @map("current_group_size")
+  desiredGroupSize           Int                   @map("desired_group_size")
+  transport                  TripTransport         @default(UNDECIDED)
+  description                String
+  status                     TripStatus            @default(DRAFT)
+  version                    Int                   @default(1)
+  publishedAt                DateTime?             @map("published_at") @db.Timestamptz(6)
+  // The owner's latest confirmation, at publish, that the plan is personal,
+  // accurate and not a commercial listing (PRD 7.2), and the wording version.
+  // Both are set together; trips published before this existed have neither.
+  publishConfirmedAt         DateTime?             @map("publish_confirmed_at") @db.Timestamptz(6)
+  publishConfirmationVersion String?               @map("publish_confirmation_version") @db.VarChar(20)
+  moderationRemovedAt        DateTime?             @map("moderation_removed_at") @db.Timestamptz(6)
+  owner                      User                  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  community                  Community             @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  connectionRequests         ConnectionRequest[]   @relation("ConnectionTargetTrip")
+  relatedConnectionRequests  ConnectionRequest[]   @relation("ConnectionRelatedTrip")
+  memberships                TripMembership[]
+  reports                    Report[]
+  conversation               Conversation?
+  checklistItems             TripChecklistItem[]
+  expenses                   Expense[]
+  settlements                Settlement[]
+  publicationAlert           TripPublicationAlert?
+  changes                    TripChange[]
+  createdAt                  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status, startDate])
   @@index([communityId, status, startDate])

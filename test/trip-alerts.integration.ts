@@ -121,6 +121,7 @@ async function publish(extra: Partial<Prisma.TripUncheckedCreateInput> = {}) {
   const trip = await createTrip(extra);
   const response = await api('POST', `/trips/${trip.id}/publish`, 'owner', {
     expectedVersion: 1,
+    confirmsPersonalPlan: true,
   });
   expect(response.statusCode, response.body).toBe(200);
   return trip;
@@ -385,6 +386,7 @@ describe('durable matching-trip delivery', () => {
     ).toBe(0);
     const published = await api('POST', `/trips/${trip.id}/publish`, 'owner', {
       expectedVersion: 1,
+      confirmsPersonalPlan: true,
     });
     expect(published.statusCode).toBe(200);
     expect(
@@ -428,6 +430,7 @@ describe('durable matching-trip delivery', () => {
       (
         await api('POST', `/trips/${trip.id}/publish`, 'owner', {
           expectedVersion: 3,
+          confirmsPersonalPlan: true,
         })
       ).statusCode,
     ).toBe(200);
@@ -637,6 +640,7 @@ describe('durable matching-trip delivery', () => {
     ).mockRejectedValueOnce(new Error('Injected publish failure'));
     const response = await api('POST', `/trips/${trip.id}/publish`, 'owner', {
       expectedVersion: 1,
+      confirmsPersonalPlan: true,
     });
     vi.restoreAllMocks();
     expect(response.statusCode).toBe(500);
@@ -767,6 +771,7 @@ describe('matching-trip alert limits', () => {
       drafts.map((trip) =>
         api('POST', `/trips/${trip.id}/publish`, 'owner', {
           expectedVersion: 1,
+          confirmsPersonalPlan: true,
         }),
       ),
     );
@@ -793,6 +798,7 @@ describe('matching-trip alert limits', () => {
     );
     const publishing = api('POST', `/trips/${draft.id}/publish`, 'owner', {
       expectedVersion: 1,
+      confirmsPersonalPlan: true,
     });
     try {
       expect(await settledWithin(publishing, 300)).toBe(false);

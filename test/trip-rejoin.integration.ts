@@ -105,6 +105,7 @@ beforeAll(async () => {
   tripId = created.json().data.id as string;
   const published = await api('POST', `/trips/${tripId}/publish`, 'owner', {
     expectedVersion: 1,
+    confirmsPersonalPlan: true,
   });
   expect(published.statusCode).toBe(200);
 });

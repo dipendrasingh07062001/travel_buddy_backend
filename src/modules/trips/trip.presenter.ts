@@ -49,6 +49,13 @@ export function presentOwnedTrip(trip: PublicTripRecord) {
     description: trip.description,
     version: trip.version,
     moderationRemovedAt: trip.moderationRemovedAt?.toISOString() ?? null,
+    publishConfirmation:
+      trip.publishConfirmedAt && trip.publishConfirmationVersion
+        ? {
+            confirmedAt: trip.publishConfirmedAt.toISOString(),
+            version: trip.publishConfirmationVersion,
+          }
+        : null,
     createdAt: trip.createdAt.toISOString(),
     updatedAt: trip.updatedAt.toISOString(),
   };

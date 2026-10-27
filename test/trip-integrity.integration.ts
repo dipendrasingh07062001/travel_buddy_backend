@@ -50,7 +50,7 @@ async function createPublishedTrip(desiredGroupSize: number) {
     method: 'POST',
     url: `/api/v1/trips/${tripId}/publish`,
     headers: headers('owner-token'),
-    payload: { expectedVersion: 1 },
+    payload: { expectedVersion: 1, confirmsPersonalPlan: true },
   });
   expect(published.statusCode).toBe(200);
   return tripId;

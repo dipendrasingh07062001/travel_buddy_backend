@@ -89,7 +89,7 @@ beforeAll(async () => {
     method: 'POST',
     url: `/api/v1/trips/${tripId}/publish`,
     headers: headers('owner-token'),
-    payload: { expectedVersion: 1 },
+    payload: { expectedVersion: 1, confirmsPersonalPlan: true },
   });
   const request = await app.inject({
     method: 'POST',
