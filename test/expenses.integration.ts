@@ -258,6 +258,98 @@ describe('private shared expense ledger', () => {
     expect(await database.expenseShare.count({ where: { expenseId } })).toBe(3);
   });
 
+  it('stores an optional private note and keeps it unless an edit changes it', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url,
+      headers: headers('owner'),
+      payload: { ...base(), note: '  2 rooms for 2 nights  ' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().data.note).toBe('2 rooms for 2 nights');
+    const noteId = created.json().data.id;
+    const edit = (version: number, extra: object = {}) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/v1/expenses/${noteId}`,
+        headers: headers('owner'),
+        payload: { ...base(), expectedVersion: version, ...extra },
+      });
+
+    const kept = await edit(1, { amountPaise: 1500 });
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json().data).toMatchObject({
+      amountPaise: 1500,
+      note: '2 rooms for 2 nights',
+    });
+    const changed = await edit(2, { note: 'Includes a 200 rupee tip' });
+    expect(changed.json().data.note).toBe('Includes a 200 rupee tip');
+    const tooLong = await edit(3, { note: 'x'.repeat(501) });
+    expect(tooLong.statusCode).toBe(400);
+
+    // Participants see it, including in their own view.
+    const own = await app.inject({
+      method: 'GET',
+      url: `${url}/me`,
+      headers: headers('memberB'),
+    });
+    expect(own.json().data.expenses).toContainEqual(
+      expect.objectContaining({
+        id: noteId,
+        note: 'Includes a 200 rupee tip',
+      }),
+    );
+
+    const cleared = await edit(3, { note: '' });
+    expect(cleared.json().data.note).toBeNull();
+    const clearedAgain = await edit(4, {
+      note: 'Second thoughts',
+    });
+    expect((await edit(5, { note: null })).json().data.note).toBeNull();
+    expect(clearedAgain.json().data.note).toBe('Second thoughts');
+
+    // Every note change is part of the expense's revision history.
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/expenses/${noteId}`,
+      headers: headers('memberA'),
+    });
+    expect(
+      detail
+        .json()
+        .data.revisions.map(
+          (revision: { snapshot: { note: string | null } }) =>
+            revision.snapshot.note,
+        ),
+    ).toEqual(
+      expect.arrayContaining([
+        '2 rooms for 2 nights',
+        'Includes a 200 rupee tip',
+        null,
+        'Second thoughts',
+      ]),
+    );
+
+    const exported = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/data-export',
+      headers: headers('owner'),
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().activity.expenses).toContainEqual(
+      expect.objectContaining({ id: noteId, note: null }),
+    );
+
+    // Void it so later tests start from the same balances.
+    const voided = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/expenses/${noteId}`,
+      headers: headers('owner'),
+      payload: { expectedVersion: 6 },
+    });
+    expect(voided.statusCode).toBe(200);
+  });
+
   it('keeps former members in balances while revoking their ledger access', async () => {
     const created = await app.inject({
       method: 'POST',

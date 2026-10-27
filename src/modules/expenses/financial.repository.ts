@@ -121,6 +121,7 @@ export async function getMyFinancialRecords(
           select: {
             id: true,
             description: true,
+            note: true,
             category: true,
             amountPaise: true,
             expenseDate: true,
@@ -147,6 +148,7 @@ export async function getMyFinancialRecords(
         expenses: expenses.map((expense) => ({
           id: expense.id,
           description: expense.description,
+          note: expense.note,
           category: expense.category,
           amountPaise: expense.amountPaise,
           ownSharePaise: expense.shares[0]?.amountPaise ?? 0,

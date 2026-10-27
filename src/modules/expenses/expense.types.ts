@@ -24,6 +24,7 @@ export interface ExpenseParticipantInput {
 
 export interface ExpenseBody {
   description: string;
+  note?: string | null;
   category: ExpenseCategory;
   amountPaise: number;
   paidByUserId: string;
@@ -38,6 +39,8 @@ export interface UpdateExpenseBody extends ExpenseBody {
 
 export interface PreparedExpense {
   description: string;
+  // undefined: not sent, so an edit keeps the current note. null: no note.
+  note: string | null | undefined;
   category: ExpenseCategory;
   amountPaise: number;
   paidById: string;

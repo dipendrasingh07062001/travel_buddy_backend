@@ -597,6 +597,13 @@ ascending UUID order, which makes the calculation repeatable. You may also set
 `expenseDate` as a `YYYY-MM-DD` date no later than today; omission uses today's
 UTC date. A stale `expectedVersion` returns `409 EXPENSE_VERSION_CONFLICT`.
 
+An optional `note` (up to 500 characters) adds private context, such as
+"includes tip" (PRD §11.1). It is trimmed, and a blank note is stored as `null`.
+When editing with `PUT`, omit `note` to keep the current one, or send `null` or
+`""` to clear it. Notes appear only to trip members, including in a former
+member's own expense view. They are part of the revision history and the data
+export.
+
 The API explains that entries are member-provided and payments happen outside
 the platform. The backend never processes money.
 

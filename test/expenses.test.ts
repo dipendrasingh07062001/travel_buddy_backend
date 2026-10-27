@@ -84,4 +84,14 @@ describe('expense calculations', () => {
     ]);
     expect(balances[2]?.membershipStatus).toBe('LEFT');
   });
+
+  it('trims a note, treats a blank one as no note, and keeps omission distinct', () => {
+    expect(prepareExpense({ ...base, note: '  includes tip  ' }).note).toBe(
+      'includes tip',
+    );
+    expect(prepareExpense({ ...base, note: '   ' }).note).toBeNull();
+    expect(prepareExpense({ ...base, note: null }).note).toBeNull();
+    // Leaving it out lets an edit keep the current note.
+    expect(prepareExpense(base).note).toBeUndefined();
+  });
 });

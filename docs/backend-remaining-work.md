@@ -6,13 +6,17 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Former-member expense payer (PRD §11.1): a member who left or was removed,
-  with an active account, can be the payer of a new expense. New participants
-  stay current members. Balances, the former member's own expense view and
-  settlements already handled former members.
-- No migration, provider or API key.
+- Expense note (PRD §11.1): an optional private `note` of up to 500 characters
+  on expenses. Omitting it on edit keeps the current note; `null` or `""`
+  clears it. It is recorded in the revision history and the data export.
+- One migration (`20261027150000_expense_note`) adding a nullable column; no
+  provider or API key.
 
 ## Already implemented
+
+- Former-member expense payer (PRD §11.1): a member who left or was removed,
+  with an active account, can be the payer of a new expense. New participants
+  stay current members.
 
 - Required profile photo (PRD §5.4): with `PROFILE_PHOTO_REQUIRED=true`,
   publishing trips, connection requests and community contributions also need
