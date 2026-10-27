@@ -56,7 +56,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const envSchema = z
+export const envSchema = z
   .object({
     NODE_ENV: z
       .enum(['development', 'test', 'production'])
@@ -96,6 +96,12 @@ const envSchema = z
         message: 'R2_PUBLIC_BASE_URL must use HTTPS.',
       }),
     ),
+    // PRD 5.4: publishing trips, connection requests and community posts
+    // also need a profile photo. Off until photo uploads are live.
+    PROFILE_PHOTO_REQUIRED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     POLICY_TERMS_VERSION: policyVersion,
     POLICY_TERMS_URL: policyUrl,
     POLICY_PRIVACY_VERSION: policyVersion,
@@ -133,6 +139,17 @@ const envSchema = z
         code: 'custom',
         message: 'Configure all six R2_* storage settings together.',
         path: ['R2_ACCOUNT_ID'],
+      });
+    }
+    if (
+      configuration.PROFILE_PHOTO_REQUIRED &&
+      storage.some((value) => !value)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'PROFILE_PHOTO_REQUIRED=true needs all six R2_* storage settings; otherwise nobody could upload the required photo.',
+        path: ['PROFILE_PHOTO_REQUIRED'],
       });
     }
     if (
