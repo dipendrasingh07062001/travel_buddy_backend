@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateBalances,
   prepareExpense,
+  prepareSettlementMethod,
 } from '../src/modules/expenses/expense.service.js';
 
 const ids = [
@@ -93,5 +94,37 @@ describe('expense calculations', () => {
     expect(prepareExpense({ ...base, note: null }).note).toBeNull();
     // Leaving it out lets an edit keep the current note.
     expect(prepareExpense(base).note).toBeUndefined();
+  });
+});
+
+describe('settlement method', () => {
+  it('trims the text and treats a missing or blank one as not stated', () => {
+    expect(prepareSettlementMethod('  UPI  ')).toBe('UPI');
+    expect(prepareSettlementMethod('   ')).toBeNull();
+    expect(prepareSettlementMethod(null)).toBeNull();
+    expect(prepareSettlementMethod(undefined)).toBeNull();
+    expect(prepareSettlementMethod(` ${'x'.repeat(50)} `)).toBe('x'.repeat(50));
+    expect(prepareSettlementMethod('💵'.repeat(50))).toBe('💵'.repeat(50));
+    expect(() => prepareSettlementMethod('x'.repeat(51))).toThrow(
+      expect.objectContaining({ code: 'INVALID_SETTLEMENT_METHOD' }),
+    );
+  });
+
+  it('allows up to 3 digits so PINs, OTPs and card or account numbers are refused', () => {
+    expect(prepareSettlementMethod('GPay 123')).toBe('GPay 123');
+    expect(prepareSettlementMethod('Cash, day 2')).toBe('Cash, day 2');
+    for (const method of [
+      'UPI PIN 1234',
+      'OTP 482910',
+      '4111 1111 1111 1111',
+      '1 2 3 4',
+      'Paid to 98765 43210',
+      'IFSC SBIN0001234',
+      '१२३४',
+    ]) {
+      expect(() => prepareSettlementMethod(method), method).toThrow(
+        expect.objectContaining({ code: 'INVALID_SETTLEMENT_METHOD' }),
+      );
+    }
   });
 });

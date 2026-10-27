@@ -55,6 +55,7 @@ function presentSettlement(
     receiver: record.receiver,
     amountPaise: record.amountPaise,
     currency: record.currency.trim(),
+    method: record.method,
     status: record.status,
     createdAt: record.createdAt.toISOString(),
     decidedAt: record.decidedAt?.toISOString() ?? null,
@@ -180,7 +181,7 @@ export async function registerFinancialRoutes(
 
   app.post<{
     Params: { tripId: string };
-    Body: { receiverId: string; amountPaise: number };
+    Body: { receiverId: string; amountPaise: number; method?: string | null };
   }>(
     '/trips/:tripId/settlements',
     {
@@ -201,6 +202,11 @@ export async function registerFinancialRoutes(
               minimum: 1,
               maximum: 1_000_000_000,
             },
+            method: {
+              anyOf: [{ type: 'string', maxLength: 50 }, { type: 'null' }],
+              description:
+                'Optional: how you paid, such as UPI or cash. At most 3 digits, so PINs, OTPs and card or account numbers are refused. It cannot be changed later.',
+            },
           },
         },
       },
@@ -212,6 +218,7 @@ export async function registerFinancialRoutes(
         actor.id,
         request.body.receiverId,
         request.body.amountPaise,
+        request.body.method,
       );
       return reply
         .code(201)

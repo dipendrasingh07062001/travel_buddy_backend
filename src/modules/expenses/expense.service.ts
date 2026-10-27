@@ -131,6 +131,31 @@ export function prepareExpense(
   };
 }
 
+const MAX_SETTLEMENT_METHOD_LENGTH = 50;
+// "UPI" or "Paid on day 2" need few digits. Four or more could be a UPI PIN,
+// OTP, card, account or phone number, which must never be collected (PRD 11.5).
+const MAX_SETTLEMENT_METHOD_DIGITS = 3;
+
+// A blank method means "not stated".
+export function prepareSettlementMethod(
+  method: string | null | undefined,
+): string | null {
+  const text = method?.trim();
+  if (!text) return null;
+  if (
+    // Counted as characters, like VARCHAR(50), so an emoji counts once.
+    [...text].length > MAX_SETTLEMENT_METHOD_LENGTH ||
+    (text.match(/\p{Nd}/gu)?.length ?? 0) > MAX_SETTLEMENT_METHOD_DIGITS
+  ) {
+    throw new AppError(
+      400,
+      'INVALID_SETTLEMENT_METHOD',
+      'Describe how you paid, such as UPI or cash, in up to 50 characters. Leave out numbers, PINs and account details.',
+    );
+  }
+  return text;
+}
+
 export function calculateBalances(
   members: {
     userId: string;

@@ -623,12 +623,22 @@ can confirm or reject it. A pending or rejected record never changes balances;
 confirmation rechecks the latest outstanding balance before applying it.
 
 - `POST /api/v1/trips/:tripId/settlements` with
-  `{ "receiverId": "<member-uuid>", "amountPaise": 500 }`
+  `{ "receiverId": "<member-uuid>", "amountPaise": 500, "method": "UPI" }`
 - `GET /api/v1/trips/:tripId/settlements` for active members
 - `GET /api/v1/trips/:tripId/settlements/me` for a member's own records
 - `POST /api/v1/settlements/:settlementId/confirm`
 - `POST /api/v1/settlements/:settlementId/reject`
 - `POST /api/v1/settlements/:settlementId/cancel`
+
+`method` is optional text saying how the money moved, such as `UPI`, `Cash` or
+`Bank transfer`, up to 50 characters. It is trimmed, and a blank value is stored
+as `null`. It may contain at most 3 digits, so UPI PINs, OTPs, and card, account
+or phone numbers are refused with `400 INVALID_SETTLEMENT_METHOD`. This is a
+guard, not a guarantee, so clients should still label the field as "How did you
+pay?" and keep the warning notice. The method is set only when recording and
+cannot be edited; to correct it, the payer cancels and records again. It is
+returned with every settlement and included in the data export, but is never
+copied into notifications or emails.
 
 `GET /api/v1/trips/:tripId/expenses/balances` keeps `netPaise` as the balance
 from expenses alone and adds `remainingNetPaise`, `settlementsSentPaise` and
