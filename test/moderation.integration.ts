@@ -240,6 +240,11 @@ describe('moderation and enforcement', () => {
     });
     expect(inspected.statusCode).toBe(200);
     expect(inspected.json().data.target.description).toContain('public trip');
+    // Published before confirmations were recorded, so none is shown.
+    expect(inspected.json().data.target).toMatchObject({
+      publishConfirmedAt: null,
+      publishConfirmationVersion: null,
+    });
     expect(
       await database.moderationAction.count({
         where: { reportId, action: 'REPORT_INSPECTED' },
@@ -326,7 +331,7 @@ describe('moderation and enforcement', () => {
       method: 'POST',
       url: `/api/v1/trips/${tripId}/publish`,
       headers: headers('owner'),
-      payload: { expectedVersion: 2 },
+      payload: { expectedVersion: 2, confirmsPersonalPlan: true },
     });
     expect(ownerPublish.statusCode).toBe(403);
     expect(ownerPublish.json().error.code).toBe('TRIP_REMOVED_BY_MODERATION');

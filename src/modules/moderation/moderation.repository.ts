@@ -166,6 +166,9 @@ export async function findStaffReportDetail(
           status: true,
           description: true,
           moderationRemovedAt: true,
+          // Shows whether the owner confirmed it was not a commercial listing.
+          publishConfirmedAt: true,
+          publishConfirmationVersion: true,
         },
       });
       break;

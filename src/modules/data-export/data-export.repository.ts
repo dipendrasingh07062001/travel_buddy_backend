@@ -122,6 +122,8 @@ export async function createAccountDataExport(userId: string) {
             description: true,
             status: true,
             publishedAt: true,
+            publishConfirmedAt: true,
+            publishConfirmationVersion: true,
             createdAt: true,
             updatedAt: true,
           },

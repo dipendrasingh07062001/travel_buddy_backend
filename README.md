@@ -296,6 +296,24 @@ Trip status is not directly editable. Use the explicit lifecycle endpoints:
 - `POST /api/v1/trips/:tripId/cancel`
 - `POST /api/v1/trips/:tripId/complete`
 
+Every publish, including republishing a paused trip, needs the owner's
+confirmation (PRD §7.2). The client shows this statement with a checkbox and
+sends `{ "expectedVersion": 2, "confirmsPersonalPlan": true }` once it is ticked:
+
+> This trip is my personal plan, accurate to the best of my knowledge, and not a
+> commercial tour listing.
+
+Without it, publishing returns `400 PUBLISH_CONFIRMATION_REQUIRED` and the trip
+does not change. The trip stores when the owner last confirmed and the wording
+version (`2026-10-27`; bump `publishConfirmation.version` in
+`trip-management.service.ts` whenever the wording changes). The owner sees it as
+`publishConfirmation` in their own trip responses; it is also in the data export
+and in the moderator's view of a reported trip, but never in public trip
+responses. Edits to a published trip and automatic reopening of a full trip do
+not ask again. Trips published before this was recorded show `null`; no
+confirmation is assumed for them. It is a recorded statement, not a check that
+the trip is non-commercial, so reports and moderation still apply.
+
 Publishing requires a complete adult profile: display name, birth date, home
 city, biography, and at least one language. An incomplete profile returns
 `409 PROFILE_INCOMPLETE`. Drafts can be created before the profile is complete.

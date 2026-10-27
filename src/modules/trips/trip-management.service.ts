@@ -70,7 +70,17 @@ interface DatePlan {
 
 export interface VersionBody {
   expectedVersion: number;
+  // Publish only: the owner ticked the publish confirmation.
+  confirmsPersonalPlan?: boolean;
 }
+
+// What the owner confirms on every publish (PRD 7.2). Change the version
+// whenever the wording changes, so each trip records which wording applied.
+export const publishConfirmation = {
+  version: '2026-10-27',
+  statement:
+    'This trip is my personal plan, accurate to the best of my knowledge, and not a commercial tour listing.',
+} as const;
 
 const editableStatuses: TripStatus[] = ['DRAFT', 'PUBLISHED', 'PAUSED'];
 
@@ -418,7 +428,7 @@ export async function transitionTrip(
   owner: AuthenticatedUser,
   tripId: string,
   action: TripAction,
-  expectedVersion: number,
+  { expectedVersion, confirmsPersonalPlan }: VersionBody,
   repository: TripManagementRepository,
   now = new Date(),
 ): Promise<PublicTripRecord> {
@@ -427,6 +437,14 @@ export async function transitionTrip(
   const transition = transitions[action];
   requireStatus(trip, transition.from);
   if (action === 'publish') {
+    // Asked again on every publish: a paused plan may have been edited.
+    if (confirmsPersonalPlan !== true) {
+      throw new AppError(
+        400,
+        'PUBLISH_CONFIRMATION_REQUIRED',
+        'Confirm that this plan is personal, accurate to the best of your knowledge and not a commercial tour listing.',
+      );
+    }
     requireCompleteProfile(owner, 'publishing a trip');
     // Recheck stored drafts and paused records created before these guards.
     requireSafePublicText(trip.originCity);
@@ -457,6 +475,10 @@ export async function transitionTrip(
     {
       status: transition.to,
       ...(action === 'publish' && !trip.publishedAt && { publishedAt: now }),
+      ...(action === 'publish' && {
+        publishConfirmedAt: now,
+        publishConfirmationVersion: publishConfirmation.version,
+      }),
     },
   );
   if (!updated) {

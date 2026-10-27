@@ -93,6 +93,7 @@ beforeAll(async () => {
   tripId = trip.json().data.id as string;
   const published = await api('POST', `/trips/${tripId}/publish`, {
     expectedVersion: 1,
+    confirmsPersonalPlan: true,
   });
   expect(published.statusCode).toBe(200);
   const post = await api('POST', `/communities/${communityId}/posts`, {
@@ -213,7 +214,10 @@ describe('public-text privacy writes and legacy public projections', () => {
     });
     const before = await database.trip.findUniqueOrThrow({ where: { id } });
     rejected(
-      await api('POST', `/trips/${id}/publish`, { expectedVersion: 1 }),
+      await api('POST', `/trips/${id}/publish`, {
+        expectedVersion: 1,
+        confirmsPersonalPlan: true,
+      }),
       phoneText,
     );
     expect(await database.trip.findUniqueOrThrow({ where: { id } })).toEqual(
@@ -227,15 +231,22 @@ describe('public-text privacy writes and legacy public projections', () => {
         .statusCode,
     ).toBe(200);
     expect(
-      (await api('POST', `/trips/${id}/publish`, { expectedVersion: 2 }))
-        .statusCode,
+      (
+        await api('POST', `/trips/${id}/publish`, {
+          expectedVersion: 2,
+          confirmsPersonalPlan: true,
+        })
+      ).statusCode,
     ).toBe(200);
     await database.trip.update({
       where: { id },
       data: { status: 'PAUSED', description: phoneText },
     });
     rejected(
-      await api('POST', `/trips/${id}/publish`, { expectedVersion: 3 }),
+      await api('POST', `/trips/${id}/publish`, {
+        expectedVersion: 3,
+        confirmsPersonalPlan: true,
+      }),
       phoneText,
     );
     expect(

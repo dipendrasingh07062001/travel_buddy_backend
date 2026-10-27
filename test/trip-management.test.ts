@@ -76,6 +76,8 @@ const managementRepository: TripManagementRepository = {
       status: 'DRAFT',
       version: 1,
       publishedAt: null,
+      publishConfirmedAt: null,
+      publishConfirmationVersion: null,
       moderationRemovedAt: null,
       createdAt: now,
       updatedAt: now,
@@ -233,7 +235,7 @@ describe('authenticated trip management HTTP contract', () => {
       method: 'POST',
       url: `/api/v1/trips/${tripId}/publish`,
       headers: { authorization: 'Bearer other-token' },
-      payload: { expectedVersion: 2 },
+      payload: { expectedVersion: 2, confirmsPersonalPlan: true },
     });
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('TRIP_FORBIDDEN');
@@ -246,7 +248,7 @@ describe('authenticated trip management HTTP contract', () => {
         method: 'POST',
         url: `/api/v1/trips/${tripId}/publish`,
         headers: { authorization: 'Bearer owner-token' },
-        payload: { expectedVersion: 2 },
+        payload: { expectedVersion: 2, confirmsPersonalPlan: true },
       });
       expect(response.statusCode).toBe(409);
       expect(response.json().error.code).toBe('PROFILE_INCOMPLETE');
@@ -255,18 +257,39 @@ describe('authenticated trip management HTTP contract', () => {
     }
   });
 
+  it('refuses to publish until the owner confirms the plan', async () => {
+    for (const payload of [
+      { expectedVersion: 2 },
+      { expectedVersion: 2, confirmsPersonalPlan: false },
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${tripId}/publish`,
+        headers: { authorization: 'Bearer owner-token' },
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('PUBLISH_CONFIRMATION_REQUIRED');
+    }
+    expect(trips.get(tripId)).toMatchObject({
+      status: 'DRAFT',
+      version: 2,
+      publishConfirmedAt: null,
+    });
+  });
+
   it('publishes through the lifecycle command and rejects an invalid repeat', async () => {
     const published = await app.inject({
       method: 'POST',
       url: `/api/v1/trips/${tripId}/publish`,
       headers: { authorization: 'Bearer owner-token' },
-      payload: { expectedVersion: 2 },
+      payload: { expectedVersion: 2, confirmsPersonalPlan: true },
     });
     const repeated = await app.inject({
       method: 'POST',
       url: `/api/v1/trips/${tripId}/publish`,
       headers: { authorization: 'Bearer owner-token' },
-      payload: { expectedVersion: 3 },
+      payload: { expectedVersion: 3, confirmsPersonalPlan: true },
     });
 
     expect(published.statusCode).toBe(200);
@@ -275,6 +298,10 @@ describe('authenticated trip management HTTP contract', () => {
       version: 3,
     });
     expect(published.json().data.publishedAt).toBeTruthy();
+    expect(published.json().data.publishConfirmation).toEqual({
+      confirmedAt: published.json().data.publishedAt,
+      version: '2026-10-27',
+    });
     expect(repeated.statusCode).toBe(409);
     expect(repeated.json().error.code).toBe('INVALID_TRIP_STATE');
   });
@@ -286,11 +313,19 @@ describe('authenticated trip management HTTP contract', () => {
       headers: { authorization: 'Bearer owner-token' },
       payload: { expectedVersion: 3 },
     });
-    const republish = await app.inject({
+    const firstConfirmation = trips.get(tripId)!.publishConfirmedAt!;
+    // A paused plan may have been edited, so republishing asks again.
+    const unconfirmedRepublish = await app.inject({
       method: 'POST',
       url: `/api/v1/trips/${tripId}/publish`,
       headers: { authorization: 'Bearer owner-token' },
       payload: { expectedVersion: 4 },
+    });
+    const republish = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${tripId}/publish`,
+      headers: { authorization: 'Bearer owner-token' },
+      payload: { expectedVersion: 4, confirmsPersonalPlan: true },
     });
     const markFull = await app.inject({
       method: 'POST',
@@ -312,10 +347,17 @@ describe('authenticated trip management HTTP contract', () => {
     });
 
     expect(pause.json().data).toMatchObject({ status: 'PAUSED', version: 4 });
+    expect(unconfirmedRepublish.json().error.code).toBe(
+      'PUBLISH_CONFIRMATION_REQUIRED',
+    );
     expect(republish.json().data).toMatchObject({
       status: 'PUBLISHED',
       version: 5,
     });
+    expect(
+      Date.parse(republish.json().data.publishConfirmation.confirmedAt),
+    ).toBeGreaterThanOrEqual(firstConfirmation.getTime());
+    // Pause, mark-full and cancel above needed no confirmation.
     expect(markFull.json().data).toMatchObject({ status: 'FULL', version: 6 });
     expect(completeEarly.statusCode).toBe(409);
     expect(completeEarly.json().error.code).toBe('INVALID_TRIP_STATE');

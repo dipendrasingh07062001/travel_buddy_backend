@@ -89,7 +89,7 @@ const publish = (target = app) =>
     'POST',
     `/trips/${tripId}/publish`,
     'owner',
-    { expectedVersion: 1 },
+    { expectedVersion: 1, confirmsPersonalPlan: true },
     target,
   );
 

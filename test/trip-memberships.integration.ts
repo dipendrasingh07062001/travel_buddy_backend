@@ -492,6 +492,7 @@ describe('private trip membership discovery', () => {
       (
         await api('POST', `/trips/${id}/publish`, 'host', {
           expectedVersion: 1,
+          confirmsPersonalPlan: true,
         })
       ).statusCode,
     ).toBe(200);

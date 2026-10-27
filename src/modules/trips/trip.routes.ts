@@ -5,6 +5,7 @@ import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { prismaTripManagementRepository } from './trip-management.repository.js';
 import {
   createTrip,
+  publishConfirmation,
   transitionTrip,
   updateTrip,
   type CreateTripBody,
@@ -125,6 +126,7 @@ const ownedTripSchema = {
     ...publicTripSchema.required,
     'version',
     'moderationRemovedAt',
+    'publishConfirmation',
     'createdAt',
     'updatedAt',
   ],
@@ -134,6 +136,21 @@ const ownedTripSchema = {
     version: { type: 'integer', minimum: 1 },
     moderationRemovedAt: {
       anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+    },
+    publishConfirmation: {
+      description:
+        'When the owner last confirmed the plan at publish, and the wording version. null if never confirmed, including trips published before confirmations were recorded.',
+      anyOf: [
+        {
+          type: 'object',
+          required: ['confirmedAt', 'version'],
+          properties: {
+            confirmedAt: { type: 'string', format: 'date-time' },
+            version: { type: 'string' },
+          },
+        },
+        { type: 'null' },
+      ],
     },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
@@ -355,7 +372,15 @@ export async function registerTripRoutes(
             type: 'object',
             additionalProperties: false,
             required: ['expectedVersion'],
-            properties: { expectedVersion: { type: 'integer', minimum: 1 } },
+            properties: {
+              expectedVersion: { type: 'integer', minimum: 1 },
+              ...(action === 'publish' && {
+                confirmsPersonalPlan: {
+                  type: 'boolean',
+                  description: `Required on every publish, including after a pause: true when the owner confirms "${publishConfirmation.statement}" Otherwise 400 PUBLISH_CONFIRMATION_REQUIRED.`,
+                },
+              }),
+            },
           },
           response: { 200: ownedTripResponse },
         },
@@ -369,7 +394,7 @@ export async function registerTripRoutes(
           user,
           request.params.tripId,
           action,
-          request.body.expectedVersion,
+          request.body,
           managementRepository,
         );
         return { data: presentOwnedTrip(trip) };

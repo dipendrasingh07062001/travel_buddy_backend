@@ -71,6 +71,7 @@ async function create(published = false, desiredGroupSize = 4) {
       (
         await api('POST', `/trips/${id}/publish`, 'owner', {
           expectedVersion: 1,
+          confirmsPersonalPlan: true,
         })
       ).statusCode,
     ).toBe(200);
@@ -180,7 +181,10 @@ describe('transactional, private trip history', () => {
       (await app.inject({ method: 'GET', url: `/api/v1/trips/${id}/history` }))
         .statusCode,
     ).toBe(401);
-    await api('POST', `/trips/${id}/publish`, 'owner', { expectedVersion: 1 });
+    await api('POST', `/trips/${id}/publish`, 'owner', {
+      expectedVersion: 1,
+      confirmsPersonalPlan: true,
+    });
     await api('POST', `/trips/${id}/connection-requests`, 'member', {
       message: 'Waiting for the owner to accept my request.',
     });

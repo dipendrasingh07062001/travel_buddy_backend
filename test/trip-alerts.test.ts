@@ -57,6 +57,8 @@ const trip: Trip = {
   status: 'PUBLISHED',
   version: 1,
   publishedAt: now,
+  publishConfirmedAt: null,
+  publishConfirmationVersion: null,
   moderationRemovedAt: null,
   createdAt: now,
   updatedAt: now,

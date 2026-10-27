@@ -143,6 +143,8 @@ const trip: Trip = {
   description: 'PRIVATE old contact number',
   version: 1,
   publishedAt: null,
+  publishConfirmedAt: null,
+  publishConfirmationVersion: null,
   moderationRemovedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),

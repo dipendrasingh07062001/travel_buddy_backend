@@ -65,7 +65,10 @@ function trip(id: string, ownerId: string, status: 'DRAFT' | 'PUBLISHED') {
 
 const actions = {
   publish: () =>
-    call('POST', `/trips/${draftTripId}/publish`, { expectedVersion: 1 }),
+    call('POST', `/trips/${draftTripId}/publish`, {
+      expectedVersion: 1,
+      confirmsPersonalPlan: true,
+    }),
   request: () =>
     call('POST', `/trips/${openTripId}/connection-requests`, {
       message: 'I would love to join this trip with the group.',

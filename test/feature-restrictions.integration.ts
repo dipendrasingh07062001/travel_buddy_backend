@@ -464,6 +464,7 @@ describe('restricted features', () => {
       `/trips/${draftTripId}/publish`,
       {
         expectedVersion: draft.version,
+        confirmsPersonalPlan: true,
       },
     );
     expect(publish.statusCode).toBe(403);
@@ -479,7 +480,10 @@ describe('restricted features', () => {
       'target',
       'POST',
       `/trips/${draftTripId}/publish`,
-      { expectedVersion: edited.json().data.version },
+      {
+        expectedVersion: edited.json().data.version,
+        confirmsPersonalPlan: true,
+      },
     );
     expect(published.statusCode).toBe(200);
     expect(published.json().data.status).toBe('PUBLISHED');

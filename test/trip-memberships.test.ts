@@ -99,6 +99,8 @@ function item(status: 'ACTIVE' | 'LEFT' | 'REMOVED'): TripMembershipListItem {
     version: 8,
     moderationRemovedAt: null,
     publishedAt: now,
+    publishConfirmedAt: null,
+    publishConfirmationVersion: null,
     createdAt: now,
     updatedAt: now,
     owner: { id: userId, displayName: 'Owner' },
