@@ -303,6 +303,134 @@ describe('private shared expense ledger', () => {
     expect(newCharge.json().error.code).toBe('EXPENSE_MEMBER_INVALID');
   });
 
+  // memberB left in the previous test. PRD 11.1: a historical member may pay.
+  it('records a former member as the payer of a new expense', async () => {
+    const paidByFormer = {
+      ...base(),
+      description: 'Hotel deposit paid before leaving',
+      amountPaise: 6000,
+      paidByUserId: users.memberB,
+      participants: [{ userId: users.owner }, { userId: users.memberA }],
+    };
+    const before = await app.inject({
+      method: 'GET',
+      url: `${url}/balances`,
+      headers: headers('owner'),
+    });
+    const paidBefore = before
+      .json()
+      .data.balances.find(
+        (balance: { userId: string }) => balance.userId === users.memberB,
+      ).paidPaise;
+
+    const created = await app.inject({
+      method: 'POST',
+      url,
+      headers: headers('owner'),
+      payload: paidByFormer,
+    });
+    expect(created.statusCode).toBe(201);
+    const expenseId = created.json().data.id;
+    const after = await app.inject({
+      method: 'GET',
+      url: `${url}/balances`,
+      headers: headers('owner'),
+    });
+    expect(
+      after
+        .json()
+        .data.balances.find(
+          (balance: { userId: string }) => balance.userId === users.memberB,
+        ),
+    ).toMatchObject({ membershipStatus: 'LEFT', paidPaise: paidBefore + 6000 });
+
+    // The former member is told, and sees the expense in their own view.
+    expect(
+      await database.notification.count({
+        where: {
+          recipientId: users.memberB,
+          type: 'EXPENSE_CREATED',
+          sourceId: expenseId,
+        },
+      }),
+    ).toBe(1);
+    const own = await app.inject({
+      method: 'GET',
+      url: `${url}/me`,
+      headers: headers('memberB'),
+    });
+    expect(own.statusCode).toBe(200);
+    expect(own.json().data.expenses).toContainEqual(
+      expect.objectContaining({
+        id: expenseId,
+        ownSharePaise: 0,
+        paidBy: expect.objectContaining({ id: users.memberB }),
+      }),
+    );
+
+    // A removed member may pay too.
+    await database.tripMembership.update({
+      where: { tripId_userId: { tripId, userId: users.memberB } },
+      data: { status: 'REMOVED', removedAt: new Date() },
+    });
+    const byRemoved = await app.inject({
+      method: 'POST',
+      url,
+      headers: headers('owner'),
+      payload: paidByFormer,
+    });
+    expect(byRemoved.statusCode).toBe(201);
+    await database.tripMembership.update({
+      where: { tripId_userId: { tripId, userId: users.memberB } },
+      data: { status: 'LEFT', removedAt: null },
+    });
+  });
+
+  it('still rejects outsiders, unavailable accounts and former participants', async () => {
+    const attempt = (payload: object) =>
+      app.inject({ method: 'POST', url, headers: headers('owner'), payload });
+    const payerMessage =
+      'The payer must be a current trip member, or a former member whose account is active.';
+
+    const outsiderPays = await attempt({
+      ...base(),
+      paidByUserId: users.outsider,
+      participants: [{ userId: users.owner }],
+    });
+    expect(outsiderPays.statusCode).toBe(400);
+    expect(outsiderPays.json().error).toMatchObject({
+      code: 'EXPENSE_MEMBER_INVALID',
+      message: payerMessage,
+    });
+
+    await database.user.update({
+      where: { id: users.memberB },
+      data: { status: 'SUSPENDED' },
+    });
+    const suspendedPays = await attempt({
+      ...base(),
+      paidByUserId: users.memberB,
+      participants: [{ userId: users.owner }],
+    });
+    await database.user.update({
+      where: { id: users.memberB },
+      data: { status: 'ACTIVE' },
+    });
+    expect(suspendedPays.statusCode).toBe(400);
+    expect(suspendedPays.json().error.message).toBe(payerMessage);
+
+    const formerShares = await attempt({
+      ...base(),
+      paidByUserId: users.owner,
+      participants: [{ userId: users.owner }, { userId: users.memberB }],
+    });
+    expect(formerShares.statusCode).toBe(400);
+    expect(formerShares.json().error).toMatchObject({
+      code: 'EXPENSE_MEMBER_INVALID',
+      message: 'New participants must be current trip members.',
+    });
+  });
+
   it('makes completed trips read only while retaining their ledger', async () => {
     await database.trip.update({
       where: { id: tripId },
