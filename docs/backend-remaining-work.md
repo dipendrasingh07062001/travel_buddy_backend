@@ -6,18 +6,21 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Rounding disclosure (PRD §11.2): expense responses show `rounding`
+  (`remainderPaise`, `baseSharePaise`) and a per-share `roundingPaise`, so an
+  uneven equal split says which members absorbed the leftover paise. The own
+  view (`/expenses/me`) adds only `ownRoundingPaise`. The assignment rule is
+  unchanged. No migration: it is worked out from the stored shares.
+
+## Already implemented
+
 - Publish confirmation (PRD §7.2): every publish, including republishing a
   paused trip, requires `confirmsPersonalPlan: true`, meaning the owner
   confirmed the plan is personal, accurate and not a commercial tour listing.
   The trip stores the latest confirmation time and wording version, shown to
   the owner, in the data export and to moderators, never publicly. Trips
-  published earlier are not backfilled.
-- One migration (`20261027210000_publish_confirmation`) adding two nullable
-  columns and a check that they are set together; no provider or API key.
-- The Flutter client must send `confirmsPersonalPlan` when it connects to the
-  publish endpoint.
-
-## Already implemented
+  published earlier are not backfilled. The Flutter client must send
+  `confirmsPersonalPlan` when it connects to the publish endpoint.
 
 - Settlement method (PRD §11.5): an optional `method` of up to 50 characters
   on settlement records, such as "UPI" or "Cash". At most 3 digits, so PINs,

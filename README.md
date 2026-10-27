@@ -615,6 +615,20 @@ ascending UUID order, which makes the calculation repeatable. You may also set
 `expenseDate` as a `YYYY-MM-DD` date no later than today; omission uses today's
 UTC date. A stale `expectedVersion` returns `409 EXPENSE_VERSION_CONFLICT`.
 
+Every expense response discloses that rounding (PRD §11.2). For ₹100 split
+equally between three, `rounding` is
+`{ "remainderPaise": 1, "baseSharePaise": 3333 }`, and each share has
+`roundingPaise`: `1` for the member whose share took the leftover paisa and `0`
+for the others, so clients can show "₹33.33 each; 1 paisa of rounding added to
+Rahul's share". `rounding` is `null` and every `roundingPaise` is `0` for custom
+splits and equal splits that divide evenly. A share absorbs at most 1 paisa per
+expense, but because the order is fixed by member ID, the same member absorbs it
+on every uneven equal split in a trip. The member's own view
+(`/expenses/me`, below) adds only `ownRoundingPaise` for their own share, since
+the full rounding would reveal how many people shared the expense. Nothing is
+stored for this; it is worked out from the saved shares, so older expenses show
+it too.
+
 An optional `note` (up to 500 characters) adds private context, such as
 "includes tip" (PRD §11.1). It is trimmed, and a blank note is stored as `null`.
 When editing with `PUT`, omit `note` to keep the current one, or send `null` or

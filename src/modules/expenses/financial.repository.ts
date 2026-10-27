@@ -7,6 +7,7 @@ import {
 import { createNotifications } from '../notifications/notification.repository.js';
 import {
   calculateBalances,
+  equalSplitRounding,
   prepareSettlementMethod,
 } from './expense.service.js';
 
@@ -127,6 +128,7 @@ export async function getMyFinancialRecords(
             note: true,
             category: true,
             amountPaise: true,
+            splitMethod: true,
             expenseDate: true,
             status: true,
             version: true,
@@ -137,6 +139,8 @@ export async function getMyFinancialRecords(
               where: { userId: actorId },
               select: { amountPaise: true },
             },
+            // Only to work out the rounding; the count is not returned.
+            _count: { select: { shares: true } },
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           skip: (page - 1) * pageSize,
@@ -148,20 +152,34 @@ export async function getMyFinancialRecords(
         tripId,
         currency: 'INR',
         balance: balances.find((balance) => balance.userId === actorId)!,
-        expenses: expenses.map((expense) => ({
-          id: expense.id,
-          description: expense.description,
-          note: expense.note,
-          category: expense.category,
-          amountPaise: expense.amountPaise,
-          ownSharePaise: expense.shares[0]?.amountPaise ?? 0,
-          paidBy: expense.paidBy,
-          expenseDate: expense.expenseDate.toISOString().slice(0, 10),
-          status: expense.status,
-          version: expense.version,
-          createdAt: expense.createdAt.toISOString(),
-          updatedAt: expense.updatedAt.toISOString(),
-        })),
+        expenses: expenses.map((expense) => {
+          const ownShare = expense.shares[0]?.amountPaise;
+          const rounding = equalSplitRounding(
+            expense.splitMethod,
+            expense.amountPaise,
+            expense._count.shares,
+          );
+          return {
+            id: expense.id,
+            description: expense.description,
+            note: expense.note,
+            category: expense.category,
+            amountPaise: expense.amountPaise,
+            ownSharePaise: ownShare ?? 0,
+            // Only whether your own share took a leftover paisa: the full
+            // rounding would reveal how many people shared the expense.
+            ownRoundingPaise:
+              rounding && ownShare !== undefined
+                ? ownShare - rounding.baseSharePaise
+                : 0,
+            paidBy: expense.paidBy,
+            expenseDate: expense.expenseDate.toISOString().slice(0, 10),
+            status: expense.status,
+            version: expense.version,
+            createdAt: expense.createdAt.toISOString(),
+            updatedAt: expense.updatedAt.toISOString(),
+          };
+        }),
         pagination: { page, pageSize, total },
       };
     },

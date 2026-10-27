@@ -131,6 +131,24 @@ export function prepareExpense(
   };
 }
 
+// Discloses the equal-split rounding from prepareExpense (PRD 11.2): everyone
+// owes the base share, and the leftover paise were added one each to the first
+// participants by user ID. Worked out from the stored total and share count,
+// so it covers every saved expense. null when nothing was left over.
+export function equalSplitRounding(
+  splitMethod: ExpenseBody['splitMethod'],
+  amountPaise: number,
+  participantCount: number,
+): { remainderPaise: number; baseSharePaise: number } | null {
+  if (splitMethod !== 'EQUAL' || participantCount < 1) return null;
+  const remainderPaise = amountPaise % participantCount;
+  if (remainderPaise === 0) return null;
+  return {
+    remainderPaise,
+    baseSharePaise: Math.floor(amountPaise / participantCount),
+  };
+}
+
 const MAX_SETTLEMENT_METHOD_LENGTH = 50;
 // "UPI" or "Paid on day 2" need few digits. Four or more could be a UPI PIN,
 // OTP, card, account or phone number, which must never be collected (PRD 11.5).

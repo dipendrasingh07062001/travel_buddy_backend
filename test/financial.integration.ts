@@ -9,6 +9,7 @@ import type { TokenVerifier } from '../src/modules/auth/auth.types.js';
 const communityId = randomUUID();
 const tripId = randomUUID();
 const methodTripId = randomUUID();
+const roundingTripId = randomUUID();
 const users = {
   owner: randomUUID(),
   memberA: randomUUID(),
@@ -92,7 +93,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
   await database.trip.deleteMany({
-    where: { id: { in: [tripId, methodTripId] } },
+    where: { id: { in: [tripId, methodTripId, roundingTripId] } },
   });
   await database.community.deleteMany({ where: { id: communityId } });
   await database.user.deleteMany({
@@ -556,5 +557,144 @@ describe('disputes and external settlement confirmation', () => {
     expect(exported.json().activity.settlements).toContainEqual(
       expect.objectContaining({ id: paidId, method: 'UPI' }),
     );
+  });
+  it('discloses which shares of an equal split absorbed the leftover paise', async () => {
+    // Its own trip of three, so the balances above are not involved.
+    await database.trip.create({
+      data: {
+        id: roundingTripId,
+        ownerId: users.owner,
+        communityId,
+        originCity: 'Pune',
+        startDate: new Date('2026-10-10'),
+        endDate: new Date('2026-10-12'),
+        durationDays: 3,
+        desiredGroupSize: 3,
+        currentGroupSize: 3,
+        description: 'Rounding disclosure test trip',
+        status: 'FULL',
+        publishedAt: new Date(),
+        memberships: {
+          create: [
+            { userId: users.owner, role: 'OWNER' },
+            { userId: users.memberA, role: 'MEMBER' },
+            { userId: users.payer, role: 'MEMBER' },
+          ],
+        },
+      },
+    });
+    const expensesUrl = `/api/v1/trips/${roundingTripId}/expenses`;
+    const members = {
+      owner: users.owner,
+      memberA: users.memberA,
+      payer: users.payer,
+    };
+    // Leftover paise go one each to participants in ascending ID order.
+    const byId = Object.entries(members).sort(([, a], [, b]) =>
+      a < b ? -1 : 1,
+    );
+    const expense = (amountPaise: number, extra: object = {}) => ({
+      description: 'Taxi',
+      category: 'TRANSPORT',
+      amountPaise,
+      paidByUserId: users.owner,
+      splitMethod: 'EQUAL',
+      participants: Object.values(members).map((userId) => ({ userId })),
+      ...extra,
+    });
+    const roundingOf = (data: {
+      shares: { user: { id: string }; roundingPaise: number }[];
+    }) =>
+      Object.fromEntries(
+        data.shares.map((share) => [share.user.id, share.roundingPaise]),
+      );
+    const ownLine = async (role: string, expenseId: string) =>
+      (await request('GET', `${expensesUrl}/me`, role))
+        .json()
+        .data.expenses.find((line: { id: string }) => line.id === expenseId);
+
+    // ₹100 between three: ₹33.33 each and one leftover paisa.
+    const created = await request(
+      'POST',
+      expensesUrl,
+      'owner',
+      expense(10_000),
+    );
+    expect(created.statusCode).toBe(201);
+    const expenseId = created.json().data.id as string;
+    expect(created.json().data.rounding).toEqual({
+      remainderPaise: 1,
+      baseSharePaise: 3333,
+    });
+    expect(roundingOf(created.json().data)).toEqual({
+      [byId[0]![1]]: 1,
+      [byId[1]![1]]: 0,
+      [byId[2]![1]]: 0,
+    });
+    const listed = (await request('GET', expensesUrl, 'payer'))
+      .json()
+      .data.find((item: { id: string }) => item.id === expenseId);
+    expect(listed.rounding).toEqual(created.json().data.rounding);
+    expect(
+      (await request('GET', `/api/v1/expenses/${expenseId}`, 'memberA')).json()
+        .data.rounding,
+    ).toEqual({ remainderPaise: 1, baseSharePaise: 3333 });
+
+    // Each member's own view says only whether their share took a paisa.
+    for (const [index, [role]] of byId.entries()) {
+      const line = await ownLine(role, expenseId);
+      expect(line).toMatchObject({
+        ownSharePaise: index === 0 ? 3334 : 3333,
+        ownRoundingPaise: index === 0 ? 1 : 0,
+      });
+      expect(line.rounding).toBeUndefined();
+      expect(line.shares).toBeUndefined();
+    }
+
+    // Editing to ₹100.01 leaves two leftover paise for the first two.
+    const edited = await request(
+      'PUT',
+      `/api/v1/expenses/${expenseId}`,
+      'owner',
+      expense(10_001, { expectedVersion: 1 }),
+    );
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().data.rounding).toEqual({
+      remainderPaise: 2,
+      baseSharePaise: 3333,
+    });
+    expect(roundingOf(edited.json().data)).toEqual({
+      [byId[0]![1]]: 1,
+      [byId[1]![1]]: 1,
+      [byId[2]![1]]: 0,
+    });
+    expect((await ownLine(byId[1]![0], expenseId)).ownRoundingPaise).toBe(1);
+
+    // Even divisions and custom amounts have nothing to disclose.
+    for (const body of [
+      expense(9_000),
+      expense(10_000, {
+        splitMethod: 'CUSTOM',
+        participants: [
+          { userId: users.owner, amountPaise: 3_334 },
+          { userId: users.memberA, amountPaise: 3_333 },
+          { userId: users.payer, amountPaise: 3_333 },
+        ],
+      }),
+    ]) {
+      const response = await request('POST', expensesUrl, 'owner', body);
+      expect(response.statusCode).toBe(201);
+      expect(response.json().data.rounding).toBeNull();
+      expect(
+        response
+          .json()
+          .data.shares.every(
+            (share: { roundingPaise: number }) => share.roundingPaise === 0,
+          ),
+      ).toBe(true);
+      expect(
+        (await ownLine('memberA', response.json().data.id)).ownRoundingPaise,
+      ).toBe(0);
+    }
   });
 });
