@@ -27,6 +27,7 @@ const missingExpense = () =>
 function snapshot(expense: ExpenseRecord): Prisma.InputJsonObject {
   return {
     description: expense.description,
+    note: expense.note,
     category: expense.category,
     amountPaise: expense.amountPaise,
     paidByUserId: expense.paidById,
@@ -150,6 +151,7 @@ export async function createExpense(
             createdById: actorId,
             paidById: input.paidById,
             description: input.description,
+            note: input.note ?? null,
             category: input.category,
             amountPaise: input.amountPaise,
             splitMethod: input.splitMethod,
@@ -293,6 +295,8 @@ export async function updateExpense(
           data: {
             paidById: input.paidById,
             description: input.description,
+            // An edit without a note keeps the current one.
+            ...(input.note !== undefined && { note: input.note }),
             category: input.category,
             amountPaise: input.amountPaise,
             splitMethod: input.splitMethod,

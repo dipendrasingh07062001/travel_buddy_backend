@@ -26,6 +26,11 @@ const expenseParams = {
 } as const;
 const expenseFields = {
   description: { type: 'string', minLength: 2, maxLength: 200 },
+  note: {
+    anyOf: [{ type: 'string', maxLength: 500 }, { type: 'null' }],
+    description:
+      'Optional private context, up to 500 characters. When editing, omit it to keep the current note, or send null or an empty string to clear it.',
+  },
   category: {
     type: 'string',
     enum: [
@@ -79,6 +84,7 @@ const expenseView = {
     'id',
     'tripId',
     'description',
+    'note',
     'category',
     'amountPaise',
     'currency',
@@ -97,6 +103,7 @@ const expenseView = {
     id: { type: 'string', format: 'uuid' },
     tripId: { type: 'string', format: 'uuid' },
     description: { type: 'string' },
+    note: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     category: { type: 'string' },
     amountPaise: { type: 'integer' },
     currency: { type: 'string' },

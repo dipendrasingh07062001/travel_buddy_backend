@@ -247,6 +247,7 @@ export async function createAccountDataExport(userId: string) {
             createdById: true,
             paidById: true,
             description: true,
+            note: true,
             category: true,
             amountPaise: true,
             currency: true,

@@ -8,6 +8,7 @@ export function presentExpense(expense: ExpenseRecord) {
     id: expense.id,
     tripId: expense.tripId,
     description: expense.description,
+    note: expense.note,
     category: expense.category,
     amountPaise: expense.amountPaise,
     currency: expense.currency.trim(),

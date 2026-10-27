@@ -633,6 +633,8 @@ model Expense {
   createdById String             @map("created_by_id") @db.Uuid
   paidById    String             @map("paid_by_id") @db.Uuid
   description String             @db.VarChar(200)
+  // Optional private context, such as "includes tip" (PRD 11.1).
+  note        String?            @db.VarChar(500)
   category    ExpenseCategory
   amountPaise Int                @map("amount_paise")
   currency    String             @default("INR") @db.Char(3)

@@ -117,8 +117,11 @@ export function prepareExpense(
       );
     }
   }
+  // A blank note means "no note"; leaving it out is different (see note).
+  const note = body.note === undefined ? undefined : body.note?.trim() || null;
   return {
     description,
+    note,
     category: body.category,
     amountPaise: body.amountPaise,
     paidById: body.paidByUserId.toLowerCase(),
