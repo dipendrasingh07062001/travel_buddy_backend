@@ -310,6 +310,7 @@ export async function createAccountDataExport(userId: string) {
             receiverId: true,
             amountPaise: true,
             currency: true,
+            method: true,
             status: true,
             decidedAt: true,
             cancelledAt: true,

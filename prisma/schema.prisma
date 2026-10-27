@@ -729,6 +729,8 @@ model Settlement {
   receiverId  String           @map("receiver_id") @db.Uuid
   amountPaise Int              @map("amount_paise")
   currency    String           @default("INR") @db.Char(3)
+  // How the money moved outside Travel Buddy, such as "UPI" (PRD 11.5).
+  method      String?          @db.VarChar(50)
   status      SettlementStatus @default(PENDING)
   decidedAt   DateTime?        @map("decided_at") @db.Timestamptz(6)
   cancelledAt DateTime?        @map("cancelled_at") @db.Timestamptz(6)

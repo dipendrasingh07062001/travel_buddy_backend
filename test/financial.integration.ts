@@ -8,11 +8,14 @@ import type { TokenVerifier } from '../src/modules/auth/auth.types.js';
 
 const communityId = randomUUID();
 const tripId = randomUUID();
+const methodTripId = randomUUID();
 const users = {
   owner: randomUUID(),
   memberA: randomUUID(),
   memberB: randomUUID(),
   outsider: randomUUID(),
+  // Records settlements on its own trip, with its own rate-limit allowance.
+  payer: randomUUID(),
 };
 const subjects = Object.fromEntries(
   Object.keys(users).map((role) => [role, `financial-${role}-${randomUUID()}`]),
@@ -88,7 +91,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  await database.trip.deleteMany({ where: { id: tripId } });
+  await database.trip.deleteMany({
+    where: { id: { in: [tripId, methodTripId] } },
+  });
   await database.community.deleteMany({ where: { id: communityId } });
   await database.user.deleteMany({
     where: { id: { in: Object.values(users) } },
@@ -431,5 +436,125 @@ describe('disputes and external settlement confirmation', () => {
         })
       ).statusCode,
     ).toBe(409);
+  });
+
+  it('records an optional payment method and refuses numbers that could be PINs or card details', async () => {
+    // Its own trip, so the balances above are not involved.
+    await database.trip.create({
+      data: {
+        id: methodTripId,
+        ownerId: users.owner,
+        communityId,
+        originCity: 'Jaipur',
+        startDate: new Date('2026-10-10'),
+        endDate: new Date('2026-10-12'),
+        durationDays: 3,
+        desiredGroupSize: 2,
+        currentGroupSize: 2,
+        description: 'Settlement method test trip',
+        status: 'FULL',
+        publishedAt: new Date(),
+        memberships: {
+          create: [
+            { userId: users.owner, role: 'OWNER' },
+            { userId: users.payer, role: 'MEMBER' },
+          ],
+        },
+      },
+    });
+    const url = `/api/v1/trips/${methodTripId}/settlements`;
+    expect(
+      (
+        await request(
+          'POST',
+          `/api/v1/trips/${methodTripId}/expenses`,
+          'owner',
+          {
+            description: 'Fuel',
+            category: 'TRANSPORT',
+            amountPaise: 3000,
+            paidByUserId: users.owner,
+            splitMethod: 'EQUAL',
+            participants: [{ userId: users.owner }, { userId: users.payer }],
+          },
+        )
+      ).statusCode,
+    ).toBe(201);
+    const pay = (method?: unknown) =>
+      request('POST', url, 'payer', {
+        receiverId: users.owner,
+        amountPaise: 500,
+        ...(method !== undefined && { method }),
+      });
+
+    const withMethod = await pay('  UPI  ');
+    expect(withMethod.statusCode).toBe(201);
+    expect(withMethod.json().data.method).toBe('UPI');
+    const paidId = withMethod.json().data.id as string;
+    expect((await request('GET', url, 'owner')).json().data[0]).toMatchObject({
+      id: paidId,
+      method: 'UPI',
+    });
+    expect(
+      (await request('GET', `${url}/me`, 'payer')).json().data[0].method,
+    ).toBe('UPI');
+    const confirmed = await request(
+      'POST',
+      `/api/v1/settlements/${paidId}/confirm`,
+      'owner',
+    );
+    expect(confirmed.json().data).toMatchObject({
+      status: 'CONFIRMED',
+      method: 'UPI',
+    });
+    // Notifications keep their fixed wording; the method is not copied in.
+    const notices = await database.notification.findMany({
+      where: { sourceId: paidId },
+    });
+    expect(notices.length).toBeGreaterThan(0);
+    expect(JSON.stringify(notices)).not.toContain('UPI');
+
+    expect((await pay('x'.repeat(51))).statusCode).toBe(400);
+    for (const method of ['UPI PIN 1234', '4111 1111 1111 1111']) {
+      const refused = await pay(method);
+      expect(refused.statusCode, method).toBe(400);
+      expect(refused.json().error.code, method).toBe(
+        'INVALID_SETTLEMENT_METHOD',
+      );
+    }
+    expect(
+      await database.settlement.count({ where: { tripId: methodTripId } }),
+    ).toBe(1);
+
+    // Three digits are allowed; blank, null or left out means not stated.
+    for (const [method, stored] of [
+      ['GPay 123', 'GPay 123'],
+      ['   ', null],
+      [null, null],
+      [undefined, null],
+    ] as const) {
+      const recorded = await pay(method);
+      expect(recorded.statusCode).toBe(201);
+      expect(recorded.json().data.method).toBe(stored);
+      expect(
+        (
+          await request(
+            'POST',
+            `/api/v1/settlements/${recorded.json().data.id}/cancel`,
+            'payer',
+          )
+        ).json().data.method,
+      ).toBe(stored);
+    }
+
+    const exported = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/data-export',
+      headers: headers('payer'),
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().activity.settlements).toContainEqual(
+      expect.objectContaining({ id: paidId, method: 'UPI' }),
+    );
   });
 });

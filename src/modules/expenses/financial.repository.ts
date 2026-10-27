@@ -5,7 +5,10 @@ import {
   type SettlementStatus,
 } from '../../generated/prisma/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
-import { calculateBalances } from './expense.service.js';
+import {
+  calculateBalances,
+  prepareSettlementMethod,
+} from './expense.service.js';
 
 const person = { select: { id: true, displayName: true } } as const;
 const settlementInclude = { payer: person, receiver: person } as const;
@@ -171,6 +174,7 @@ export async function recordSettlement(
   actorId: string,
   receiverId: string,
   amountPaise: number,
+  method?: string | null,
   now = new Date(),
 ) {
   if (actorId === receiverId)
@@ -190,6 +194,7 @@ export async function recordSettlement(
       'Amount must be between 1 and 1,000,000,000 paise.',
     );
   }
+  const cleanMethod = prepareSettlementMethod(method);
   try {
     return await database.$transaction(
       async (tx) => {
@@ -245,6 +250,7 @@ export async function recordSettlement(
             payerId: actorId,
             receiverId,
             amountPaise,
+            method: cleanMethod,
             createdAt: now,
           },
           include: settlementInclude,
