@@ -956,9 +956,10 @@ check the account's current database role and active status on every request.
   inspection is recorded in the moderation audit trail.
 - `POST /api/v1/admin/reports/:reportId/start-review` claims a submitted report.
 - `POST /api/v1/admin/reports/:reportId/resolve` accepts a `resolution` of
-  `DISMISS`, `SUSPEND_USER`, or `REMOVE_CONTENT`, and a required `reason` of at
-  least 10 non-space characters. Only the assigned reviewer or an administrator
-  may resolve a claimed report.
+  `DISMISS`, `SUSPEND_USER`, `REMOVE_CONTENT`, or `RESTRICT_FEATURE` (with a
+  `restriction` object; see [feature restrictions](#feature-restrictions)), and a
+  required `reason` of at least 10 non-space characters. Only the assigned
+  reviewer or an administrator may resolve a claimed report.
 - `POST /api/v1/admin/users/:userId/suspend` suspends an active account with a
   reason; `POST /api/v1/admin/users/:userId/restore` restores one and is
   administrator-only.
@@ -981,15 +982,17 @@ community content. Administrator accounts cannot be suspended through the API.
 The affected account receives an in-app notification in the same transaction
 as the moderation action (PRD §12):
 
-| Action                    | Notification type           | `sourceId`           | `tripId`           |
-| ------------------------- | --------------------------- | -------------------- | ------------------ |
-| Trip removed              | `TRIP_REMOVED`              | trip ID              | trip ID            |
-| Community post removed    | `COMMUNITY_POST_REMOVED`    | post ID              | `null`             |
-| Community comment removed | `COMMUNITY_COMMENT_REMOVED` | comment ID           | `null`             |
-| Trip-room message removed | `MESSAGE_REMOVED`           | message ID           | the message's trip |
-| Profile photo removed     | `PROFILE_PHOTO_REMOVED`     | report or action ID  | `null`             |
-| Account suspended         | `ACCOUNT_SUSPENDED`         | moderation action ID | `null`             |
-| Account restored          | `ACCOUNT_RESTORED`          | moderation action ID | `null`             |
+| Action                    | Notification type            | `sourceId`           | `tripId`           |
+| ------------------------- | ---------------------------- | -------------------- | ------------------ |
+| Trip removed              | `TRIP_REMOVED`               | trip ID              | trip ID            |
+| Community post removed    | `COMMUNITY_POST_REMOVED`     | post ID              | `null`             |
+| Community comment removed | `COMMUNITY_COMMENT_REMOVED`  | comment ID           | `null`             |
+| Trip-room message removed | `MESSAGE_REMOVED`            | message ID           | the message's trip |
+| Profile photo removed     | `PROFILE_PHOTO_REMOVED`      | report or action ID  | `null`             |
+| Account suspended         | `ACCOUNT_SUSPENDED`          | moderation action ID | `null`             |
+| Account restored          | `ACCOUNT_RESTORED`           | moderation action ID | `null`             |
+| Feature restricted        | `FEATURE_RESTRICTED`         | restriction ID       | `null`             |
+| Restriction lifted early  | `FEATURE_RESTRICTION_LIFTED` | restriction ID       | `null`             |
 
 Notices have generic titles and no `actorId`. They never name the moderator or
 the reporter, or repeat the moderator's internal reason; explaining reasons and
@@ -1003,6 +1006,35 @@ A suspended account cannot open the inbox, so authenticated routes return
 data or make a data request.") instead of the generic `ACCOUNT_DISABLED`, which
 remains for other inactive accounts. These notices use the optional `safety`
 email category until a mandatory-notice policy is approved.
+
+### Feature restrictions
+
+For problems that do not justify suspension, staff can restrict one feature of
+an account (PRD §6.4):
+
+| `feature`             | Blocks                                 | Still allowed                                 |
+| --------------------- | -------------------------------------- | --------------------------------------------- |
+| `CONNECTION_REQUESTS` | sending connection requests            | answering received requests                   |
+| `COMMUNITY_POSTING`   | creating or editing posts and comments | reading, deleting own content                 |
+| `TRIP_PUBLISHING`     | publishing or republishing trips       | drafts, edits, cancelling, completing         |
+| `MESSAGING`           | sending or editing trip-room messages  | reading, deleting own messages, leaving trips |
+
+- `POST /api/v1/admin/users/:userId/restrictions` with `feature`, an optional
+  `durationDays` (1–90; omit for "until lifted") and a `reason`. Only one active
+  restriction per feature: another returns `409 RESTRICTION_ACTIVE`.
+- `GET /api/v1/admin/users/:userId/restrictions` lists current and past
+  restrictions, with reasons, for staff.
+- `POST /api/v1/admin/restrictions/:restrictionId/lift` ends one early with a
+  reason; an ended or lifted one returns `409 RESTRICTION_NOT_ACTIVE`.
+- `GET /api/v1/me/restrictions` shows the signed-in account its active
+  restrictions: feature, `startsAt` and `endsAt` only.
+
+The same staff protections as suspension apply. Each apply or lift is recorded
+in the moderation audit trail and notifies the account (without the reason);
+a restriction that simply reaches `endsAt` ends silently. A blocked action
+returns `403 FEATURE_RESTRICTED` with the end time, checked inside the action's
+own database transaction. Restrictions are private: they never appear on public
+profiles, and the data export lists only their feature and dates.
 
 ### Profile photo moderation
 

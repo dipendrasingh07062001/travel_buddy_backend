@@ -121,6 +121,8 @@ describe('safe email configuration and allowlist', () => {
     MESSAGE_REMOVED: 'SAFETY',
     ACCOUNT_SUSPENDED: 'SAFETY',
     ACCOUNT_RESTORED: 'SAFETY',
+    FEATURE_RESTRICTED: 'SAFETY',
+    FEATURE_RESTRICTION_LIFTED: 'SAFETY',
     MESSAGE_RECEIVED: null,
     MATCHING_TRIP_PUBLISHED: null,
   };

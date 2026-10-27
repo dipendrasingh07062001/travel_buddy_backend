@@ -23,6 +23,11 @@ import {
   suspendAccountDirect,
 } from './moderation.repository.js';
 import { preservePhotoEvidence } from './photo-evidence.js';
+import {
+  maximumRestrictionDays,
+  restrictedFeatures,
+  type RestrictionInput,
+} from './restriction.repository.js';
 
 interface PageQuery {
   page?: number;
@@ -46,7 +51,9 @@ interface ReasonBody {
 }
 
 interface ResolveBody extends ReasonBody {
-  resolution: 'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT';
+  resolution:
+    'DISMISS' | 'SUSPEND_USER' | 'REMOVE_CONTENT' | 'RESTRICT_FEATURE';
+  restriction?: RestrictionInput;
 }
 
 const pageSchema = {
@@ -58,11 +65,26 @@ const pageSchema = {
   },
 } as const;
 
-const reasonSchema = {
+export const reasonSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['reason'],
   properties: { reason: { type: 'string', minLength: 10, maxLength: 1000 } },
+} as const;
+
+export const restrictionInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['feature'],
+  properties: {
+    feature: { type: 'string', enum: restrictedFeatures },
+    durationDays: {
+      type: 'integer',
+      minimum: 1,
+      maximum: maximumRestrictionDays,
+      description: 'Omit to restrict until a moderator lifts it.',
+    },
+  },
 } as const;
 
 const reportParams = {
@@ -71,13 +93,13 @@ const reportParams = {
   properties: { reportId: { type: 'string', format: 'uuid' } },
 } as const;
 
-const userParams = {
+export const userParams = {
   type: 'object',
   required: ['userId'],
   properties: { userId: { type: 'string', format: 'uuid' } },
 } as const;
 
-async function staffIdentity(
+export async function staffIdentity(
   request: FastifyRequest,
   auth: AuthRouteDependencies,
 ) {
@@ -87,7 +109,7 @@ async function staffIdentity(
   return { userId: user.id, role };
 }
 
-function pagination(page: number, pageSize: number, totalItems: number) {
+export function pagination(page: number, pageSize: number, totalItems: number) {
   return {
     page,
     pageSize,
@@ -96,7 +118,7 @@ function pagination(page: number, pageSize: number, totalItems: number) {
   };
 }
 
-function cleanReason(reason: string): string {
+export function cleanReason(reason: string): string {
   const value = reason.trim();
   if (value.length < 10) {
     throw new AppError(
@@ -196,7 +218,16 @@ export async function registerModerationRoutes(
             ...reasonSchema.properties,
             resolution: {
               type: 'string',
-              enum: ['DISMISS', 'SUSPEND_USER', 'REMOVE_CONTENT'],
+              enum: [
+                'DISMISS',
+                'SUSPEND_USER',
+                'REMOVE_CONTENT',
+                'RESTRICT_FEATURE',
+              ],
+            },
+            restriction: {
+              ...restrictionInputSchema,
+              description: 'Required with RESTRICT_FEATURE, and only then.',
             },
           },
         },
@@ -210,6 +241,7 @@ export async function registerModerationRoutes(
         role,
         request.body.resolution,
         cleanReason(request.body.reason),
+        request.body.restriction,
       );
       if (removedPhotoKey && storage) {
         await deleteObjectQuietly(

@@ -6,14 +6,21 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Feature restrictions (PRD §6.4): staff can block connection requests,
+  community posting, trip publishing or messaging for 1–90 days or until
+  lifted, directly or from a report. Checked inside each action's transaction;
+  the account is notified and can list its active restrictions. See
+  [feature restrictions](../README.md#feature-restrictions).
+- One migration (`20261027120000_feature_restrictions`) adding the
+  `account_restrictions` table and audit/notification types; no provider or
+  API key.
+
+## Already implemented
+
 - Moderation notices (PRD §12): removing a trip, post, comment or message, and
   suspending or restoring an account, notify the affected user in-app. Suspended
   accounts get `403 ACCOUNT_SUSPENDED`. Notices carry no reason text or staff
   identity. See [moderation notices](../README.md#moderation-notices).
-- One migration (`20261027090000_moderation_notices`) adding notification
-  types; no provider or API key.
-
-## Already implemented
 
 - Trip date windows (PRD §7.1): a trip can be exact dates or "any N days"
   within a window of up to 92 days, optionally weekends only. See
@@ -50,9 +57,9 @@ Frontend/UI implementation belongs to the Flutter developer.
   response expectations, including whether moderation notices explain the
   reason. Existing report review/removal is not a complete operational
   moderation policy. Implement any agreed workflow gaps separately.
-- Partial feature restrictions (PRD §6.4): moderators can only suspend an
-  account outright; restricting single features (such as sending requests or
-  posting) for a period is not built yet.
+- Automatic limits for new accounts (PRD §9.2): request limits apply to every
+  account equally; stricter limits for new accounts are not built. Moderator
+  feature restrictions cover abusive accounts.
 - Account/policy notice coverage: decide which notices are mandatory versus
   optional and approved content/version rules. Existing policy acceptance and
   opt-in email preferences do not settle these decisions.

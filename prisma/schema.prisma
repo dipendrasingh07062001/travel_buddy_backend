@@ -202,6 +202,8 @@ enum NotificationType {
   MESSAGE_REMOVED
   ACCOUNT_SUSPENDED
   ACCOUNT_RESTORED
+  FEATURE_RESTRICTED
+  FEATURE_RESTRICTION_LIFTED
 }
 
 enum PushPlatform {
@@ -270,6 +272,16 @@ enum ModerationActionType {
   CONTENT_REMOVED
   STAFF_ROLE_GRANTED
   STAFF_ROLE_REVOKED
+  FEATURE_RESTRICTED
+  FEATURE_RESTRICTION_LIFTED
+}
+
+// Features a moderator can restrict without suspending the whole account.
+enum RestrictedFeature {
+  CONNECTION_REQUESTS
+  COMMUNITY_POSTING
+  TRIP_PUBLISHING
+  MESSAGING
 }
 
 enum MessageStatus {
@@ -329,6 +341,9 @@ model User {
   pushDevices                PushDevice[]
   tripAlerts                 TripAlertSubscription[]
   emailPreference            EmailPreference?
+  restrictions               AccountRestriction[]      @relation("RestrictedAccount")
+  restrictionsApplied        AccountRestriction[]      @relation("RestrictionCreator")
+  restrictionsLifted         AccountRestriction[]      @relation("RestrictionLifter")
   createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamptz(6)
@@ -914,34 +929,35 @@ model UserBlock {
 }
 
 model Report {
-  id                          String             @id @default(uuid()) @db.Uuid
-  reporterId                  String             @map("reporter_id") @db.Uuid
-  targetType                  ReportTargetType   @map("target_type")
-  reportedUserId              String?            @map("reported_user_id") @db.Uuid
-  reportedTripId              String?            @map("reported_trip_id") @db.Uuid
-  reportedConnectionRequestId String?            @map("reported_connection_request_id") @db.Uuid
-  reportedMessageId           String?            @map("reported_message_id") @db.Uuid
-  reportedCommunityPostId     String?            @map("reported_community_post_id") @db.Uuid
-  reportedCommunityCommentId  String?            @map("reported_community_comment_id") @db.Uuid
-  reportedPhotoKey            String?            @map("reported_photo_key") @db.VarChar(500)
-  evidenceStorageKey          String?            @map("evidence_storage_key") @db.VarChar(500)
+  id                          String               @id @default(uuid()) @db.Uuid
+  reporterId                  String               @map("reporter_id") @db.Uuid
+  targetType                  ReportTargetType     @map("target_type")
+  reportedUserId              String?              @map("reported_user_id") @db.Uuid
+  reportedTripId              String?              @map("reported_trip_id") @db.Uuid
+  reportedConnectionRequestId String?              @map("reported_connection_request_id") @db.Uuid
+  reportedMessageId           String?              @map("reported_message_id") @db.Uuid
+  reportedCommunityPostId     String?              @map("reported_community_post_id") @db.Uuid
+  reportedCommunityCommentId  String?              @map("reported_community_comment_id") @db.Uuid
+  reportedPhotoKey            String?              @map("reported_photo_key") @db.VarChar(500)
+  evidenceStorageKey          String?              @map("evidence_storage_key") @db.VarChar(500)
   reason                      ReportReason
-  details                     String?            @db.VarChar(1000)
-  status                      ReportStatus       @default(SUBMITTED)
-  reviewerId                  String?            @map("reviewer_id") @db.Uuid
-  reviewedAt                  DateTime?          @map("reviewed_at") @db.Timestamptz(6)
-  resolvedAt                  DateTime?          @map("resolved_at") @db.Timestamptz(6)
-  reporter                    User               @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  reviewer                    User?              @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  details                     String?              @db.VarChar(1000)
+  status                      ReportStatus         @default(SUBMITTED)
+  reviewerId                  String?              @map("reviewer_id") @db.Uuid
+  reviewedAt                  DateTime?            @map("reviewed_at") @db.Timestamptz(6)
+  resolvedAt                  DateTime?            @map("resolved_at") @db.Timestamptz(6)
+  reporter                    User                 @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewer                    User?                @relation("ReportReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
   moderationActions           ModerationAction[]
-  reportedUser                User?              @relation("ReportUserTarget", fields: [reportedUserId], references: [id], onDelete: Restrict)
-  reportedTrip                Trip?              @relation(fields: [reportedTripId], references: [id], onDelete: Restrict)
-  reportedConnectionRequest   ConnectionRequest? @relation(fields: [reportedConnectionRequestId], references: [id], onDelete: Restrict)
-  reportedMessage             Message?           @relation(fields: [reportedMessageId], references: [id], onDelete: Restrict)
-  reportedCommunityPost       CommunityPost?     @relation(fields: [reportedCommunityPostId], references: [id], onDelete: Restrict)
-  reportedCommunityComment    CommunityComment?  @relation(fields: [reportedCommunityCommentId], references: [id], onDelete: Restrict)
-  createdAt                   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  restrictions                AccountRestriction[]
+  reportedUser                User?                @relation("ReportUserTarget", fields: [reportedUserId], references: [id], onDelete: Restrict)
+  reportedTrip                Trip?                @relation(fields: [reportedTripId], references: [id], onDelete: Restrict)
+  reportedConnectionRequest   ConnectionRequest?   @relation(fields: [reportedConnectionRequestId], references: [id], onDelete: Restrict)
+  reportedMessage             Message?             @relation(fields: [reportedMessageId], references: [id], onDelete: Restrict)
+  reportedCommunityPost       CommunityPost?       @relation(fields: [reportedCommunityPostId], references: [id], onDelete: Restrict)
+  reportedCommunityComment    CommunityComment?    @relation(fields: [reportedCommunityCommentId], references: [id], onDelete: Restrict)
+  createdAt                   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([reporterId, status, createdAt])
   @@index([status, createdAt, id])
@@ -972,6 +988,31 @@ model ModerationAction {
   @@index([targetType, targetId, createdAt])
   @@index([actorId, createdAt])
   @@map("moderation_actions")
+}
+
+// A moderator-applied limit on one feature. Active while not lifted and
+// before endsAt; a null endsAt lasts until a moderator lifts it. The reasons
+// are internal and are never shown to the restricted user.
+model AccountRestriction {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  feature     RestrictedFeature
+  reason      String            @db.VarChar(1000)
+  reportId    String?           @map("report_id") @db.Uuid
+  createdById String            @map("created_by_id") @db.Uuid
+  startsAt    DateTime          @default(now()) @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime?         @map("ends_at") @db.Timestamptz(6)
+  liftedAt    DateTime?         @map("lifted_at") @db.Timestamptz(6)
+  liftedById  String?           @map("lifted_by_id") @db.Uuid
+  liftReason  String?           @map("lift_reason") @db.VarChar(1000)
+  user        User              @relation("RestrictedAccount", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation("RestrictionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  liftedBy    User?             @relation("RestrictionLifter", fields: [liftedById], references: [id], onDelete: Restrict)
+  report      Report?           @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, feature, liftedAt])
+  @@index([reportId])
+  @@map("account_restrictions")
 }
 
 model AuthIdentity {

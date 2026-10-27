@@ -2,6 +2,7 @@ import { database } from '../../database/client.js';
 import { createNotifications } from '../notifications/notification.repository.js';
 import { lockActiveCommunity } from '../communities/community-lock.js';
 import { AppError } from '../../errors/app-error.js';
+import { requireFeatureAllowed } from '../moderation/restriction.repository.js';
 import {
   alertLimitWindowMs,
   lockOwnerAlertBudget,
@@ -71,6 +72,10 @@ export const prismaTripManagementRepository: TripManagementRepository = {
 
   async updateOwned(id, ownerId, expectedVersion, allowedStatuses, data) {
     return database.$transaction(async (transaction) => {
+      // Publishing and republishing; drafts, edits and closing stay allowed.
+      if (data.status === 'PUBLISHED') {
+        await requireFeatureAllowed(transaction, ownerId, 'TRIP_PUBLISHING');
+      }
       if (
         typeof data.communityId === 'string' &&
         !(await lockActiveCommunity(transaction, data.communityId))
