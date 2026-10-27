@@ -6,22 +6,24 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Required profile photo (PRD §5.4): with `PROFILE_PHOTO_REQUIRED=true`,
+  publishing trips, connection requests and community contributions also need
+  a profile photo. Off by default; the API refuses to start with it on unless
+  photo storage (R2) is fully configured. Turning it on is a founder decision
+  recorded in the [setup checklist](backend-setup-checklist.md).
+- No migration, provider or API key.
+
+## Already implemented
+
 - Feature restrictions (PRD §6.4): staff can block connection requests,
   community posting, trip publishing or messaging for 1–90 days or until
   lifted, directly or from a report. Checked inside each action's transaction;
   the account is notified and can list its active restrictions. See
   [feature restrictions](../README.md#feature-restrictions).
-- One migration (`20261027120000_feature_restrictions`) adding the
-  `account_restrictions` table and audit/notification types; no provider or
-  API key.
-
-## Already implemented
-
 - Moderation notices (PRD §12): removing a trip, post, comment or message, and
   suspending or restoring an account, notify the affected user in-app. Suspended
   accounts get `403 ACCOUNT_SUSPENDED`. Notices carry no reason text or staff
   identity. See [moderation notices](../README.md#moderation-notices).
-
 - Trip date windows (PRD §7.1): a trip can be exact dates or "any N days"
   within a window of up to 92 days, optionally weekends only. See
   [rules and search behaviour](trip-date-windows.md).

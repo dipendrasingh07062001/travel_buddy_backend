@@ -299,6 +299,13 @@ Trip status is not directly editable. Use the explicit lifecycle endpoints:
 Publishing requires a complete adult profile: display name, birth date, home
 city, biography, and at least one language. An incomplete profile returns
 `409 PROFILE_INCOMPLETE`. Drafts can be created before the profile is complete.
+The same check applies to connection requests and community contributions.
+
+A profile photo joins those requirements when `PROFILE_PHOTO_REQUIRED=true`
+(PRD §5.4). It is off by default, and the API refuses to start with it on unless
+all six `R2_*` storage settings are configured, so the photo can always be
+uploaded. Browsing, reading and drafts never need a photo. If moderation removes
+the photo, the account must upload a new one before those actions.
 
 `currentGroupSize` counts travellers already committed to the trip, including
 the owner and accepted members. The owner can raise it for companions who are

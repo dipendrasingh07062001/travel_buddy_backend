@@ -24,6 +24,9 @@ a dedicated milestone after feature work, then verify each service separately.
 - [ ] Public/private object storage configuration (currently R2 integration),
       media hostname, bucket access controls, credentials, upload/read/delete tests,
       private receipt isolation and account-deletion cleanup verification.
+- [ ] Founder decision: whether a profile photo is required (PRD §5.4). If so,
+      set `PROFILE_PHOTO_REQUIRED=true` only after the storage checks above pass;
+      the API refuses to start with it on while any `R2_*` setting is missing.
 - [ ] Choose an email provider and implement its real sender adapter. Verify
       a sending domain/address using that provider's DNS instructions. Configure
       provider credentials, timeouts and idempotency for the full retry window.
