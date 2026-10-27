@@ -6,14 +6,19 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
+- Former-member expense payer (PRD §11.1): a member who left or was removed,
+  with an active account, can be the payer of a new expense. New participants
+  stay current members. Balances, the former member's own expense view and
+  settlements already handled former members.
+- No migration, provider or API key.
+
+## Already implemented
+
 - Required profile photo (PRD §5.4): with `PROFILE_PHOTO_REQUIRED=true`,
   publishing trips, connection requests and community contributions also need
   a profile photo. Off by default; the API refuses to start with it on unless
   photo storage (R2) is fully configured. Turning it on is a founder decision
   recorded in the [setup checklist](backend-setup-checklist.md).
-- No migration, provider or API key.
-
-## Already implemented
 
 - Feature restrictions (PRD §6.4): staff can block connection requests,
   community posting, trip publishing or messaging for 1–90 days or until

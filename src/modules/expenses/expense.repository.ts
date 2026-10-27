@@ -58,7 +58,11 @@ async function eligibleTrip(
     select: {
       status: true,
       memberships: {
-        select: { userId: true, status: true },
+        select: {
+          userId: true,
+          status: true,
+          user: { select: { status: true } },
+        },
       },
     },
   });
@@ -73,25 +77,40 @@ async function eligibleTrip(
   return trip;
 }
 
+// PRD 11.1: the payer may be a current or a former member (left or removed),
+// as long as the former member's account is active and can still see and
+// settle the expense. New participants must be current members, so nobody is
+// given a new share after leaving. People already on an expense stay valid
+// when it is edited.
 function checkParticipants(
-  members: { userId: string; status: string }[],
+  members: { userId: string; status: string; user: { status: string } }[],
   input: PreparedExpense,
   previouslyIncluded = new Set<string>(),
 ) {
-  const eligible = new Set(
+  const current = new Set(
     members
       .filter((member) => member.status === 'ACTIVE')
       .map((member) => member.userId),
   );
-  for (const userId of [
-    input.paidById,
-    ...input.shares.map((share) => share.userId),
-  ]) {
-    if (!eligible.has(userId) && !previouslyIncluded.has(userId)) {
+  const payers = new Set([
+    ...current,
+    ...members
+      .filter((member) => member.user.status === 'ACTIVE')
+      .map((member) => member.userId),
+  ]);
+  if (!payers.has(input.paidById) && !previouslyIncluded.has(input.paidById)) {
+    throw new AppError(
+      400,
+      'EXPENSE_MEMBER_INVALID',
+      'The payer must be a current trip member, or a former member whose account is active.',
+    );
+  }
+  for (const share of input.shares) {
+    if (!current.has(share.userId) && !previouslyIncluded.has(share.userId)) {
       throw new AppError(
         400,
         'EXPENSE_MEMBER_INVALID',
-        'Payer and participants must belong to this trip. New participants must be active members.',
+        'New participants must be current trip members.',
       );
     }
   }

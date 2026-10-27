@@ -551,11 +551,16 @@ deleted messages reach open rooms live through the
 ## Shared expense ledger
 
 Active trip members can record and review private INR expenses. Amounts are
-integer **paise**: `1001` means ₹10.01. The payer and every split participant
-must be an active trip member when a new expense is recorded. Existing shares
-remain in the ledger after a member leaves. Former members lose ledger access,
-while current members can still see their historical balances. Completed and
-cancelled trips retain a readable ledger but accept no changes.
+integer **paise**: `1001` means ₹10.01. Every split participant must be an
+active trip member when a new expense is recorded. The payer may be an active
+member or a former one (left or removed) whose account is still active, such as
+someone who paid the hotel before leaving (PRD §11.1). A former payer receives
+the expense notice and sees it in their own view, described below. Otherwise
+`400 EXPENSE_MEMBER_INVALID`. Existing shares and payers remain valid when an
+expense is edited, and remain in the ledger after a member leaves. Former
+members lose full ledger access, while current members can still see their
+historical balances. Completed and cancelled trips retain a readable ledger but
+accept no changes.
 
 - `POST /api/v1/trips/:tripId/expenses` records an expense.
 - `GET /api/v1/trips/:tripId/expenses?page=1&pageSize=20` lists expenses,
