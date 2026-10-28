@@ -1384,6 +1384,12 @@ The integration tests require a reachable PostgreSQL database with all committed
 migrations applied. GitHub Actions runs these tests automatically against an
 isolated PostgreSQL service for every pull request.
 
+App startup and test data setup run in `beforeAll` hooks, which have their own
+time limit (30 seconds for unit tests, 60 seconds for integration tests) because
+they slow down on a busy machine. Each test body keeps a tighter limit (5
+seconds for unit tests, 15 seconds for integration tests), so a slow test still
+fails. Tests are never retried automatically.
+
 ## Project structure
 
 ```text

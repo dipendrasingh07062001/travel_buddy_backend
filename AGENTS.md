@@ -115,10 +115,10 @@ npm audit --audit-level=high
 Save complete test output to a `*.log` file in the repository root (ignored by
 git), not just the summary, so any failure can be diagnosed.
 
-**Known flaky tests on a busy machine:** an integration file can fail in
-`beforeAll` with "Hook timed out in 15000ms", and `test/rate-limit.test.ts` can
-time out. If that happens, run the failed file alone, then the full suite once
-more, and report both results. A failure that repeats is a real failure.
+**Timeouts are failures.** Setup hooks have 30 s (unit) or 60 s (integration)
+and test bodies 5 s or 15 s (item 39). If a test or hook times out, run the
+failed file alone once to confirm, report both results, and investigate; do not
+treat it as known flakiness.
 
 ## Project facts
 
