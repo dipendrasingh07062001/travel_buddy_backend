@@ -51,20 +51,20 @@ Status recorded 2026-10-28.
 
 ## Group 4: launch setup (no new features)
 
-| #   | Item                                                                    | Status                                                                                                                                 |
-| --- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 28  | Merge PR #44 (hosted Firebase credentials)                              | Open: PR #44 is not merged                                                                                                             |
-| 29  | Hosting, domain, HTTPS                                                  | Open                                                                                                                                   |
-| 30  | Production database, backups and a tested restore                       | Open                                                                                                                                   |
-| 31  | Secure secret storage                                                   | Open                                                                                                                                   |
-| 32  | Live Firebase checks                                                    | Open                                                                                                                                   |
-| 33  | Push notification test on a real phone                                  | Open                                                                                                                                   |
-| 34  | R2 file storage setup and tests                                         | Open                                                                                                                                   |
-| 35  | CORS and proxy settings                                                 | Open                                                                                                                                   |
-| 36  | Monitoring, error alerts, incident contact                              | Open                                                                                                                                   |
-| 37  | Security and load tests, shared rate-limit store                        | Open                                                                                                                                   |
-| 38  | Give the Flutter developer the API URL and contract, then test together | Open                                                                                                                                   |
-| 39  | Fix flaky tests                                                         | Open: `test/rate-limit.test.ts` timeouts, and integration `beforeAll` hook timeouts (15 s) when the whole suite runs on a busy machine |
+| #   | Item                                                                    | Status                                                                                                                       |
+| --- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 28  | Merge PR #44 (hosted Firebase credentials)                              | Open: PR #44 is not merged                                                                                                   |
+| 29  | Hosting, domain, HTTPS                                                  | Open                                                                                                                         |
+| 30  | Production database, backups and a tested restore                       | Open                                                                                                                         |
+| 31  | Secure secret storage                                                   | Open                                                                                                                         |
+| 32  | Live Firebase checks                                                    | Open                                                                                                                         |
+| 33  | Push notification test on a real phone                                  | Open                                                                                                                         |
+| 34  | R2 file storage setup and tests                                         | Open                                                                                                                         |
+| 35  | CORS and proxy settings                                                 | Open                                                                                                                         |
+| 36  | Monitoring, error alerts, incident contact                              | Open                                                                                                                         |
+| 37  | Security and load tests, shared rate-limit store                        | Open                                                                                                                         |
+| 38  | Give the Flutter developer the API URL and contract, then test together | Open                                                                                                                         |
+| 39  | Fix flaky tests                                                         | Done (PR number added after merge): app startup out of rate-limit test bodies; setup-hook limits 30 s unit, 60 s integration |
 
 ## Found later (not in the original 39)
 

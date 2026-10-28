@@ -138,8 +138,9 @@ item branch.
 
 - **The agents disagree:** after 3 rounds you decide. Ask either agent to
   explain its side in plain words if it is unclear.
-- **A test fails once and then passes:** see "Known flaky tests" in
-  `AGENTS.md`. A failure that repeats is real.
+- **A test fails once and then passes:** there are no known flaky tests, so
+  ask the Builder to investigate it (see "Timeouts are failures" in
+  `AGENTS.md`).
 - **An agent starts something you did not ask for:** stop it and point it to
   `AGENTS.md` rule 1.
 - **You want to change a rule:** edit `AGENTS.md` (or ask an agent to, as its

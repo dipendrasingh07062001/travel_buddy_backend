@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { AppError } from '../src/errors/app-error.js';
@@ -24,10 +24,26 @@ function createApp(trustProxy?: (address: string, hop: number) => boolean) {
   });
 }
 
-async function exhaust(
-  app: ReturnType<typeof createApp>,
-  headers: Record<string, string>,
-) {
+type App = ReturnType<typeof createApp>;
+
+// Each block gets its own app, so each test has a fresh rate-limit store.
+// Startup runs under the hook timeout, not the test's 5 s budget.
+function startApp(trustProxy?: (address: string, hop: number) => boolean) {
+  let app: App | undefined;
+  beforeAll(async () => {
+    app = createApp(trustProxy);
+    await app.ready();
+  });
+  afterAll(async () => {
+    await app?.close();
+  });
+  return () => {
+    if (!app) throw new Error('The test app did not start.');
+    return app;
+  };
+}
+
+async function exhaust(app: App, headers: Record<string, string>) {
   for (let index = 0; index < globalLimit; index += 1) {
     const response = await app.inject({
       method: 'GET',
@@ -45,61 +61,58 @@ async function exhaust(
 }
 
 describe('rate limiting', () => {
-  it('keeps separate limits for accounts that share one IP address', async () => {
-    const app = createApp();
-    try {
-      await exhaust(app, { authorization: 'Bearer alice-token' });
+  describe('accounts sharing an address', () => {
+    const app = startApp();
 
-      const otherAccount = await app.inject({
+    it('keeps separate limits for accounts that share one IP address', async () => {
+      await exhaust(app(), { authorization: 'Bearer alice-token' });
+
+      const otherAccount = await app().inject({
         method: 'GET',
         url: '/api/v1/health',
         headers: { authorization: 'Bearer bob-token' },
       });
-      const anonymous = await app.inject({
+      const anonymous = await app().inject({
         method: 'GET',
         url: '/api/v1/health',
       });
       expect(otherAccount.statusCode).toBe(200);
       expect(anonymous.statusCode).toBe(200);
-    } finally {
-      await app.close();
-    }
+    });
   });
 
-  it('limits an invalid token by address instead of by its claimed account', async () => {
-    const app = createApp();
-    try {
-      await exhaust(app, { authorization: 'Bearer invalid-token' });
+  describe('invalid tokens', () => {
+    const app = startApp();
 
-      const anonymous = await app.inject({
+    it('limits an invalid token by address instead of by its claimed account', async () => {
+      await exhaust(app(), { authorization: 'Bearer invalid-token' });
+
+      const anonymous = await app().inject({
         method: 'GET',
         url: '/api/v1/health',
       });
-      const validAccount = await app.inject({
+      const validAccount = await app().inject({
         method: 'GET',
         url: '/api/v1/health',
         headers: { authorization: 'Bearer alice-token' },
       });
       expect(anonymous.statusCode).toBe(429);
       expect(validAccount.statusCode).toBe(200);
-    } finally {
-      await app.close();
-    }
+    });
   });
 
-  it('uses the forwarded client address behind a trusted proxy', async () => {
-    const app = createApp((_address, hop) => hop < 1);
-    try {
-      await exhaust(app, { 'x-forwarded-for': '203.0.113.10' });
+  describe('trusted proxy', () => {
+    const app = startApp((_address, hop) => hop < 1);
 
-      const otherClient = await app.inject({
+    it('uses the forwarded client address behind a trusted proxy', async () => {
+      await exhaust(app(), { 'x-forwarded-for': '203.0.113.10' });
+
+      const otherClient = await app().inject({
         method: 'GET',
         url: '/api/v1/health',
         headers: { 'x-forwarded-for': '203.0.113.11' },
       });
       expect(otherClient.statusCode).toBe(200);
-    } finally {
-      await app.close();
-    }
+    });
   });
 });

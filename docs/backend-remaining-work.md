@@ -1,18 +1,26 @@
 # Backend remaining work
 
-Status recorded 2026-10-27. This is a working engineering checklist, not a
+Status recorded 2026-10-28. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
+
+- Flaky tests (roadmap item 39): `test/rate-limit.test.ts` now starts each
+  test's app in `beforeAll`, so app startup no longer counts against the 5 s
+  test limit. Setup hooks get 30 s in unit tests and 60 s in integration tests;
+  test bodies keep 5 s and 15 s, and nothing is retried. No production code
+  changed. The integration hook timeouts were not reproduced; the cause (app
+  startup plus data setup in `beforeAll` on a busy machine) is likely, not
+  proven.
+
+## Already implemented
 
 - Rounding disclosure (PRD §11.2): expense responses show `rounding`
   (`remainderPaise`, `baseSharePaise`) and a per-share `roundingPaise`, so an
   uneven equal split says which members absorbed the leftover paise. The own
   view (`/expenses/me`) adds only `ownRoundingPaise`. The assignment rule is
   unchanged. No migration: it is worked out from the stored shares.
-
-## Already implemented
 
 - Publish confirmation (PRD §7.2): every publish, including republishing a
   paused trip, requires `confirmsPersonalPlan: true`, meaning the owner
