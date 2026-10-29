@@ -149,8 +149,12 @@ service-account credentials.
 Hosts without secret-file mounts can instead provide
 `FIREBASE_SERVICE_ACCOUNT_JSON` as one private environment variable containing
 the original service-account JSON. It takes precedence over ADC and must match
-`FIREBASE_PROJECT_ID`; malformed credentials fail closed with a generic `503`,
-without falling back to another key or logging the secret. Existing file-based
+`FIREBASE_PROJECT_ID`. The server checks it offline at startup and refuses to
+start, with a fixed reason, if it is malformed (not JSON, wrong fields or
+project, or an unreadable private key); it never falls back to another key or
+logs the secret. A revoked or deleted key passes that check and makes the routes
+that need Firebase return a generic `503`, so verify a real sign-in after
+deploying. Existing file-based
 and workload-identity setups remain supported when this variable is unset.
 See [Firebase hosting credentials](docs/firebase-hosted-credentials.md) for
 Railway secret variables, Docker read-only mounts and the live verification gate.

@@ -1,20 +1,28 @@
 # Backend remaining work
 
-Status recorded 2026-10-28. This is a working engineering checklist, not a
+Status recorded 2026-10-29. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Flaky tests (roadmap item 39): `test/rate-limit.test.ts` now starts each
+- Hosted Firebase credentials (roadmap item 28, from PR #44): the server can
+  read the Firebase service-account key from one secret variable,
+  `FIREBASE_SERVICE_ACCOUNT_JSON`, for hosts such as Railway that have no
+  secret files. It checks the value offline at startup and refuses to start
+  with a fixed reason if it is malformed; the value is never logged. A revoked
+  key is only detected by a live sign-in. Setting up Railway and the real key
+  is item 29. See [hosted credential setup](firebase-hosted-credentials.md).
+
+## Already implemented
+
+- Flaky tests (roadmap item 39, PR #59): `test/rate-limit.test.ts` now starts each
   test's app in `beforeAll`, so app startup no longer counts against the 5 s
   test limit. Setup hooks get 30 s in unit tests and 60 s in integration tests;
   test bodies keep 5 s and 15 s, and nothing is retried. No production code
   changed. The integration hook timeouts were not reproduced; the cause (app
   startup plus data setup in `beforeAll` on a busy machine) is likely, not
   proven.
-
-## Already implemented
 
 - Rounding disclosure (PRD §11.2): expense responses show `rounding`
   (`remainderPaise`, `baseSharePaise`) and a per-share `roundingPaise`, so an

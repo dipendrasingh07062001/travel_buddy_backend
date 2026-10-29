@@ -27,17 +27,26 @@ back to a local file, workload identity or another account.
 
 The JSON must be an object of type `service_account`, with a valid `client_email`,
 a nonempty `private_key` and a `project_id` matching `FIREBASE_PROJECT_ID`.
-The configured string is limited to 65,536 characters. The Firebase SDK validates
-the private-key format. Only these three credential fields are passed to the SDK;
-arbitrary URLs or other JSON properties do not configure our credential client.
-On HTTP paths, parsing and initialization failures produce a generic
-`503 AUTHENTICATION_UNAVAILABLE` without credential fragments or the original
-error cause in application logs. An explicitly empty/whitespace-only or oversized
-secret fails environment validation and stops startup with a sanitized error;
-leave the variable entirely unset to use ADC. If push is enabled, failed Firebase
-initialization can also stop startup instead of starting its delivery worker.
-This does not prove that the account/key is active or has the necessary IAM roles;
-those require live checks.
+The configured string is limited to 65,536 characters. Only these three
+credential fields are passed to the SDK; arbitrary URLs or other JSON properties
+do not configure our credential client.
+
+**Startup check.** When the variable is set, the server checks it offline before
+it listens or starts any worker: valid JSON, the required fields and type, the
+matching project, and a `private_key` that parses as a PEM private key. If a
+check fails, the server logs `API failed to start` with one fixed reason, such
+as `FIREBASE_SERVICE_ACCOUNT_JSON project_id does not match FIREBASE_PROJECT_ID.`,
+and exits, so the deployment fails visibly. The value and the underlying parser
+error are never printed. An explicitly empty/whitespace-only or oversized secret
+fails environment validation even earlier, also without printing it; leave the
+variable entirely unset to use ADC.
+
+**What the check cannot catch.** It does not contact Google, so it cannot tell
+whether the key was deleted or revoked, or whether the account has the IAM roles
+it needs. Those surface only when Firebase is called: HTTP routes that need it
+return a generic `503 AUTHENTICATION_UNAVAILABLE` without credential fragments
+or the original error, and background jobs log the failure and retry. A real
+sign-in after deploying (see "Verification" below) is the check for this.
 
 The app reuses its Firebase Admin instance. Restart/redeploy after changing a
 credential; changing a file or secret does not replace an already cached instance.

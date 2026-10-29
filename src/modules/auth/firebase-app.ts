@@ -1,3 +1,5 @@
+import { createPrivateKey } from 'node:crypto';
+
 import {
   applicationDefault,
   cert,
@@ -16,6 +18,64 @@ const serviceAccountSchema = z.object({
   client_email: z.email(),
   private_key: z.string().min(1),
 });
+
+// Fixed texts only: parser and crypto errors can quote parts of the key.
+export class FirebaseCredentialError extends Error {
+  override name = 'FirebaseCredentialError';
+}
+
+export interface ServiceAccountCredential {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+}
+
+// Checks the hosted secret offline. Whether Google still accepts the key (it
+// may have been deleted or revoked) is only known when Firebase is called.
+export function parseServiceAccount(
+  secret: string,
+  projectId: string,
+): ServiceAccountCredential {
+  let value: unknown;
+  try {
+    value = JSON.parse(secret);
+  } catch {
+    throw new FirebaseCredentialError(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.',
+    );
+  }
+  const account = serviceAccountSchema.safeParse(value);
+  if (!account.success) {
+    throw new FirebaseCredentialError(
+      'FIREBASE_SERVICE_ACCOUNT_JSON is not a service account (type, project_id, client_email and private_key are required).',
+    );
+  }
+  if (account.data.project_id !== projectId) {
+    throw new FirebaseCredentialError(
+      'FIREBASE_SERVICE_ACCOUNT_JSON project_id does not match FIREBASE_PROJECT_ID.',
+    );
+  }
+  try {
+    createPrivateKey(account.data.private_key);
+  } catch {
+    throw new FirebaseCredentialError(
+      'FIREBASE_SERVICE_ACCOUNT_JSON private_key is not a valid PEM private key.',
+    );
+  }
+  return {
+    projectId: account.data.project_id,
+    clientEmail: account.data.client_email,
+    privateKey: account.data.private_key,
+  };
+}
+
+// Run at startup, so a malformed secret fails the deployment with a clear
+// reason instead of passing the health check while every sign-in returns 503.
+export function checkFirebaseCredentials(): void {
+  const secret = env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (secret === undefined || !env.FIREBASE_PROJECT_ID) return;
+  parseServiceAccount(secret, env.FIREBASE_PROJECT_ID);
+}
 
 // One Firebase Admin app serves token verification, push delivery and
 // sign-in account deletion. Local token checks need only the project ID;
@@ -37,16 +97,8 @@ export function firebaseApp(): App {
 
     const secret = env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (secret !== undefined) {
-      const account = serviceAccountSchema.parse(JSON.parse(secret));
-      if (account.project_id !== env.FIREBASE_PROJECT_ID) {
-        throw new Error('Firebase service account project does not match.');
-      }
       return initializeApp({
-        credential: cert({
-          projectId: account.project_id,
-          clientEmail: account.client_email,
-          privateKey: account.private_key,
-        }),
+        credential: cert(parseServiceAccount(secret, env.FIREBASE_PROJECT_ID)),
         projectId: env.FIREBASE_PROJECT_ID,
       });
     }

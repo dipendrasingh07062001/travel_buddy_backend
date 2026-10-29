@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { inspect } from 'node:util';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,11 +27,22 @@ vi.mock('firebase-admin/auth', () => ({
 }));
 
 import { AppError } from '../src/errors/app-error.js';
-import { firebaseApp } from '../src/modules/auth/firebase-app.js';
+import {
+  checkFirebaseCredentials,
+  firebaseApp,
+  FirebaseCredentialError,
+  parseServiceAccount,
+} from '../src/modules/auth/firebase-app.js';
 import { firebaseTokenVerifier } from '../src/modules/auth/firebase-token-verifier.js';
 
 const privateMarker = 'SYNTHETIC_PRIVATE_KEY_MUST_NOT_LEAK';
-const privateKey = `-----BEGIN PRIVATE KEY-----\n${privateMarker}\n-----END PRIVATE KEY-----\n`;
+// A real throwaway key: the offline check parses the PEM, so a fake one fails.
+const { privateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+});
+const unparseableKey = `-----BEGIN PRIVATE KEY-----\n${privateMarker}\n-----END PRIVATE KEY-----\n`;
 const account = {
   type: 'service_account',
   project_id: 'travel-buddy-test',
@@ -167,6 +179,10 @@ describe('Firebase Admin credential initialization', () => {
       name: 'a different project',
       raw: JSON.stringify({ ...account, project_id: 'different-test-project' }),
     },
+    {
+      name: 'an unparseable private key',
+      raw: JSON.stringify({ ...account, private_key: unparseableKey }),
+    },
   ])(
     'rejects $name without falling back to ADC or leaking the secret',
     ({ raw }) => {
@@ -218,5 +234,79 @@ describe('Firebase Admin credential initialization', () => {
     });
     expect(fixture.verifyIdToken).not.toHaveBeenCalled();
     expect(fixture.applicationDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('hosted credential startup check', () => {
+  function failure(raw: string) {
+    try {
+      parseServiceAccount(raw, 'travel-buddy-test');
+    } catch (error) {
+      return error;
+    }
+    throw new Error('Expected the credential check to fail.');
+  }
+
+  const notAServiceAccount =
+    'FIREBASE_SERVICE_ACCOUNT_JSON is not a service account (type, project_id, client_email and private_key are required).';
+
+  it.each([
+    {
+      raw: `{"private_key":"${privateMarker}"`,
+      message: 'FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.',
+    },
+    {
+      raw: JSON.stringify({ ...account, type: 'authorized_user' }),
+      message: notAServiceAccount,
+    },
+    {
+      raw: JSON.stringify({ ...account, client_email: undefined }),
+      message: notAServiceAccount,
+    },
+    {
+      raw: JSON.stringify({ ...account, project_id: 'different-test-project' }),
+      message:
+        'FIREBASE_SERVICE_ACCOUNT_JSON project_id does not match FIREBASE_PROJECT_ID.',
+    },
+    {
+      raw: JSON.stringify({ ...account, private_key: unparseableKey }),
+      message:
+        'FIREBASE_SERVICE_ACCOUNT_JSON private_key is not a valid PEM private key.',
+    },
+  ])('reports "$message" without the secret', ({ raw, message }) => {
+    const error = failure(raw);
+    expect(error).toBeInstanceOf(FirebaseCredentialError);
+    expect(error).toMatchObject({ message });
+    expect(error).not.toHaveProperty('cause');
+    expect(inspect(error, { depth: null, showHidden: true })).not.toContain(
+      privateMarker,
+    );
+  });
+
+  it('returns only the three fields the SDK needs from a valid secret', () => {
+    expect(
+      parseServiceAccount(
+        JSON.stringify({ ...account, extra: privateMarker }),
+        'travel-buddy-test',
+      ),
+    ).toEqual({
+      projectId: account.project_id,
+      clientEmail: account.client_email,
+      privateKey,
+    });
+  });
+
+  it('passes when the secret is unset or valid', () => {
+    expect(() => checkFirebaseCredentials()).not.toThrow();
+    fixture.env.FIREBASE_SERVICE_ACCOUNT_JSON = JSON.stringify(account);
+    expect(() => checkFirebaseCredentials()).not.toThrow();
+  });
+
+  it('fails when the configured secret is invalid', () => {
+    fixture.env.FIREBASE_SERVICE_ACCOUNT_JSON = JSON.stringify({
+      ...account,
+      private_key: unparseableKey,
+    });
+    expect(() => checkFirebaseCredentials()).toThrow(FirebaseCredentialError);
   });
 });
