@@ -5,6 +5,7 @@ import {
   startAccountErasure,
   type AccountErasureWorker,
 } from './modules/account-deletion/account-erasure.js';
+import { checkFirebaseCredentials } from './modules/auth/firebase-app.js';
 import { firebaseSignInAccounts } from './modules/auth/firebase-sign-in-accounts.js';
 import { createFcmPushSender } from './modules/notifications/fcm-push-sender.js';
 import {
@@ -66,6 +67,8 @@ process.once('SIGINT', () => void shutdown('SIGINT'));
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
 try {
+  // Before listening or starting workers, so a bad secret fails the deploy.
+  checkFirebaseCredentials();
   await app.listen({ host: env.HOST, port: env.PORT });
   realtimeListener = startRealtimeListener(env.DATABASE_URL, {
     onEvent: (event) => realtime.dispatch(event),
