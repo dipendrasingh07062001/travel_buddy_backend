@@ -10,6 +10,8 @@ import { env } from './config/env.js';
 import { checkDatabase } from './database/client.js';
 import { registerAdminMetricsRoutes } from './modules/admin-metrics/admin-metrics.routes.js';
 import type { AdminMetricsDependencies } from './modules/admin-metrics/admin-metrics.types.js';
+import { registerAdminUserRoutes } from './modules/admin-users/admin-users.routes.js';
+import type { AdminUserDependencies } from './modules/admin-users/admin-users.types.js';
 import { AppError } from './errors/app-error.js';
 import { resolveAuthDependencies } from './modules/auth/auth.dependencies.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
@@ -83,6 +85,7 @@ export interface BuildAppOptions {
   trips?: Partial<TripRouteDependencies>;
   auth?: Partial<AuthRouteDependencies>;
   adminMetrics?: Partial<AdminMetricsDependencies>;
+  adminUsers?: Partial<AdminUserDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
   profileActivity?: Partial<ProfileActivityDependencies>;
   profileSignals?: Partial<ProfileSignalsDependencies>;
@@ -208,6 +211,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       );
       await registerModerationRoutes(api, authDependencies, storage);
       await registerRestrictionRoutes(api, authDependencies);
+      await registerAdminUserRoutes(api, authDependencies, options.adminUsers);
       await registerAdminMetricsRoutes(
         api,
         authDependencies,

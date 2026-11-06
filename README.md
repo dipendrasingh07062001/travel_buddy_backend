@@ -1123,6 +1123,51 @@ content; use account suspension or dismiss those reports. Suspending an account
 blocks its authenticated API access and hides its public profile, trips, and
 community content. Administrator accounts cannot be suspended through the API.
 
+### Finding accounts
+
+Moderators and administrators can find an account's ID without database
+access. Both routes use the same fresh staff check as the other staff routes.
+
+- `GET /api/v1/admin/users?page=1&pageSize=20` lists accounts, newest first.
+  Optional filters: `query`, `status` (a `UserStatus`) and `staffRole` (a
+  `StaffRole`); leave out any you do not need. `query` is an exact account ID
+  if it is a UUID, otherwise part of the display name in any letter case;
+  `%`, `_` and `\` match literally. Deleted accounts are left out unless
+  `status=DELETED`.
+- `query` may be at most 100 characters before trimming. An empty `query` is
+  rejected with `400 REQUEST_ERROR`; one shorter than 2 characters after
+  trimming with `400 INVALID_USER_SEARCH`; one containing `@` or starting
+  with `+` with `400 USE_CONTACT_LOOKUP`.
+- `POST /api/v1/admin/users/lookup` with `{ "type": "EMAIL" | "PHONE",
+"value": "..." }` returns the account that owns a stored contact, or
+  `{ "data": null }`. Emails match in any letter case; phones must match the
+  stored E.164 value. It finds suspended and pending-deletion accounts too.
+
+Each result has `id`, `displayName`, `status`, `staffRole`, `createdAt`,
+`hasProfilePhoto`, `activeRestrictions` (features currently restricted) and
+`openReportCount` (submitted or under-review reports against the account).
+Results never include emails, phone numbers, birth dates, storage keys or
+moderation reasons.
+
+Only contacts stored in `auth_identities` can be found: an email only if
+Firebase reported it verified, and contacts as of account creation or the
+user's last `POST /me/verification-signals/refresh`. A contact changed in
+Firebase since then is not found.
+
+Privacy and limits:
+
+- Contacts travel only in the `POST` body, never in a URL. Both routes log
+  their URL without the query string, send `Cache-Control: no-store`, and
+  replace unexpected database errors (whose messages can quote the searched
+  value) with a fixed `500` before they are logged.
+- A lookup that finds an account writes a `USER_LOOKED_UP` moderation action
+  (actor, target and a fixed reason, not the searched value) in the same
+  transaction; if that write fails, nothing is returned. Every authorised,
+  valid lookup logs one `admin_user_lookup` line with the staff ID, contact
+  type and outcome (`hit`, `miss` or `failed`), never the value. Name searches
+  are not audited.
+- Rate limits per account: 60 searches and 20 lookups a minute.
+
 ### Moderation notices
 
 The affected account receives an in-app notification in the same transaction
