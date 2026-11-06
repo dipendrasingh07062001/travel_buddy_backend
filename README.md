@@ -458,6 +458,8 @@ Authenticated users follow communities with these idempotent operations:
 - `DELETE /api/v1/communities/:communityId/follow`
 - `GET /api/v1/me/followed-communities`
 
+Following again, even with simultaneous duplicate requests such as a double-tap,
+returns `200` with the existing follow and its original `followedAt`.
 Archived communities are excluded from discovery and cannot be followed.
 
 Authenticated users with a complete profile and public community-activity
@@ -540,7 +542,10 @@ Everyone else gets one chance per trip:
 Acceptance creates an active membership and updates trip capacity, version, and
 automatic `FULL` status in one serializable database transaction. Only active
 members can see the private member list. Reporting and blocking are enforced
-across requests and private messaging.
+across requests and private messaging. Blocking a user
+(`POST /api/v1/users/:userId/block`) also marks pending requests between the
+two accounts `BLOCKED`; blocking again, even with simultaneous duplicates,
+returns `200` with the original `blockedAt`.
 
 ## Private trip-room coordination
 
