@@ -70,10 +70,14 @@ export const prismaSafetyRepository: SafetyRepository = {
 
   blockUser(blockerId, blockedId, now) {
     return database.$transaction(async (transaction) => {
-      const block = await transaction.userBlock.upsert({
+      // As for follows: insert-or-ignore instead of a read-first upsert, so a
+      // repeated block returns the first one instead of a unique-key error.
+      await transaction.userBlock.createMany({
+        data: { blockerId, blockedId, createdAt: now },
+        skipDuplicates: true,
+      });
+      const block = await transaction.userBlock.findUniqueOrThrow({
         where: { blockerId_blockedId: { blockerId, blockedId } },
-        create: { blockerId, blockedId, createdAt: now },
-        update: {},
         include: blockInclude,
       });
       await transaction.connectionRequest.updateMany({

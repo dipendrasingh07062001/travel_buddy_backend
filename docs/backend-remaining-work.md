@@ -1,20 +1,30 @@
 # Backend remaining work
 
-Status recorded 2026-10-29. This is a working engineering checklist, not a
+Status recorded 2026-11-06. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Hosted Firebase credentials (roadmap item 28, from PR #44): the server can
+- Duplicate submissions: following a community or blocking a user twice at the
+  same moment, such as a double-tap, returned `500` because Prisma's upsert
+  with an empty update reads before inserting. Both now insert-or-ignore and
+  then read the row, so every duplicate gets `200` with the original time. The
+  upserts for push devices, profiles, profile photos, mark-read and mute already
+  send one atomic insert. Accepting a request still reads first, but its
+  serializable transaction retries and maps a clash to `409`; a new test that
+  accepts two requests at once on a trip without a room saw no `500` in 5
+  rounds. Its code is unchanged.
+
+## Already implemented
+
+- Hosted Firebase credentials (roadmap item 28, PR #60, from PR #44): the server can
   read the Firebase service-account key from one secret variable,
   `FIREBASE_SERVICE_ACCOUNT_JSON`, for hosts such as Railway that have no
   secret files. It checks the value offline at startup and refuses to start
   with a fixed reason if it is malformed; the value is never logged. A revoked
   key is only detected by a live sign-in. Setting up Railway and the real key
   is item 29. See [hosted credential setup](firebase-hosted-credentials.md).
-
-## Already implemented
 
 - Flaky tests (roadmap item 39, PR #59): `test/rate-limit.test.ts` now starts each
   test's app in `beforeAll`, so app startup no longer counts against the 5 s
@@ -110,11 +120,6 @@ Frontend/UI implementation belongs to the Flutter developer.
 - Community cover images: the Flutter design shows a photo on every community
   card, but communities have no image field yet. Needs an admin upload flow
   using the existing object storage; plan it as its own milestone.
-- Duplicate-submission audit: policy acceptance used a Prisma `upsert` that
-  reads before inserting, so simultaneous identical requests could fail with a
-  unique-key error (fixed with an atomic insert-or-ignore). Check the other
-  `upsert` calls (community follow, block, push device, profile, conversation
-  participants) for the same race before relying on them under double-taps.
 - Recheck PRD-to-API coverage at the end, including edge cases across features.
 
 ## Deferred external integrations and launch checks

@@ -217,10 +217,15 @@ export const prismaCommunityRepository: CommunityRepository = {
   follow(userId, communityId) {
     return database.$transaction(async (transaction) => {
       if (!(await lockActiveCommunity(transaction, communityId))) return null;
-      return transaction.communityFollow.upsert({
+      // An upsert with an empty update reads before inserting, so a double-tap
+      // raced into a unique-key error. Insert-or-ignore is atomic, and the read
+      // returns the first follow with its original time.
+      await transaction.communityFollow.createMany({
+        data: { communityId, userId },
+        skipDuplicates: true,
+      });
+      return transaction.communityFollow.findUniqueOrThrow({
         where: { communityId_userId: { communityId, userId } },
-        create: { communityId, userId },
-        update: {},
       });
     });
   },
