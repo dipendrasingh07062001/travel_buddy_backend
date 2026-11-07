@@ -19,7 +19,10 @@ import { rateLimitKey } from './modules/auth/auth.service.js';
 import type { AuthRouteDependencies } from './modules/auth/auth.types.js';
 import { registerConnectionRoutes } from './modules/connections/connection.routes.js';
 import { registerDataExportRoutes } from './modules/data-export/data-export.routes.js';
-import { registerDataRequestRoutes } from './modules/data-requests/data-request.routes.js';
+import {
+  registerDataRequestRoutes,
+  type DataRequestRouteOptions,
+} from './modules/data-requests/data-request.routes.js';
 import type { ConnectionRouteDependencies } from './modules/connections/connection.types.js';
 import { registerExpenseRoutes } from './modules/expenses/expense.routes.js';
 import { registerFinancialRoutes } from './modules/expenses/financial.routes.js';
@@ -89,6 +92,7 @@ export interface BuildAppOptions {
   adminMetrics?: Partial<AdminMetricsDependencies>;
   adminUsers?: Partial<AdminUserDependencies>;
   staffRoles?: Partial<StaffRoleDependencies>;
+  dataRequests?: DataRequestRouteOptions;
   profiles?: Partial<ProfileRouteDependencies>;
   profileActivity?: Partial<ProfileActivityDependencies>;
   profileSignals?: Partial<ProfileSignalsDependencies>;
@@ -181,7 +185,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       );
       await registerProfilePhotoRoutes(api, authDependencies, storage);
       await registerDataExportRoutes(api, authDependencies);
-      await registerDataRequestRoutes(api, authDependencies);
+      await registerDataRequestRoutes(
+        api,
+        authDependencies,
+        options.dataRequests,
+      );
       await registerTripRoutes(api, authDependencies, options.trips);
       await registerTripHistoryRoutes(
         api,

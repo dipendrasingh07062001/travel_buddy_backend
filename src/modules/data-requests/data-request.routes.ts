@@ -17,10 +17,17 @@ import {
 } from '../moderation/moderation.repository.js';
 import {
   cancelDataRequest,
+  completeAccessRequest,
   createDataRequest,
   listAdminDataRequests,
   listMyDataRequests,
+  type AdminDataRequest,
+  type DataRequestCompletionHooks,
 } from './data-request.repository.js';
+
+export interface DataRequestRouteOptions {
+  completionHooks?: DataRequestCompletionHooks;
+}
 
 interface CreateBody {
   type: AccountDataRequestType;
@@ -31,6 +38,7 @@ interface CreateBody {
 // not enough.
 const recentSignInMs = 10 * 60 * 1000;
 const requestStatuses = ['OPEN', 'CANCELLED', 'COMPLETED'] as const;
+const requestTypes = ['ACCESS', 'ACCOUNT_DELETION'] as const;
 
 interface RequestParams {
   requestId: string;
@@ -43,6 +51,11 @@ interface PageQuery {
 
 interface AdminPageQuery extends PageQuery {
   status?: AccountDataRequestStatus;
+  type?: AccountDataRequestType;
+}
+
+interface CompleteBody {
+  note: string;
 }
 
 const pageSchema = {
@@ -70,7 +83,7 @@ const dataRequestSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     userId: { type: 'string', format: 'uuid' },
-    type: { type: 'string', enum: ['ACCESS', 'ACCOUNT_DELETION'] },
+    type: { type: 'string', enum: requestTypes },
     status: { type: 'string', enum: requestStatuses },
     createdAt: { type: 'string', format: 'date-time' },
     cancelledAt: {
@@ -85,10 +98,40 @@ const dataRequestSchema = {
   },
 } as const;
 
+const nullableUuid = {
+  anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }],
+} as const;
+
+// Kept apart from dataRequestSchema so these fields never reach users.
+const adminDataRequestSchema = {
+  ...dataRequestSchema,
+  required: [
+    ...dataRequestSchema.required,
+    'completedById',
+    'completionActionId',
+  ],
+  properties: {
+    ...dataRequestSchema.properties,
+    completedById: nullableUuid,
+    completionActionId: nullableUuid,
+  },
+} as const;
+
 const singleResponseSchema = {
   type: 'object',
   required: ['data'],
   properties: { data: dataRequestSchema },
+} as const;
+
+const paginationSchema = {
+  type: 'object',
+  required: ['page', 'pageSize', 'totalItems', 'totalPages'],
+  properties: {
+    page: { type: 'integer' },
+    pageSize: { type: 'integer' },
+    totalItems: { type: 'integer' },
+    totalPages: { type: 'integer' },
+  },
 } as const;
 
 const listResponseSchema = {
@@ -96,18 +139,36 @@ const listResponseSchema = {
   required: ['data', 'pagination'],
   properties: {
     data: { type: 'array', items: dataRequestSchema },
-    pagination: {
-      type: 'object',
-      required: ['page', 'pageSize', 'totalItems', 'totalPages'],
-      properties: {
-        page: { type: 'integer' },
-        pageSize: { type: 'integer' },
-        totalItems: { type: 'integer' },
-        totalPages: { type: 'integer' },
-      },
-    },
+    pagination: paginationSchema,
   },
 } as const;
+
+const adminListResponseSchema = {
+  type: 'object',
+  required: ['data', 'pagination'],
+  properties: {
+    data: { type: 'array', items: adminDataRequestSchema },
+    pagination: paginationSchema,
+  },
+} as const;
+
+const requestParams = {
+  type: 'object',
+  required: ['requestId'],
+  properties: { requestId: { type: 'string', format: 'uuid' } },
+} as const;
+
+function cleanAdminNote(note: string): string {
+  const value = note.trim();
+  if (value.length < 10) {
+    throw new AppError(
+      400,
+      'INVALID_ADMIN_NOTE',
+      'An admin note must contain at least 10 non-space characters.',
+    );
+  }
+  return value;
+}
 
 function pagination(page: number, pageSize: number, totalItems: number) {
   return {
@@ -140,9 +201,19 @@ function presentRequest(request: {
   };
 }
 
+function presentAdminRequest(request: AdminDataRequest) {
+  const completion = request.moderationActions[0];
+  return {
+    ...presentRequest(request),
+    completedById: completion?.actorId ?? null,
+    completionActionId: completion?.id ?? null,
+  };
+}
+
 export async function registerDataRequestRoutes(
   app: FastifyInstance,
   auth: AuthRouteDependencies,
+  options: DataRequestRouteOptions = {},
 ): Promise<void> {
   app.post<{ Body: CreateBody }>(
     '/me/data-requests',
@@ -234,11 +305,7 @@ export async function registerDataRequestRoutes(
         summary:
           'Cancel your open request; cancelling a deletion restores the account',
         security: [{ bearerAuth: [] }],
-        params: {
-          type: 'object',
-          required: ['requestId'],
-          properties: { requestId: { type: 'string', format: 'uuid' } },
-        },
+        params: requestParams,
         response: { 200: singleResponseSchema },
       },
     },
@@ -267,20 +334,87 @@ export async function registerDataRequestRoutes(
           properties: {
             ...pageSchema.properties,
             status: { type: 'string', enum: requestStatuses },
+            type: { type: 'string', enum: requestTypes },
           },
         },
-        response: { 200: listResponseSchema },
+        response: { 200: adminListResponseSchema },
       },
     },
     async (request) => {
       const user = await authenticateRequest(request, auth, { fresh: true });
       requireAdmin(await requireStaff(user.id));
-      const { page = 1, pageSize = 20, status } = request.query;
-      const result = await listAdminDataRequests(status, page, pageSize);
+      const { page = 1, pageSize = 20, status, type } = request.query;
+      const result = await listAdminDataRequests(status, type, page, pageSize);
       return {
-        data: result.requests.map(presentRequest),
+        data: result.requests.map(presentAdminRequest),
         pagination: pagination(page, pageSize, result.totalItems),
       };
     },
   );
+
+  // A scope of its own, so the header applies only here.
+  await app.register(async (scope) => {
+    // onSend also runs for error and rate-limit replies.
+    scope.addHook('onSend', async (_request, reply, payload) => {
+      reply.header('cache-control', 'no-store');
+      return payload;
+    });
+
+    scope.post<{ Params: RequestParams; Body: CompleteBody }>(
+      '/admin/data-requests/:requestId/complete',
+      {
+        config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+        schema: {
+          tags: ['Account data'],
+          summary: 'Mark an ACCESS request completed (administrators only)',
+          description:
+            'Use after the founders have answered the request outside the app. The note is kept in the moderation audit trail and is never shown to the user; do not put personal data or contact details in it. Deletion requests are completed automatically and give 409 DATA_REQUEST_AUTOMATIC. Repeating a completion changes nothing and returns changed: false.',
+          security: [{ bearerAuth: [] }],
+          params: requestParams,
+          body: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['note'],
+            properties: {
+              note: { type: 'string', minLength: 10, maxLength: 1000 },
+            },
+          },
+          response: {
+            200: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['data'],
+              properties: {
+                data: {
+                  ...adminDataRequestSchema,
+                  required: [...adminDataRequestSchema.required, 'changed'],
+                  properties: {
+                    ...adminDataRequestSchema.properties,
+                    changed: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      async (request) => {
+        const user = await authenticateRequest(request, auth, { fresh: true });
+        requireAdmin(await requireStaff(user.id));
+        const note = cleanAdminNote(request.body.note);
+        const result = await completeAccessRequest(
+          request.params.requestId,
+          user.id,
+          note,
+          options.completionHooks,
+        );
+        return {
+          data: {
+            ...presentAdminRequest(result.request),
+            changed: result.changed,
+          },
+        };
+      },
+    );
+  });
 }

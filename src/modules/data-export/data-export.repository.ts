@@ -51,6 +51,7 @@ export async function createAccountDataExport(userId: string) {
               status: true,
               createdAt: true,
               cancelledAt: true,
+              completedAt: true,
             },
             orderBy: { createdAt: 'asc' },
           },
