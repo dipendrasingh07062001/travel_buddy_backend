@@ -4,24 +4,14 @@ Status recorded 2026-11-07. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
-## Current milestone
-
-- Custom trip destinations (PRD §7.1): a trip names its destination by an
-  active `communityId` or a typed `destinationName` (up to 120 characters,
-  privacy-checked); exactly one, enforced by a database CHECK. A typed name
-  equal to exactly one active community's name, ignoring case, links that
-  community. Users still cannot create communities. Trip responses keep the
-  `destination` object, with `null` id, slug, region and country code for a
-  typed name. Typed trips appear in search, details, My Trips, memberships,
-  profiles, connection requests and trip rooms, never on community pages, and
-  send no saved-search alerts. Destination changes notify members and are kept
-  in trip history; moderators see the stored name. `description` is now
-  optional (`null`), and the budget is documented as per person. Searching
-  typed names is deferred. Breaking for clients: `description` and the
-  destination's community fields can be `null`; see the
-  [Flutter integration guide](work/custom-trip-destinations/flutter-integration.md).
-
 ## Already implemented
+
+- Server-startup test deadline (found as C2-1 in the admin user search
+  review): `test/server-startup.test.ts` starts six real servers at once, and
+  under full-suite load their startup sometimes passed the 45 s child deadline.
+  Each child now gets 120 s and the hook 150 s; every assertion is unchanged,
+  and a child still running at the deadline is killed and fails. The cause
+  (resource contention during startup) is likely, not proven. Test-only.
 
 - Duplicate submissions (PR #61): following a community or blocking a user twice at the
   same moment, such as a double-tap, returned `500` because Prisma's upsert

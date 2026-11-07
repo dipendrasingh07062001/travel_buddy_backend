@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // stops before listening, says why, and never prints the secret.
 const marker = 'SYNTHETIC_STARTUP_SECRET_MUST_NOT_LEAK';
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
-const childDeadline = 45_000;
+const childDeadline = 120_000;
 const unparseableKey = `-----BEGIN PRIVATE KEY-----\n${marker}\n-----END PRIVATE KEY-----\n`;
 const account = {
   type: 'service_account',
@@ -133,9 +133,11 @@ beforeAll(async () => {
   );
   for (const [name, outcome] of results as [string, Outcome][])
     outcomes.set(name, outcome);
-  // Six cold starts run together, and one can take about 13 s on a 4-core
-  // machine, so this hook gets more than the 30 s unit default.
-}, 60_000);
+  // Six starts run together. In full unit runs each took up to 35 s on a
+  // 4-core machine, and a busier machine went past 45 s, so each child gets
+  // 120 s. The extra hook time lets a slow child be reported by the timedOut
+  // assertion; if killing a child stalls, the hook timeout fails instead.
+}, childDeadline + 30_000);
 
 afterAll(async () => {
   await Promise.all(
