@@ -5,7 +5,7 @@ status. Work one item at a time, in the order the owner chooses (see
 [`AGENTS.md`](../AGENTS.md)). When an item is merged, mark it done here with its
 pull request number; the number can be added in the next item's branch.
 
-Status recorded 2026-11-06.
+Status recorded 2026-11-07.
 
 ## Group 1: coding gaps (no API key needed)
 

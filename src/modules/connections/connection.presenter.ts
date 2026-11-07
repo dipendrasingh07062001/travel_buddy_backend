@@ -1,3 +1,4 @@
+import { publicText } from '../../privacy/public-text.js';
 import { presentPublicProfile } from '../profiles/profile.presenter.js';
 import type {
   ConnectionRequestRecord,
@@ -15,7 +16,10 @@ function tripReference(
 ) {
   return {
     id: trip.id,
-    destination: trip.community,
+    destination: trip.community ?? {
+      slug: null,
+      name: publicText(trip.destinationName ?? ''),
+    },
     startDate: dateOnly(trip.startDate),
     endDate: dateOnly(trip.endDate),
     dateMode: trip.dateMode,

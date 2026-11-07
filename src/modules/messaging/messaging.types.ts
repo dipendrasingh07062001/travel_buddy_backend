@@ -21,6 +21,7 @@ export const roomSelect = {
       transport: true,
       description: true,
       version: true,
+      destinationName: true,
       community: {
         select: {
           id: true,

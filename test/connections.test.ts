@@ -133,6 +133,7 @@ function connectionRecord(
       durationDays: 6,
       currentGroupSize: 1,
       desiredGroupSize: 2,
+      destinationName: null,
       community: { slug: 'manali', name: 'Manali' },
     },
     relatedTrip: null,

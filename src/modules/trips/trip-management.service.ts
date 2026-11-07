@@ -15,7 +15,8 @@ import type {
 import type { PublicTripRecord } from './trip.types.js';
 
 export interface CreateTripBody {
-  communityId: string;
+  communityId?: string;
+  destinationName?: string;
   originCity: string;
   startDate: string;
   endDate: string;
@@ -29,12 +30,13 @@ export interface CreateTripBody {
   currentGroupSize?: number;
   desiredGroupSize: number;
   transport?: TripTransport;
-  description: string;
+  description?: string | null;
 }
 
 export interface UpdateTripBody {
   expectedVersion: number;
   communityId?: string;
+  destinationName?: string;
   originCity?: string;
   startDate?: string;
   endDate?: string;
@@ -47,7 +49,7 @@ export interface UpdateTripBody {
   currentGroupSize?: number;
   desiredGroupSize?: number;
   transport?: TripTransport;
-  description?: string;
+  description?: string | null;
 }
 
 const datePlanFields = [
@@ -224,6 +226,40 @@ async function validateCommunity(
   }
 }
 
+type TripDestination =
+  | { communityId: string; destinationName: null }
+  | { communityId: null; destinationName: string };
+
+function invalidDestination(message: string): never {
+  return invalid('INVALID_DESTINATION', message);
+}
+
+// A typed name that equals exactly one active community links it, so a
+// destination with a hub is not split across custom and linked trips.
+async function resolveDestination(
+  repository: TripManagementRepository,
+  body: Pick<CreateTripBody, 'communityId' | 'destinationName'>,
+): Promise<TripDestination | undefined> {
+  const { communityId, destinationName } = body;
+  if (communityId !== undefined && destinationName !== undefined) {
+    return invalidDestination('Send either communityId or destinationName.');
+  }
+  if (communityId !== undefined) {
+    await validateCommunity(repository, communityId);
+    return { communityId, destinationName: null };
+  }
+  if (destinationName === undefined) return undefined;
+  const name = destinationName.trim();
+  if (name === '') {
+    return invalidDestination('destinationName cannot be blank.');
+  }
+  requireSafePublicText(name);
+  const linkedId = await repository.findActiveCommunityIdByName(name);
+  return linkedId
+    ? { communityId: linkedId, destinationName: null }
+    : { communityId: null, destinationName: name };
+}
+
 function requireOwner(
   trip: PublicTripRecord | null,
   ownerId: string,
@@ -273,7 +309,10 @@ export async function createTrip(
 ): Promise<PublicTripRecord> {
   requireSafePublicText(body.originCity);
   requireSafePublicText(body.description);
-  await validateCommunity(repository, body.communityId);
+  const destination = await resolveDestination(repository, body);
+  if (!destination) {
+    return invalidDestination('Send communityId or destinationName.');
+  }
   const startDate = parseDate(body.startDate, 'startDate');
   const endDate = parseDate(body.endDate, 'endDate');
   const budgetMin = body.budgetMin ?? null;
@@ -284,7 +323,7 @@ export async function createTrip(
 
   const input: CreateTripInput = {
     ownerId,
-    communityId: body.communityId,
+    ...destination,
     originCity: body.originCity.trim(),
     startDate,
     endDate,
@@ -306,7 +345,7 @@ export async function createTrip(
     currentGroupSize,
     desiredGroupSize: body.desiredGroupSize,
     transport: body.transport ?? 'UNDECIDED',
-    description: body.description.trim(),
+    description: body.description?.trim() ?? null,
   };
   return repository.create(input);
 }
@@ -322,9 +361,7 @@ export async function updateTrip(
   requireStatus(trip, editableStatuses);
   requireSafePublicText(body.originCity);
   requireSafePublicText(body.description);
-  if (body.communityId !== undefined) {
-    await validateCommunity(repository, body.communityId);
-  }
+  const destination = await resolveDestination(repository, body);
 
   const startDate = body.startDate
     ? parseDate(body.startDate, 'startDate')
@@ -365,12 +402,12 @@ export async function updateTrip(
     : null;
 
   const data: Prisma.TripUncheckedUpdateManyInput = {
-    ...(body.communityId !== undefined && { communityId: body.communityId }),
+    ...destination,
     ...(body.originCity !== undefined && {
       originCity: body.originCity.trim(),
     }),
     ...(body.description !== undefined && {
-      description: body.description.trim(),
+      description: body.description?.trim() ?? null,
     }),
     ...(body.startDate !== undefined && { startDate }),
     ...(body.endDate !== undefined && { endDate }),
@@ -448,6 +485,7 @@ export async function transitionTrip(
     requireCompleteProfile(owner, 'publishing a trip');
     // Recheck stored drafts and paused records created before these guards.
     requireSafePublicText(trip.originCity);
+    requireSafePublicText(trip.destinationName);
     requireSafePublicText(trip.description);
   }
 

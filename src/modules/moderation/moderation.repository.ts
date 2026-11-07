@@ -164,6 +164,10 @@ export async function findStaffReportDetail(
           id: true,
           ownerId: true,
           status: true,
+          // A trip may have no description; the destination can be the
+          // reported text.
+          communityId: true,
+          destinationName: true,
           description: true,
           moderationRemovedAt: true,
           // Shows whether the owner confirmed it was not a commercial listing.

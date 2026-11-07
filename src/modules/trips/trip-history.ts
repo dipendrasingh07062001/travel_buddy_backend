@@ -7,6 +7,7 @@ export const tripHistorySelect = {
   id: true,
   version: true,
   communityId: true,
+  destinationName: true,
   originCity: true,
   startDate: true,
   endDate: true,
@@ -32,6 +33,9 @@ function plan(
 ): Record<string, string | number | boolean | null> {
   return {
     communityId: trip.communityId,
+    // Short public text that passed the privacy check, so unlike the
+    // description its value is kept.
+    destinationName: trip.destinationName,
     originCity: trip.originCity,
     startDate: trip.startDate.toISOString().slice(0, 10),
     endDate: trip.endDate.toISOString().slice(0, 10),

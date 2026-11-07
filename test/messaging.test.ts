@@ -79,6 +79,7 @@ const room: RoomRecord = {
     transport: 'BUS',
     description: 'A shared Manali trip plan for room contract tests.',
     version: 1,
+    destinationName: null,
     community: {
       id: '20000000-0000-4000-8000-000000000001',
       slug: 'manali',

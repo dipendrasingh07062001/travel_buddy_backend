@@ -126,6 +126,7 @@ const trip: Trip = {
   id: tripId,
   ownerId: userId,
   communityId: userId,
+  destinationName: null,
   originCity: 'Delhi',
   startDate: new Date('2026-12-01T00:00:00Z'),
   endDate: new Date('2026-12-05T00:00:00Z'),

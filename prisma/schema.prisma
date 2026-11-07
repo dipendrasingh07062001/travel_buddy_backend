@@ -487,7 +487,10 @@ model CommunityComment {
 model Trip {
   id                         String                @id @default(uuid()) @db.Uuid
   ownerId                    String                @map("owner_id") @db.Uuid
-  communityId                String                @map("community_id") @db.Uuid
+  // A trip links an active community or names a typed destination, never
+  // both (trips_destination_check, PRD 7.1).
+  communityId                String?               @map("community_id") @db.Uuid
+  destinationName            String?               @map("destination_name") @db.VarChar(120)
   originCity                 String                @map("origin_city") @db.VarChar(120)
   startDate                  DateTime              @map("start_date") @db.Date
   endDate                    DateTime              @map("end_date") @db.Date
@@ -501,7 +504,7 @@ model Trip {
   currentGroupSize           Int                   @default(1) @map("current_group_size")
   desiredGroupSize           Int                   @map("desired_group_size")
   transport                  TripTransport         @default(UNDECIDED)
-  description                String
+  description                String?
   status                     TripStatus            @default(DRAFT)
   version                    Int                   @default(1)
   publishedAt                DateTime?             @map("published_at") @db.Timestamptz(6)
@@ -512,7 +515,7 @@ model Trip {
   publishConfirmationVersion String?               @map("publish_confirmation_version") @db.VarChar(20)
   moderationRemovedAt        DateTime?             @map("moderation_removed_at") @db.Timestamptz(6)
   owner                      User                  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  community                  Community             @relation(fields: [communityId], references: [id], onDelete: Restrict)
+  community                  Community?            @relation(fields: [communityId], references: [id], onDelete: Restrict)
   connectionRequests         ConnectionRequest[]   @relation("ConnectionTargetTrip")
   relatedConnectionRequests  ConnectionRequest[]   @relation("ConnectionRelatedTrip")
   memberships                TripMembership[]

@@ -106,6 +106,7 @@ export async function createAccountDataExport(userId: string) {
           select: {
             id: true,
             communityId: true,
+            destinationName: true,
             originCity: true,
             startDate: true,
             endDate: true,

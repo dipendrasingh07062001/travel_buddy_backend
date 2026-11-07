@@ -1,17 +1,8 @@
 # Backend remaining work
 
-Status recorded 2026-11-06. This is a working engineering checklist, not a
+Status recorded 2026-11-07. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
-
-## Current milestone
-
-- Server-startup test deadline (found as C2-1 in the admin user search
-  review): `test/server-startup.test.ts` starts six real servers at once, and
-  under full-suite load their startup sometimes passed the 45 s child deadline.
-  Each child now gets 120 s and the hook 150 s; every assertion is unchanged,
-  and a child still running at the deadline is killed and fails. The cause
-  (resource contention during startup) is likely, not proven. Test-only.
 
 ## Already implemented
 

@@ -81,6 +81,7 @@ function item(status: 'ACTIVE' | 'LEFT' | 'REMOVED'): TripMembershipListItem {
     id: tripId,
     ownerId: userId,
     communityId: '60000000-0000-4000-8000-000000000004',
+    destinationName: null,
     originCity: 'Delhi',
     startDate: now,
     endDate: now,

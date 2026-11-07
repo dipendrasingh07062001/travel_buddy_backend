@@ -1,5 +1,6 @@
 import { publicText } from '../../privacy/public-text.js';
 import { presentPublicDestination } from '../communities/community.presenter.js';
+import { presentTripDestination } from '../trips/trip-destination.js';
 import type {
   ProfileTripActivity,
   ProfilePostActivity,
@@ -10,7 +11,7 @@ export function presentProfileTrip(trip: ProfileTripActivity) {
   return {
     id: trip.id,
     originCity: publicText(trip.originCity),
-    destination: presentPublicDestination(trip.community),
+    destination: presentTripDestination(trip),
     startDate: trip.startDate.toISOString().slice(0, 10),
     endDate: trip.endDate.toISOString().slice(0, 10),
     dateMode: trip.dateMode,

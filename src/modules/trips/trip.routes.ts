@@ -18,6 +18,10 @@ import type {
   TripManagementRepository,
 } from './trip-management.types.js';
 import { presentOwnedTrip, presentTrip } from './trip.presenter.js';
+import {
+  destinationNameProperty,
+  tripDestinationSchema,
+} from './trip-destination.js';
 import { prismaTripRepository } from './trip.repository.js';
 import {
   tripDateModeValues,
@@ -63,17 +67,7 @@ export const publicTripSchema = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     originCity: { type: 'string' },
-    destination: {
-      type: 'object',
-      required: ['id', 'slug', 'name', 'region', 'countryCode'],
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        slug: { type: 'string' },
-        name: { type: 'string' },
-        region: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-        countryCode: { type: 'string' },
-      },
-    },
+    destination: tripDestinationSchema,
     startDate: { type: 'string', format: 'date' },
     endDate: { type: 'string', format: 'date' },
     dateMode: {
@@ -87,6 +81,8 @@ export const publicTripSchema = {
     durationDays: { type: 'integer' },
     budget: {
       type: 'object',
+      description:
+        'An approximate range per person, set by the owner; not a quote.',
       required: ['minimum', 'maximum', 'currency'],
       properties: {
         minimum: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -104,7 +100,7 @@ export const publicTripSchema = {
       },
     },
     transport: { type: 'string', enum: transportValues },
-    description: { type: 'string' },
+    description: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     status: { type: 'string', enum: ['PUBLISHED', 'FULL'] },
     owner: {
       type: 'object',
@@ -162,10 +158,17 @@ const nullableBudget = {
     { type: 'number', minimum: 0, maximum: 9999999999.99 },
     { type: 'null' },
   ],
+  description: 'Approximate amount per person in INR; not a quote.',
 } as const;
 
 const tripWriteProperties = {
-  communityId: { type: 'string', format: 'uuid' },
+  communityId: {
+    type: 'string',
+    format: 'uuid',
+    description:
+      'An active destination community. Send exactly one of communityId or destinationName.',
+  },
+  destinationName: destinationNameProperty,
   originCity: { type: 'string', minLength: 1, maxLength: 120 },
   startDate: { type: 'string', format: 'date' },
   endDate: { type: 'string', format: 'date' },
@@ -193,7 +196,13 @@ const tripWriteProperties = {
   currentGroupSize: { type: 'integer', minimum: 1, maximum: 100 },
   desiredGroupSize: { type: 'integer', minimum: 1, maximum: 100 },
   transport: { type: 'string', enum: transportValues },
-  description: { type: 'string', minLength: 20, maxLength: 2000 },
+  description: {
+    anyOf: [
+      { type: 'string', minLength: 20, maxLength: 2000 },
+      { type: 'null' },
+    ],
+    description: 'Optional. null clears it on update.',
+  },
 } as const;
 
 const ownedTripResponse = {
@@ -221,18 +230,22 @@ export async function registerTripRoutes(
         body: {
           type: 'object',
           additionalProperties: false,
-          required: [
-            'communityId',
-            'originCity',
-            'startDate',
-            'endDate',
-            'desiredGroupSize',
-            'description',
-          ],
+          required: ['originCity', 'startDate', 'endDate', 'desiredGroupSize'],
           properties: {
             ...tripWriteProperties,
             currency: { type: 'string', enum: ['INR'], default: 'INR' },
           },
+          examples: [
+            {
+              destinationName: 'Kasol',
+              originCity: 'Jaipur',
+              startDate: '2026-11-10',
+              endDate: '2026-11-17',
+              desiredGroupSize: 4,
+              budgetMin: 5000,
+              budgetMax: 12000,
+            },
+          ],
         },
         response: { 201: ownedTripResponse },
       },

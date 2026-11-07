@@ -53,7 +53,8 @@ export const prismaTripRepository: TripRepository = {
       Prisma.sql`t."status" IN ('PUBLISHED', 'FULL')`,
       Prisma.sql`t."moderation_removed_at" IS NULL`,
       Prisma.sql`u."status" = 'ACTIVE' AND u."deleted_at" IS NULL`,
-      Prisma.sql`c."status" = 'ACTIVE'`,
+      // A typed destination has no community; a linked one must be active.
+      Prisma.sql`(t."community_id" IS NULL OR c."status" = 'ACTIVE')`,
       Prisma.sql`t."end_date" >= ${from}::date`,
     ];
     if (query.origin)
@@ -95,7 +96,7 @@ export const prismaTripRepository: TripRepository = {
             t."published_at"
           FROM ${identifier('trips')} t
           JOIN ${identifier('users')} u ON u."id" = t."owner_id"
-          JOIN ${identifier('communities')} c ON c."id" = t."community_id"
+          LEFT JOIN ${identifier('communities')} c ON c."id" = t."community_id"
           WHERE ${Prisma.join(filters, ' AND ')}
         )
         SELECT (SELECT COUNT(*) FROM matching_trips) AS "total_items",
@@ -137,7 +138,7 @@ export const prismaTripRepository: TripRepository = {
         status: { in: [...publicTripStatuses] },
         moderationRemovedAt: null,
         owner: { status: 'ACTIVE', deletedAt: null },
-        community: { status: 'ACTIVE' },
+        OR: [{ communityId: null }, { community: { status: 'ACTIVE' } }],
       },
       include: publicTripInclude,
     });
