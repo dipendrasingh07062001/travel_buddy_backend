@@ -6,17 +6,23 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Admin user search (first admin panel step, PRD §6.4 and FR-15):
-  `GET /admin/users` finds accounts by ID or display name with status and
-  role filters; `POST /admin/users/lookup` finds the owner of a stored email
-  or phone. Moderators and administrators only. Contacts never appear in
-  URLs, logs or responses; successful lookups are audited as
-  `USER_LOOKED_UP`. One additive enum migration. See
-  [Finding accounts](../README.md#finding-accounts).
+- Staff role management (second admin panel step, PRD FR-15 and §18):
+  administrators grant or remove the moderator role with
+  `POST /admin/users/:userId/staff-role`, with a reason, audited in the same
+  transaction. `ADMIN` stays CLI-only. No migration. See
+  [Staff roles](../README.md#staff-roles).
 
 ## Already implemented
 
-- Admin user search (first admin panel step, PRD §6.4 and FR-15, in review):
+- Staff role management (second admin panel step, in review): administrators
+  can make an active account a moderator or remove the role, with a reason.
+  Own account and administrators are protected; repeats change nothing;
+  races give `409 USER_STATE_CHANGED`. Each change is a `STAFF_ROLE_GRANTED`
+  or `STAFF_ROLE_REVOKED` action with the administrator as actor. Claimed
+  reports stay claimed and are counted (`claimedReportCount`); releasing
+  them automatically is deferred. `ADMIN` is still granted only with the CLI.
+
+- Admin user search (first admin panel step, PRD §6.4 and FR-15, PR #64):
   staff can find an account's ID by exact ID or part of the display name, with
   status and role filters (`GET /admin/users`), or by an exact stored email or
   phone (`POST /admin/users/lookup`). Results carry only status, role,

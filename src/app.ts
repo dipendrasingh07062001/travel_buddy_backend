@@ -56,6 +56,8 @@ import { registerProfileSignalsRoutes } from './modules/profiles/profile-signals
 import type { ProfileSignalsDependencies } from './modules/profiles/profile-signals.types.js';
 import { registerSafetyRoutes } from './modules/safety/safety.routes.js';
 import type { SafetyRouteDependencies } from './modules/safety/safety.types.js';
+import { registerStaffRoleRoutes } from './modules/staff-roles/staff-role.routes.js';
+import type { StaffRoleDependencies } from './modules/staff-roles/staff-role.types.js';
 import { registerTripRoomRoutes } from './modules/trip-room/trip-room.routes.js';
 import { registerTripAlertRoutes } from './modules/trip-alerts/trip-alert.routes.js';
 import type { TripAlertDependencies } from './modules/trip-alerts/trip-alert.types.js';
@@ -86,6 +88,7 @@ export interface BuildAppOptions {
   auth?: Partial<AuthRouteDependencies>;
   adminMetrics?: Partial<AdminMetricsDependencies>;
   adminUsers?: Partial<AdminUserDependencies>;
+  staffRoles?: Partial<StaffRoleDependencies>;
   profiles?: Partial<ProfileRouteDependencies>;
   profileActivity?: Partial<ProfileActivityDependencies>;
   profileSignals?: Partial<ProfileSignalsDependencies>;
@@ -212,6 +215,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       await registerModerationRoutes(api, authDependencies, storage);
       await registerRestrictionRoutes(api, authDependencies);
       await registerAdminUserRoutes(api, authDependencies, options.adminUsers);
+      await registerStaffRoleRoutes(api, authDependencies, options.staffRoles);
       await registerAdminMetricsRoutes(
         api,
         authDependencies,

@@ -1248,17 +1248,51 @@ evidence, because the owner may replace the photo before staff review it.
 Evidence copies are kept while the account exists, and deleted one year after
 the account is erased (see account deletion).
 
-Staff roles are provisioned **only by a database operator**, never through a
-public API. After the target account has signed in and exists in PostgreSQL,
-apply migrations and run this in PowerShell with a database URL scoped to the
-intended environment:
+### Staff roles
+
+Administrators grant and remove the **moderator** role through the API.
+**Administrator** roles are provisioned only by a database operator, with the
+CLI below.
+
+`POST /api/v1/admin/users/:userId/staff-role` (administrators only) with
+`{ "role": "MODERATOR" | "USER", "reason": "..." }`:
+
+- `MODERATOR` makes an active ordinary account a moderator; `USER` removes the
+  moderator role, also from a suspended account. `ADMIN` is not accepted.
+- The response is
+  `{ "data": { "userId", "staffRole", "changed", "claimedReportCount" } }`.
+  Repeating a request changes nothing and returns `changed: false`.
+- `claimedReportCount` is how many reports the account still has under
+  review. Removing the role leaves those reports claimed. Administrators can
+  resolve them, because they may resolve any report under review.
+- The change takes effect on the account's next request, because every staff
+  request reads the role from the database.
+- Errors:
+  - `403 ADMIN_ONLY` for moderators;
+  - `404 USER_NOT_FOUND`;
+  - `403 STAFF_TARGET_PROTECTED` for your own account or an administrator;
+  - `409 USER_NOT_ACTIVE` when granting to an account that is not active;
+  - `409 USER_STATE_CHANGED` when the account changed during the request
+    (retry);
+  - `400 INVALID_MODERATION_REASON` for a reason shorter than 10 characters
+    once trimmed.
+- Each change writes a `STAFF_ROLE_GRANTED` or `STAFF_ROLE_REVOKED`
+  moderation action with the administrator and the reason, in the same
+  transaction. If that write fails, the role does not change.
+- The route sends `Cache-Control: no-store` and allows 10 requests a minute
+  per administrator.
+
+To grant or revoke `ADMIN`, after the target account has signed in and exists
+in PostgreSQL, apply migrations and run this in PowerShell with a database URL
+scoped to the intended environment:
 
 ```powershell
 $env:STAFF_GRANT_OPERATOR = 'Your operator name'
 npm run staff:grant -- <user-uuid> ADMIN
 ```
 
-Use `MODERATOR` instead of `ADMIN` for report reviewers. The command requires
+The CLI also accepts `MODERATOR`, for example before any administrator
+exists. The command requires
 direct database credentials, accepts only an active ordinary account, and
 records an operator-labelled audit entry. Revoke access with
 `npm run staff:revoke -- <user-uuid>` using the same operator variable. The last
