@@ -6,7 +6,23 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Duplicate submissions: following a community or blocking a user twice at the
+- Server-startup test deadline (found as C2-1 in the admin user search
+  review): `test/server-startup.test.ts` starts six real servers at once, and
+  under full-suite load their startup sometimes passed the 45 s child deadline.
+  Each child now gets 120 s and the hook 150 s; every assertion is unchanged,
+  and a child still running at the deadline is killed and fails. The cause
+  (resource contention during startup) is likely, not proven. Test-only.
+
+## Already implemented
+
+- Server-startup test deadline (found as C2-1 in the admin user search
+  review): `test/server-startup.test.ts` starts six real servers at once, and
+  under full-suite load their startup sometimes passed the 45 s child deadline.
+  Each child now gets 120 s and the hook 150 s; every assertion is unchanged,
+  and a child still running at the deadline is killed and fails. The cause
+  (resource contention during startup) is likely, not proven. Test-only.
+
+- Duplicate submissions (PR #61): following a community or blocking a user twice at the
   same moment, such as a double-tap, returned `500` because Prisma's upsert
   with an empty update reads before inserting. Both now insert-or-ignore and
   then read the row, so every duplicate gets `200` with the original time. The
@@ -15,8 +31,6 @@ Frontend/UI implementation belongs to the Flutter developer.
   serializable transaction retries and maps a clash to `409`; a new test that
   accepts two requests at once on a trip without a room saw no `500` in 5
   rounds. Its code is unchanged.
-
-## Already implemented
 
 - Hosted Firebase credentials (roadmap item 28, PR #60, from PR #44): the server can
   read the Firebase service-account key from one secret variable,
