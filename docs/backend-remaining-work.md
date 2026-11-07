@@ -4,9 +4,27 @@ Status recorded 2026-11-07. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
+## Current milestone
+
+- Admin user search (first admin panel step, PRD §6.4 and FR-15):
+  `GET /admin/users` finds accounts by ID or display name with status and
+  role filters; `POST /admin/users/lookup` finds the owner of a stored email
+  or phone. Moderators and administrators only. Contacts never appear in
+  URLs, logs or responses; successful lookups are audited as
+  `USER_LOOKED_UP`. One additive enum migration. See
+  [Finding accounts](../README.md#finding-accounts).
+
 ## Already implemented
 
-- Server-startup test deadline (found as C2-1 in the admin user search
+- Admin user search (first admin panel step, PRD §6.4 and FR-15, in review):
+  staff can find an account's ID by exact ID or part of the display name, with
+  status and role filters (`GET /admin/users`), or by an exact stored email or
+  phone (`POST /admin/users/lookup`). Results carry only status, role,
+  restrictions and open report count, never contacts. Contacts stay out of
+  URLs and logs; successful lookups are audited as `USER_LOOKED_UP` (one
+  additive enum migration). Name searches are not audited.
+
+- Server-startup test deadline (PR #63, found as C2-1 in the admin user search
   review): `test/server-startup.test.ts` starts six real servers at once, and
   under full-suite load their startup sometimes passed the 45 s child deadline.
   Each child now gets 120 s and the hook 150 s; every assertion is unchanged,

@@ -274,6 +274,8 @@ enum ModerationActionType {
   STAFF_ROLE_REVOKED
   FEATURE_RESTRICTED
   FEATURE_RESTRICTION_LIFTED
+  // Staff found an account by an exact email or phone; the value is not kept.
+  USER_LOOKED_UP
 }
 
 // Features a moderator can restrict without suspending the whole account.
