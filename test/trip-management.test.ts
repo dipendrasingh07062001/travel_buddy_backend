@@ -60,9 +60,24 @@ const authRepository: AuthRepository = {
   },
 };
 
+const manali = {
+  id: communityId,
+  slug: 'manali',
+  name: 'Manali',
+  region: 'Himachal Pradesh',
+  countryCode: 'IN',
+};
+// The fake holds one active community; any other id is unknown.
+function communityFor(id: string | null) {
+  return id === communityId ? manali : null;
+}
+
 const managementRepository: TripManagementRepository = {
   async isActiveCommunity(id) {
     return id === communityId;
+  },
+  async findActiveCommunityIdByName(name) {
+    return name.toLowerCase() === 'manali' ? communityId : null;
   },
   async create(input) {
     const now = new Date();
@@ -82,13 +97,7 @@ const managementRepository: TripManagementRepository = {
       createdAt: now,
       updatedAt: now,
       owner: { id: input.ownerId, displayName: 'Trip Owner' },
-      community: {
-        id: communityId,
-        slug: 'manali',
-        name: 'Manali',
-        region: 'Himachal Pradesh',
-        countryCode: 'IN',
-      },
+      community: communityFor(input.communityId),
     };
     trips.set(trip.id, trip);
     return trip;
@@ -126,6 +135,7 @@ const managementRepository: TripManagementRepository = {
       version: trip.version + 1,
       updatedAt: new Date(),
     } as PublicTripRecord;
+    next.community = communityFor(next.communityId);
     trips.set(id, next);
     return next;
   },
@@ -629,5 +639,194 @@ describe('trip date windows', () => {
       durationDays: 3,
       group: { desiredSize: 6 },
     });
+  });
+});
+
+describe('trip destinations', () => {
+  const owner = { authorization: 'Bearer owner-token' };
+  const plan = {
+    originCity: 'Jaipur',
+    startDate: '2027-02-10',
+    endDate: '2027-02-12',
+    desiredGroupSize: 4,
+  };
+
+  function create(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/trips',
+      headers: owner,
+      payload: { ...plan, ...payload },
+    });
+  }
+
+  function edit(id: string, payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/trips/${id}`,
+      headers: owner,
+      payload: { expectedVersion: trips.get(id)!.version, ...payload },
+    });
+  }
+
+  it('creates a trip with a typed destination and no description', async () => {
+    const response = await create({ destinationName: '  Kasol  ' });
+
+    expect(response.statusCode).toBe(201);
+    const data = response.json().data;
+    expect(data.destination).toEqual({
+      id: null,
+      slug: null,
+      name: 'Kasol',
+      region: null,
+      countryCode: null,
+    });
+    expect(data.description).toBeNull();
+    expect(trips.get(data.id)).toMatchObject({
+      communityId: null,
+      destinationName: 'Kasol',
+      description: null,
+    });
+  });
+
+  it('stores an explicit null description as null', async () => {
+    const response = await create({
+      destinationName: 'Kasol',
+      description: null,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data.description).toBeNull();
+  });
+
+  it('links a typed name that matches an active community', async () => {
+    const response = await create({ destinationName: ' MANALI ' });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data.destination).toMatchObject({
+      id: communityId,
+      slug: 'manali',
+    });
+    expect(trips.get(response.json().data.id)?.destinationName).toBeNull();
+  });
+
+  it.each([
+    ['neither field', {}],
+    ['both fields', { communityId, destinationName: 'Kasol' }],
+    ['an empty name', { destinationName: '' }],
+    ['a name of spaces', { destinationName: '   ' }],
+  ])('rejects %s on create', async (_case, payload) => {
+    const response = await create(payload);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('INVALID_DESTINATION');
+  });
+
+  it('applies the 120-character limit before trimming', async () => {
+    const name = 'K'.repeat(120);
+    expect((await create({ destinationName: name })).statusCode).toBe(201);
+    for (const tooLong of ['K'.repeat(121), ` ${name} `]) {
+      const response = await create({ destinationName: tooLong });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error.code).toBe('REQUEST_ERROR');
+    }
+  });
+
+  it('rejects contact details in a typed destination', async () => {
+    const response = await create({ destinationName: 'Kasol 9876543210' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('PUBLIC_TEXT_PRIVACY_VIOLATION');
+  });
+
+  it('rejects an unknown community id', async () => {
+    const response = await create({ communityId: randomUUID() });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('INVALID_COMMUNITY');
+  });
+
+  it('switches between linked and typed destinations on edit', async () => {
+    const id = (await create({ communityId })).json().data.id;
+
+    const custom = await edit(id, { destinationName: 'Tosh' });
+    expect(custom.statusCode).toBe(200);
+    expect(custom.json().data.destination).toMatchObject({
+      id: null,
+      name: 'Tosh',
+    });
+    expect(trips.get(id)).toMatchObject({
+      communityId: null,
+      destinationName: 'Tosh',
+    });
+
+    const linked = await edit(id, { communityId });
+    expect(linked.statusCode).toBe(200);
+    expect(linked.json().data.destination.id).toBe(communityId);
+    expect(trips.get(id)?.destinationName).toBeNull();
+
+    await edit(id, { destinationName: 'Tosh' });
+    const relinked = await edit(id, { destinationName: 'manali' });
+    expect(relinked.json().data.destination.id).toBe(communityId);
+    expect(trips.get(id)?.destinationName).toBeNull();
+  });
+
+  it('keeps the destination when an edit sends neither field', async () => {
+    const id = (await create({ destinationName: 'Kasol' })).json().data.id;
+    const response = await edit(id, { desiredGroupSize: 6 });
+    expect(response.statusCode).toBe(200);
+    expect(trips.get(id)).toMatchObject({
+      communityId: null,
+      destinationName: 'Kasol',
+    });
+  });
+
+  it.each([
+    [
+      'both fields',
+      { communityId, destinationName: 'Kasol' },
+      'INVALID_DESTINATION',
+    ],
+    ['an empty name', { destinationName: '' }, 'INVALID_DESTINATION'],
+    ['a name of spaces', { destinationName: '  ' }, 'INVALID_DESTINATION'],
+    [
+      'an unknown community',
+      { communityId: randomUUID() },
+      'INVALID_COMMUNITY',
+    ],
+  ])('rejects %s on edit and changes nothing', async (_case, payload, code) => {
+    const id = (await create({ destinationName: 'Kasol' })).json().data.id;
+    const before = trips.get(id);
+    const response = await edit(id, payload);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe(code);
+    expect(trips.get(id)).toBe(before);
+  });
+
+  it('clears the description with null and keeps it when omitted', async () => {
+    const description = 'A slow week of walks and cafes along the Parvati.';
+    const id = (await create({ destinationName: 'Kasol', description })).json()
+      .data.id;
+
+    await edit(id, { desiredGroupSize: 5 });
+    expect(trips.get(id)?.description).toBe(description);
+
+    const cleared = await edit(id, { description: null });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().data.description).toBeNull();
+
+    const short = await edit(id, { description: 'Too short.' });
+    expect(short.statusCode).toBe(400);
+  });
+
+  it('rechecks a stored typed destination before publishing', async () => {
+    const id = (await create({ destinationName: 'Kasol' })).json().data.id;
+    // As if written before the privacy guard, or directly in the database.
+    trips.set(id, { ...trips.get(id)!, destinationName: 'Call 9876543210' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${id}/publish`,
+      headers: owner,
+      payload: { expectedVersion: 1, confirmsPersonalPlan: true },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('PUBLIC_TEXT_PRIVACY_VIOLATION');
   });
 });

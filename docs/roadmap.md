@@ -5,7 +5,7 @@ status. Work one item at a time, in the order the owner chooses (see
 [`AGENTS.md`](../AGENTS.md)). When an item is merged, mark it done here with its
 pull request number; the number can be added in the next item's branch.
 
-Status recorded 2026-11-06.
+Status recorded 2026-11-07.
 
 ## Group 1: coding gaps (no API key needed)
 
@@ -68,10 +68,11 @@ Status recorded 2026-11-06.
 
 ## Found later (not in the original 39)
 
-| Item                                                                          | Status                                                                                                                                                                                |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dependency security update                                                    | Done, PR #46                                                                                                                                                                          |
-| Policy-acceptance race (duplicate submissions returned 500)                   | Done, PR #47                                                                                                                                                                          |
-| Community cover images (the Flutter design shows one on every community card) | Open                                                                                                                                                                                  |
-| Duplicate-submission audit of the other `upsert` calls                        | Done (PR number added after merge). Follow and block fixed; push device, profile, photo, mark-read and mute already insert atomically; accept relies on retries and conflict handling |
-| Automatic stricter limits for new accounts (PRD §9.2)                         | Open                                                                                                                                                                                  |
+| Item                                                                                               | Status                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dependency security update                                                                         | Done, PR #46                                                                                                                                                        |
+| Policy-acceptance race (duplicate submissions returned 500)                                        | Done, PR #47                                                                                                                                                        |
+| Community cover images (the Flutter design shows one on every community card)                      | Open                                                                                                                                                                |
+| Duplicate-submission audit of the other `upsert` calls                                             | Done, PR #61. Follow and block fixed; push device, profile, photo, mark-read and mute already insert atomically; accept relies on retries and conflict handling     |
+| Automatic stricter limits for new accounts (PRD §9.2)                                              | Open                                                                                                                                                                |
+| Custom trip destinations: a trip may name any destination; a community link is optional (PRD §7.1) | In progress on `feature/custom-trip-destinations`. Typed `destinationName` or `communityId`, exact-name auto-link, optional description; typed-name search deferred |

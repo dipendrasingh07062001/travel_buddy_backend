@@ -1,12 +1,29 @@
 # Backend remaining work
 
-Status recorded 2026-11-06. This is a working engineering checklist, not a
+Status recorded 2026-11-07. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Duplicate submissions: following a community or blocking a user twice at the
+- Custom trip destinations (PRD §7.1): a trip names its destination by an
+  active `communityId` or a typed `destinationName` (up to 120 characters,
+  privacy-checked); exactly one, enforced by a database CHECK. A typed name
+  equal to exactly one active community's name, ignoring case, links that
+  community. Users still cannot create communities. Trip responses keep the
+  `destination` object, with `null` id, slug, region and country code for a
+  typed name. Typed trips appear in search, details, My Trips, memberships,
+  profiles, connection requests and trip rooms, never on community pages, and
+  send no saved-search alerts. Destination changes notify members and are kept
+  in trip history; moderators see the stored name. `description` is now
+  optional (`null`), and the budget is documented as per person. Searching
+  typed names is deferred. Breaking for clients: `description` and the
+  destination's community fields can be `null`; see the
+  [Flutter integration guide](work/custom-trip-destinations/flutter-integration.md).
+
+## Already implemented
+
+- Duplicate submissions (PR #61): following a community or blocking a user twice at the
   same moment, such as a double-tap, returned `500` because Prisma's upsert
   with an empty update reads before inserting. Both now insert-or-ignore and
   then read the row, so every duplicate gets `200` with the original time. The
@@ -15,8 +32,6 @@ Frontend/UI implementation belongs to the Flutter developer.
   serializable transaction retries and maps a clash to `409`; a new test that
   accepts two requests at once on a trip without a room saw no `500` in 5
   rounds. Its code is unchanged.
-
-## Already implemented
 
 - Hosted Firebase credentials (roadmap item 28, PR #60, from PR #44): the server can
   read the Firebase service-account key from one secret variable,

@@ -51,9 +51,12 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 `GET /api/v1/trips` supports these optional query parameters:
 
 - `origin`: case-insensitive partial city match
-- `destination`: exact community slug, such as `manali`
+- `destination`: exact community slug, such as `manali`. Trips with a typed
+  destination (see [Trip management](#trip-management)) have no slug, so they
+  never match; searching typed names is not supported yet.
 - `departureFrom` and `departureTo`: `YYYY-MM-DD` date window
-- `minBudget` and `maxBudget`: inclusive budget overlap
+- `minBudget` and `maxBudget`: inclusive overlap with the trip's per-person
+  budget range
 - `minDuration` and `maxDuration`: inclusive trip-duration bounds, from 1 to
   365 calendar days; either bound may be supplied alone
 - `availableOnly`: `true` returns only `PUBLISHED` trips with
@@ -67,7 +70,9 @@ readiness endpoint also checks whether PostgreSQL is reachable.
 - `sort`: `newest` (default), `departure_asc`, or `date_overlap`
 - `page` and `pageSize`: page-based pagination; page size is capped at 100
 
-Only `PUBLISHED` and `FULL` trips in active communities are public. Draft,
+Only `PUBLISHED` and `FULL` trips are public, and a trip linked to a community
+only while that community is active. Trips with a typed destination are listed
+in `GET /api/v1/trips` but never on a community's trip list. Draft,
 paused, cancelled, and completed trips return `404` from the details endpoint so
 their existence is not disclosed. Search and community trip lists also hide
 trips whose end date has passed (UTC), and those trips no longer accept
@@ -300,6 +305,66 @@ No new service, API key, schema migration or frontend change is required.
 Authenticated users create trips as private drafts with `POST /api/v1/trips`.
 They can list all of their own trips with `GET /api/v1/me/trips` and edit a
 draft, published, or paused trip with `PATCH /api/v1/trips/:tripId`.
+
+### Destination
+
+A trip names its destination in one of two ways (PRD §7.1). Send exactly one:
+
+- `communityId`: an active destination community. An unknown or archived one
+  returns `400 INVALID_COMMUNITY`.
+- `destinationName`: any place, up to 120 characters (the limit applies before
+  trimming). It is stored trimmed and goes through the public-text privacy
+  check. Users cannot create communities; a typed name is only a field on the
+  trip.
+
+If a typed name equals the name of exactly one active community, ignoring case
+and outer spaces, the trip is linked to that community instead, as if its
+`communityId` had been sent. Nothing else is compared: not the slug, region or
+inner spaces, so "Manali, HP" stays a typed name. Two active communities with
+the same name link neither.
+
+Sending neither on create, both, or a blank name returns
+`400 INVALID_DESTINATION`. On `PATCH`, either field switches the destination
+(clearing the other); sending neither keeps it. A destination change is a plan
+change: active members get the usual `TRIP_UPDATED` notice and trip history
+records the old and new values.
+
+Every trip response keeps the same `destination` object. A typed destination
+has `null` community fields:
+
+```json
+"destination": {
+  "id": null,
+  "slug": null,
+  "name": "Kasol",
+  "region": null,
+  "countryCode": null
+}
+```
+
+Publishing a trip with a typed destination sends no saved-search alerts,
+because alerts follow a community. A minimal create request:
+
+```json
+{
+  "destinationName": "Kasol",
+  "originCity": "Jaipur",
+  "startDate": "2026-11-10",
+  "endDate": "2026-11-17",
+  "desiredGroupSize": 4,
+  "budgetMin": 5000,
+  "budgetMax": 12000
+}
+```
+
+Omitted fields default to `dateMode: EXACT`, `flexibilityDays: 0`,
+`weekendsOnly: false`, `transport: UNDECIDED` and currency `INR`.
+`description` is optional (20–2000 characters when sent); without it the trip
+stores and returns `null`, and `PATCH` with `"description": null` clears it.
+`budgetMin` and `budgetMax` are an approximate amount **per person** in INR,
+entered by the owner, not a quote.
+
+### Status, edits and dates
 
 Trip status is not directly editable. Use the explicit lifecycle endpoints:
 
@@ -1032,7 +1097,9 @@ check the account's current database role and active status on every request.
 
 - `GET /api/v1/admin/reports?status=SUBMITTED&page=1&pageSize=20` lists reports.
 - `GET /api/v1/admin/reports/:reportId` shows the reported target; this private
-  inspection is recorded in the moderation audit trail.
+  inspection is recorded in the moderation audit trail. A reported trip shows
+  its `communityId` or typed `destinationName`, since it may have no
+  description.
 - `POST /api/v1/admin/reports/:reportId/start-review` claims a submitted report.
 - `POST /api/v1/admin/reports/:reportId/resolve` accepts a `resolution` of
   `DISMISS`, `SUSPEND_USER`, `REMOVE_CONTENT`, or `RESTRICT_FEATURE` (with a

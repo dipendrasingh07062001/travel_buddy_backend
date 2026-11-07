@@ -8,7 +8,8 @@ import type { PublicTripRecord } from './trip.types.js';
 
 export interface CreateTripInput {
   ownerId: string;
-  communityId: string;
+  communityId: string | null;
+  destinationName: string | null;
   originCity: string;
   startDate: Date;
   endDate: Date;
@@ -22,7 +23,7 @@ export interface CreateTripInput {
   currentGroupSize: number;
   desiredGroupSize: number;
   transport: TripTransport;
-  description: string;
+  description: string | null;
 }
 
 export interface ListOwnedTripsQuery {
@@ -38,6 +39,8 @@ export interface PaginatedOwnedTrips {
 
 export interface TripManagementRepository {
   isActiveCommunity(communityId: string): Promise<boolean>;
+  /** The id of the only active community with this name, ignoring case. */
+  findActiveCommunityIdByName(name: string): Promise<string | null>;
   create(input: CreateTripInput): Promise<PublicTripRecord>;
   listOwned(
     ownerId: string,

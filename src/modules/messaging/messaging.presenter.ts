@@ -1,5 +1,6 @@
 import { presentPublicProfile } from '../profiles/profile.presenter.js';
 import { presentChecklistItem } from '../trip-room/trip-room.presenter.js';
+import { presentTripDestination } from '../trips/trip-destination.js';
 import type { MessageRecord, RoomRecord } from './messaging.types.js';
 
 export function presentRoom(room: RoomRecord, viewerId: string) {
@@ -13,10 +14,7 @@ export function presentRoom(room: RoomRecord, viewerId: string) {
     status: readOnly ? 'READ_ONLY' : 'ACTIVE',
     plan: {
       originCity: room.trip.originCity,
-      destination: {
-        ...room.trip.community,
-        countryCode: room.trip.community.countryCode.trim(),
-      },
+      destination: presentTripDestination(room.trip, { original: true }),
       startDate: room.trip.startDate.toISOString().slice(0, 10),
       endDate: room.trip.endDate.toISOString().slice(0, 10),
       dateMode: room.trip.dateMode,
