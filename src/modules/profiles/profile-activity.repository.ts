@@ -43,7 +43,7 @@ export const prismaProfileActivityRepository: ProfileActivityRepository = {
         // permission to disclose private joined-trip participation.
         ownerId: userId,
         moderationRemovedAt: null,
-        community: { status: 'ACTIVE' },
+        OR: [{ communityId: null }, { community: { status: 'ACTIVE' } }],
         publishedAt: { not: null },
         ...(past
           ? {

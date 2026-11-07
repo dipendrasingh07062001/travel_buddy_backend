@@ -66,6 +66,7 @@ const activityRepository: ProfileActivityRepository = {
               durationDays: 1,
               status: 'COMPLETED',
               publishedAt: now,
+              destinationName: null,
               community,
             },
           ],

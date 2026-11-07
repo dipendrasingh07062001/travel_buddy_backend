@@ -82,6 +82,7 @@ export async function processTripAlertBatch(
           trip.endDate < utcStartOfToday(now) ||
           trip.owner.status !== 'ACTIVE' ||
           trip.owner.deletedAt ||
+          !trip.community ||
           trip.community.status !== 'ACTIVE'
         ) {
           await tx.tripPublicationAlert.update({

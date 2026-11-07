@@ -2,6 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { AppError } from '../../errors/app-error.js';
 import { authenticateRequestIfPresent } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
+import {
+  communityDestinationSchema,
+  tripDestinationSchema,
+} from '../trips/trip-destination.js';
 import { publicTripSchema } from '../trips/trip.routes.js';
 import { prismaProfileActivityRepository } from './profile-activity.repository.js';
 import {
@@ -20,7 +24,7 @@ const uuid = { type: 'string', format: 'uuid' } as const;
 const text = { type: 'string' } as const;
 const dateTime = { type: 'string', format: 'date-time' } as const;
 const nullableDateTime = { anyOf: [dateTime, { type: 'null' }] } as const;
-const community = publicTripSchema.properties.destination;
+const community = communityDestinationSchema;
 const tripCard = {
   type: 'object',
   additionalProperties: false,
@@ -39,7 +43,7 @@ const tripCard = {
   properties: {
     id: uuid,
     originCity: text,
-    destination: community,
+    destination: tripDestinationSchema,
     startDate: publicTripSchema.properties.startDate,
     endDate: publicTripSchema.properties.endDate,
     dateMode: publicTripSchema.properties.dateMode,

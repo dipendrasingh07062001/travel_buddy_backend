@@ -1,5 +1,5 @@
 import { publicText } from '../../privacy/public-text.js';
-import { presentPublicDestination } from '../communities/community.presenter.js';
+import { presentTripDestination } from './trip-destination.js';
 import type { PublicTripRecord } from './trip.types.js';
 
 function dateOnly(value: Date): string {
@@ -10,7 +10,7 @@ export function presentTrip(trip: PublicTripRecord) {
   return {
     id: trip.id,
     originCity: publicText(trip.originCity),
-    destination: presentPublicDestination(trip.community),
+    destination: presentTripDestination(trip),
     startDate: dateOnly(trip.startDate),
     endDate: dateOnly(trip.endDate),
     dateMode: trip.dateMode,
@@ -46,6 +46,7 @@ export function presentOwnedTrip(trip: PublicTripRecord) {
     ...presentTrip(trip),
     // The authenticated owner needs the original text to correct older data.
     originCity: trip.originCity,
+    destination: presentTripDestination(trip, { original: true }),
     description: trip.description,
     version: trip.version,
     moderationRemovedAt: trip.moderationRemovedAt?.toISOString() ?? null,

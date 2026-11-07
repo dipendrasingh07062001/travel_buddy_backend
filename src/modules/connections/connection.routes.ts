@@ -63,7 +63,10 @@ const tripReferenceSchema = {
     destination: {
       type: 'object',
       required: ['slug', 'name'],
-      properties: { slug: { type: 'string' }, name: { type: 'string' } },
+      properties: {
+        slug: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+        name: { type: 'string' },
+      },
     },
     startDate: { type: 'string', format: 'date' },
     endDate: { type: 'string', format: 'date' },

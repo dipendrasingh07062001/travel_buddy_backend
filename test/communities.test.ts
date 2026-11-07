@@ -68,6 +68,7 @@ const publicTrip: PublicTripRecord = {
   id: 'd1000000-0000-4000-8000-000000000001',
   ownerId: userId,
   communityId,
+  destinationName: null,
   originCity: 'Delhi',
   startDate: new Date('2027-01-10T00:00:00.000Z'),
   endDate: new Date('2027-01-15T00:00:00.000Z'),

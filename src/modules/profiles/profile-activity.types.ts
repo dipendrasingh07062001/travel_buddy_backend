@@ -18,6 +18,7 @@ export const profileTripSelect = {
   durationDays: true,
   status: true,
   publishedAt: true,
+  destinationName: true,
   community: { select: activityCommunitySelect },
 } satisfies Prisma.TripSelect;
 

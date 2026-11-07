@@ -40,6 +40,7 @@ const trip: Trip = {
   id,
   ownerId: id,
   communityId,
+  destinationName: null,
   originCity: 'New Delhi',
   startDate: new Date('2030-02-10'),
   endDate: new Date('2030-02-15'),

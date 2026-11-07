@@ -21,9 +21,24 @@ export const prismaTripManagementRepository: TripManagementRepository = {
     );
   },
 
+  async findActiveCommunityIdByName(name) {
+    // Plain equality, not Prisma's insensitive mode: that can compile to ILIKE,
+    // where % or _ in a typed name would match other communities.
+    const rows = await database.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM communities
+      WHERE status = 'ACTIVE' AND lower(name) = lower(${name})
+      LIMIT 2
+    `;
+    // Duplicate names link none until an admin merges them.
+    return rows.length === 1 ? rows[0]!.id : null;
+  },
+
   create(input) {
     return database.$transaction(async (transaction) => {
-      if (!(await lockActiveCommunity(transaction, input.communityId))) {
+      if (
+        input.communityId !== null &&
+        !(await lockActiveCommunity(transaction, input.communityId))
+      ) {
         throw new AppError(404, 'COMMUNITY_NOT_FOUND', 'Community not found.');
       }
       const trip = await transaction.trip.create({
@@ -123,7 +138,14 @@ export const prismaTripManagementRepository: TripManagementRepository = {
         data.status !== undefined ? 'STATUS_CHANGED' : 'OWNER_UPDATED',
         ownerId,
       );
-      if (data.status === 'PUBLISHED' && data.publishedAt && trip.publishedAt) {
+      // Saved alerts follow a community, so a trip with a typed destination
+      // has no subscribers to alert.
+      if (
+        data.status === 'PUBLISHED' &&
+        data.publishedAt &&
+        trip.publishedAt &&
+        trip.communityId
+      ) {
         // Beyond the owner's daily alert budget the trip is still published
         // and searchable; it just does not alert saved searches. The lock
         // makes the owner's concurrent publications count one at a time.
@@ -154,6 +176,7 @@ export const prismaTripManagementRepository: TripManagementRepository = {
       const planChanged = Object.keys(data).some((field) =>
         [
           'communityId',
+          'destinationName',
           'originCity',
           'startDate',
           'endDate',

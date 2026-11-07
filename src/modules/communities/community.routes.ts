@@ -7,6 +7,7 @@ import {
 } from '../auth/auth.service.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
 import { publicTripSchema } from '../trips/trip.routes.js';
+import { communityDestinationSchema } from '../trips/trip-destination.js';
 import { presentTrip } from '../trips/trip.presenter.js';
 import { prismaTripRepository } from '../trips/trip.repository.js';
 import type { ListTripsQuery } from '../trips/trip.types.js';
@@ -152,7 +153,7 @@ const recentCommunityPostSchema = {
   required: [...communityPostSchema.required, 'community'],
   properties: {
     ...communityPostSchema.properties,
-    community: publicTripSchema.properties.destination,
+    community: communityDestinationSchema,
   },
 } as const;
 
