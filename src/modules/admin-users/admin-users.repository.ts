@@ -1,13 +1,17 @@
 import { database } from '../../database/client.js';
 import type {
   Prisma,
+  ReportStatus,
   RestrictedFeature,
 } from '../../generated/prisma/client.js';
 import { escapeLike, isActiveRestriction } from './admin-users.service.js';
 import type {
+  AdminUserDetail,
+  AdminUserDetailInput,
   AdminUserRepository,
   AdminUserSearch,
   AdminUserSummary,
+  StatusCounts,
 } from './admin-users.types.js';
 
 type Client = Prisma.TransactionClient | typeof database;
@@ -99,7 +103,164 @@ async function summarize(
   }));
 }
 
+function statusCounts(
+  groups: Array<{ status: ReportStatus; _count: { _all: number } }>,
+): StatusCounts {
+  const count = (status: ReportStatus) =>
+    groups.find((group) => group.status === status)?._count._all ?? 0;
+  return {
+    submitted: count('SUBMITTED'),
+    underReview: count('UNDER_REVIEW'),
+    actioned: count('ACTIONED'),
+    dismissed: count('DISMISSED'),
+  };
+}
+
+async function findDetail({
+  userId,
+  includeDataRequests,
+  now = new Date(),
+}: AdminUserDetailInput): Promise<AdminUserDetail | null> {
+  const user = await database.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      displayName: true,
+      status: true,
+      staffRole: true,
+      createdAt: true,
+      deletedAt: true,
+      recordsPurgedAt: true,
+      statusBeforeDeletion: true,
+      profile: { select: { profilePhotoStorageKey: true } },
+    },
+  });
+  if (!user) return null;
+  const [
+    identities,
+    restrictions,
+    aboutAccount,
+    filed,
+    claimedReportCount,
+    trips,
+    posts,
+    comments,
+    blockedByCount,
+  ] = await database.$transaction([
+    database.authIdentity.findMany({
+      where: { userId, verifiedAt: { not: null } },
+      select: { type: true },
+    }),
+    database.accountRestriction.findMany({
+      where: {
+        userId,
+        liftedAt: null,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+      },
+      select: {
+        id: true,
+        feature: true,
+        startsAt: true,
+        endsAt: true,
+        liftedAt: true,
+      },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+    }),
+    // reportedUserId is only set on these types; the condition keeps it so.
+    database.report.groupBy({
+      by: ['status'],
+      where: {
+        reportedUserId: userId,
+        targetType: { in: ['USER', 'PROFILE_PHOTO'] },
+      },
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    }),
+    database.report.groupBy({
+      by: ['status'],
+      where: { reporterId: userId },
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    }),
+    database.report.count({
+      where: { reviewerId: userId, status: 'UNDER_REVIEW' },
+    }),
+    database.trip.count({ where: { ownerId: userId } }),
+    database.communityPost.groupBy({
+      by: ['status'],
+      where: { authorId: userId },
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    }),
+    database.communityComment.groupBy({
+      by: ['status'],
+      where: { authorId: userId },
+      orderBy: { status: 'asc' },
+      _count: { _all: true },
+    }),
+    database.userBlock.count({ where: { blockedId: userId } }),
+  ]);
+  const openDataRequests = includeDataRequests
+    ? await database.accountDataRequest.findMany({
+        where: { userId, status: 'OPEN' },
+        select: { id: true, type: true, createdAt: true, scheduledFor: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      })
+    : null;
+  const postCount = (status: 'DRAFT' | 'PUBLISHED' | 'REMOVED') =>
+    posts.find((group) => group.status === status)?._count._all ?? 0;
+  const commentCount = (statuses: string[]) =>
+    comments
+      .filter((group) => statuses.includes(group.status))
+      .reduce((sum, group) => sum + group._count._all, 0);
+  return {
+    account: {
+      id: user.id,
+      displayName: user.displayName,
+      status: user.status,
+      staffRole: user.staffRole,
+      createdAt: user.createdAt,
+      deletedAt: user.deletedAt,
+      recordsPurgedAt: user.recordsPurgedAt,
+      statusBeforeDeletion: user.statusBeforeDeletion,
+      hasProfilePhoto: Boolean(user.profile?.profilePhotoStorageKey),
+      hasVerifiedEmail: identities.some((row) => row.type === 'EMAIL'),
+      hasVerifiedPhone: identities.some((row) => row.type === 'PHONE'),
+    },
+    activeRestrictions: restrictions
+      .filter((restriction) => isActiveRestriction(restriction, now))
+      .map(({ id, feature, startsAt, endsAt }) => ({
+        id,
+        feature,
+        startsAt,
+        endsAt,
+      })),
+    reports: {
+      aboutAccount: statusCounts(aboutAccount),
+      filed: statusCounts(filed),
+    },
+    claimedReportCount,
+    content: {
+      trips,
+      communityPosts: {
+        draft: postCount('DRAFT'),
+        published: postCount('PUBLISHED'),
+        removed: postCount('REMOVED'),
+      },
+      communityComments: {
+        visible: commentCount(['ACTIVE', 'EDITED']),
+        removed: commentCount(['REMOVED']),
+      },
+      blockedByCount,
+    },
+    openDataRequests,
+  };
+}
+
 export const prismaAdminUserRepository: AdminUserRepository = {
+  detail: findDetail,
+
   async search(input) {
     const where = searchWhere(input);
     const [rows, totalItems] = await database.$transaction([

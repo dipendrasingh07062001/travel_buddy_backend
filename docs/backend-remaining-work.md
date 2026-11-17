@@ -4,13 +4,21 @@ Status recorded 2026-11-07. This is a working engineering checklist, not a
 claim that the backend is launch-ready or a percentage-complete estimate.
 Frontend/UI implementation belongs to the Flutter developer.
 
-## Current milestone
-
-- Admin actions on data requests (third admin panel step): in review.
-
 ## Already implemented
 
-- Admin actions on data requests (third admin panel step, in review):
+- Admin account detail (fourth admin panel step, in review): staff can open
+  one account's moderation detail (`GET /admin/users/:userId`). It shows the
+  account state and deletion dates, verified-contact flags (never the
+  values), active restrictions without reasons, counts of reports about the
+  account, filed by it and claimed by it, content counts, and blockers as a
+  number. Administrators also see open data requests. Reports on the
+  account's content are not linked to it, even as a count. Opening a report
+  stays the audited way to see whose content it is. Two filters:
+  `GET /admin/reports?userId=` (account reports only) and
+  `GET /admin/moderation-actions?targetType=&targetId=`. No migration; views
+  are not audited.
+
+- Admin actions on data requests (third admin panel step, PR #66):
   administrators can mark an `ACCESS` request completed with an internal note
   (`POST /admin/data-requests/:requestId/complete`). The note is a
   `DATA_REQUEST_COMPLETED` audit action linked to the request
