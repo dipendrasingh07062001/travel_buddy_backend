@@ -1335,7 +1335,23 @@ not deleted accounts. Repeating an open request of the same type returns its
 existing ID; the database prevents concurrent duplicate open requests.
 
 An `ACCESS` request is for the founders to handle by hand; the self-service
-export above covers most needs.
+export above covers most needs. Once they have answered it outside the app, an
+administrator closes it with
+`POST /api/v1/admin/data-requests/:requestId/complete` and
+`{ "note": "..." }` (10–1000 characters once trimmed, otherwise
+`400 INVALID_ADMIN_NOTE`). The note is kept in the moderation audit trail as a
+`DATA_REQUEST_COMPLETED` action, linked to the request by `dataRequestId`, and
+is never shown to the user; do not put personal data or contact details in
+it. The user sees only `COMPLETED` and `completedAt`, in their list and in the
+data export, and may file a new `ACCESS` request afterwards.
+
+- Repeating a completion changes nothing and returns `changed: false`.
+- Deletion requests give `409 DATA_REQUEST_AUTOMATIC`: the erasure worker
+  completes them.
+- A cancelled request gives `409 DATA_REQUEST_NOT_OPEN`.
+- It works whatever the account's status, including after erasure.
+- Administrators only, 20 a minute, and every response has
+  `Cache-Control: no-store`.
 
 An `ACCOUNT_DELETION` request deletes the account in two stages.
 
@@ -1422,7 +1438,10 @@ cleanup warnings still need operator attention.
 
 `GET /api/v1/admin/data-requests?status=OPEN` gives administrators (not
 ordinary users or moderators) a paginated queue of request IDs, account IDs,
-type, status, and dates; `COMPLETED` and `CANCELLED` filter the history.
+type, status, and dates; `COMPLETED` and `CANCELLED` filter the history, and
+`type=ACCESS` or `type=ACCOUNT_DELETION` filters by type. Each item also has
+`completedById` and `completionActionId`, the administrator and audit row of a
+manual completion, or `null` (including deletions completed by the worker).
 
 ## File storage (Cloudflare R2)
 

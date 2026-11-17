@@ -276,6 +276,8 @@ enum ModerationActionType {
   FEATURE_RESTRICTION_LIFTED
   // Staff found an account by an exact email or phone; the value is not kept.
   USER_LOOKED_UP
+  // An administrator finished an ACCESS data request by hand.
+  DATA_REQUEST_COMPLETED
 }
 
 // Features a moderator can restrict without suspending the whole account.
@@ -994,6 +996,10 @@ model ModerationAction {
   targetId           String               @map("target_id") @db.Uuid
   reason             String               @db.VarChar(1000)
   evidenceStorageKey String?              @map("evidence_storage_key") @db.VarChar(500)
+  // Set only on DATA_REQUEST_COMPLETED rows; a partial unique index in the
+  // migration allows one completion per request.
+  dataRequestId      String?              @map("data_request_id") @db.Uuid
+  dataRequest        AccountDataRequest?  @relation(fields: [dataRequestId], references: [id], onDelete: Restrict)
   actor              User?                @relation("ModerationActor", fields: [actorId], references: [id], onDelete: Restrict)
   report             Report?              @relation(fields: [reportId], references: [id], onDelete: Restrict)
   createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1059,16 +1065,17 @@ model PolicyAcceptance {
 }
 
 model AccountDataRequest {
-  id           String                   @id @default(uuid()) @db.Uuid
-  userId       String                   @map("user_id") @db.Uuid
-  type         AccountDataRequestType
-  status       AccountDataRequestStatus @default(OPEN)
-  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  cancelledAt  DateTime?                @map("cancelled_at") @db.Timestamptz(6)
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String                   @map("user_id") @db.Uuid
+  type              AccountDataRequestType
+  status            AccountDataRequestStatus @default(OPEN)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  cancelledAt       DateTime?                @map("cancelled_at") @db.Timestamptz(6)
   // When an account deletion request erases the account.
-  scheduledFor DateTime?                @map("scheduled_for") @db.Timestamptz(6)
-  completedAt  DateTime?                @map("completed_at") @db.Timestamptz(6)
-  user         User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  scheduledFor      DateTime?                @map("scheduled_for") @db.Timestamptz(6)
+  completedAt       DateTime?                @map("completed_at") @db.Timestamptz(6)
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  moderationActions ModerationAction[]
 
   @@index([userId, createdAt, id])
   @@index([status, createdAt, id])

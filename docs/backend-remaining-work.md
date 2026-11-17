@@ -6,15 +6,21 @@ Frontend/UI implementation belongs to the Flutter developer.
 
 ## Current milestone
 
-- Staff role management (second admin panel step, PRD FR-15 and §18):
-  administrators grant or remove the moderator role with
-  `POST /admin/users/:userId/staff-role`, with a reason, audited in the same
-  transaction. `ADMIN` stays CLI-only. No migration. See
-  [Staff roles](../README.md#staff-roles).
+- Admin actions on data requests (third admin panel step): in review.
 
 ## Already implemented
 
-- Staff role management (second admin panel step, in review): administrators
+- Admin actions on data requests (third admin panel step, in review):
+  administrators can mark an `ACCESS` request completed with an internal note
+  (`POST /admin/data-requests/:requestId/complete`). The note is a
+  `DATA_REQUEST_COMPLETED` audit action linked to the request
+  (`dataRequestId`, one per request); users see only `COMPLETED` and
+  `completedAt`. Deletion requests stay automatic (`409
+DATA_REQUEST_AUTOMATIC`), cancelled ones give `409 DATA_REQUEST_NOT_OPEN`,
+  and repeats change nothing. The admin list gains a `type` filter,
+  `completedById` and `completionActionId`. Two migrations; no notification.
+
+- Staff role management (second admin panel step, PR #65): administrators
   can make an active account a moderator or remove the role, with a reason.
   Own account and administrators are protected; repeats change nothing;
   races give `409 USER_STATE_CHANGED`. Each change is a `STAFF_ROLE_GRANTED`
