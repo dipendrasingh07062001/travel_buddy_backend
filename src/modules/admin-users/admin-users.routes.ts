@@ -7,7 +7,11 @@ import type {
   UserStatus,
 } from '../../generated/prisma/client.js';
 import type { AuthRouteDependencies } from '../auth/auth.types.js';
-import { pagination, staffIdentity } from '../moderation/moderation.routes.js';
+import {
+  pagination,
+  staffIdentity,
+  userParams,
+} from '../moderation/moderation.routes.js';
 import { restrictedFeatures } from '../moderation/restriction.repository.js';
 import { prismaAdminUserRepository } from './admin-users.repository.js';
 import {
@@ -20,6 +24,7 @@ import {
   staffRoles,
   userStatuses,
   type AdminUserDependencies,
+  type AdminUserDetail,
   type AdminUserRepository,
   type AdminUserSummary,
 } from './admin-users.types.js';
@@ -30,6 +35,10 @@ interface SearchQuery {
   staffRole?: StaffRole;
   page?: number;
   pageSize?: number;
+}
+
+interface UserParams {
+  userId: string;
 }
 
 interface LookupBody {
@@ -64,6 +73,86 @@ const summarySchema = {
     openReportCount: { type: 'integer', minimum: 0 },
   },
 } as const;
+
+const nullableDate = {
+  anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
+} as const;
+
+function closedObject<const P extends Record<string, unknown>>(properties: P) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: Object.keys(properties) as Array<keyof P & string>,
+    properties,
+  } as const;
+}
+
+const countSchema = { type: 'integer', minimum: 0 } as const;
+const statusCountsSchema = closedObject({
+  submitted: countSchema,
+  underReview: countSchema,
+  actioned: countSchema,
+  dismissed: countSchema,
+});
+
+const detailSchema = closedObject({
+  account: closedObject({
+    id: { type: 'string', format: 'uuid' },
+    displayName: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    status: { type: 'string', enum: userStatuses },
+    staffRole: { type: 'string', enum: staffRoles },
+    createdAt: { type: 'string', format: 'date-time' },
+    deletedAt: nullableDate,
+    recordsPurgedAt: nullableDate,
+    statusBeforeDeletion: {
+      anyOf: [{ type: 'string', enum: userStatuses }, { type: 'null' }],
+    },
+    hasProfilePhoto: { type: 'boolean' },
+    hasVerifiedEmail: { type: 'boolean' },
+    hasVerifiedPhone: { type: 'boolean' },
+  }),
+  activeRestrictions: {
+    type: 'array',
+    items: closedObject({
+      id: { type: 'string', format: 'uuid' },
+      feature: { type: 'string', enum: restrictedFeatures },
+      startsAt: { type: 'string', format: 'date-time' },
+      endsAt: nullableDate,
+    }),
+  },
+  reports: closedObject({
+    aboutAccount: statusCountsSchema,
+    filed: statusCountsSchema,
+  }),
+  claimedReportCount: countSchema,
+  content: closedObject({
+    trips: countSchema,
+    communityPosts: closedObject({
+      draft: countSchema,
+      published: countSchema,
+      removed: countSchema,
+    }),
+    communityComments: closedObject({
+      visible: countSchema,
+      removed: countSchema,
+    }),
+    blockedByCount: countSchema,
+  }),
+  openDataRequests: {
+    anyOf: [
+      {
+        type: 'array',
+        items: closedObject({
+          id: { type: 'string', format: 'uuid' },
+          type: { type: 'string', enum: ['ACCESS', 'ACCOUNT_DELETION'] },
+          createdAt: { type: 'string', format: 'date-time' },
+          scheduledFor: nullableDate,
+        }),
+      },
+      { type: 'null' },
+    ],
+  },
+});
 
 const paginationSchema = {
   type: 'object',
@@ -116,6 +205,32 @@ async function guard<T>(
 
 function present(user: AdminUserSummary) {
   return { ...user, createdAt: user.createdAt.toISOString() };
+}
+
+const iso = (date: Date | null) => date?.toISOString() ?? null;
+
+function presentDetail(detail: AdminUserDetail) {
+  const { account } = detail;
+  return {
+    ...detail,
+    account: {
+      ...account,
+      createdAt: account.createdAt.toISOString(),
+      deletedAt: iso(account.deletedAt),
+      recordsPurgedAt: iso(account.recordsPurgedAt),
+    },
+    activeRestrictions: detail.activeRestrictions.map((restriction) => ({
+      ...restriction,
+      startsAt: restriction.startsAt.toISOString(),
+      endsAt: iso(restriction.endsAt),
+    })),
+    openDataRequests:
+      detail.openDataRequests?.map((request) => ({
+        ...request,
+        createdAt: request.createdAt.toISOString(),
+        scheduledFor: iso(request.scheduledFor),
+      })) ?? null,
+  };
 }
 
 export async function registerAdminUserRoutes(
@@ -210,6 +325,42 @@ async function registerScopedRoutes(
         data: result.users.map(present),
         pagination: pagination(page, pageSize, result.totalItems),
       };
+    },
+  );
+
+  app.get<{ Params: UserParams }>(
+    '/admin/users/:userId',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+      schema: {
+        tags: ['Moderation'],
+        summary: "One account's moderation detail (staff only)",
+        description:
+          "Account state, verified-contact flags (never the values), active restrictions, counts of reports about the account, filed by it and claimed by it, and content counts. Reports on the account's trips, posts, comments, messages or connection requests are not counted; open a report to see whose content it is. openDataRequests is null for moderators. Views are not audited.",
+        security: [{ bearerAuth: [] }],
+        params: userParams,
+        response: {
+          200: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['data'],
+            properties: { data: detailSchema },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { role } = await staffIdentity(request, auth);
+      const detail = await guard(request, () =>
+        repository.detail({
+          userId: request.params.userId,
+          includeDataRequests: role === 'ADMIN',
+        }),
+      );
+      if (!detail) {
+        throw new AppError(404, 'USER_NOT_FOUND', 'User not found.');
+      }
+      return { data: presentDetail(detail) };
     },
   );
 

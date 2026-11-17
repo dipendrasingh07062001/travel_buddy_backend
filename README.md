@@ -1168,6 +1168,63 @@ Privacy and limits:
   are not audited.
 - Rate limits per account: 60 searches and 20 lookups a minute.
 
+#### Account detail
+
+`GET /api/v1/admin/users/:userId` gives moderators and administrators one
+account's moderation picture before they act. Any account can be viewed:
+every status (including `DELETED`), every role, and your own. It is not
+audited, and it shares the routes' `no-store`, log and error rules above. The
+limit is 60 a minute per account. An unknown ID gives `404 USER_NOT_FOUND`.
+
+The response `data` has:
+
+- **`account`:**
+  - `id`, `displayName`, `status`, `staffRole`, `createdAt`, `deletedAt`,
+    `recordsPurgedAt` and `statusBeforeDeletion`;
+  - `hasProfilePhoto`;
+  - `hasVerifiedEmail` and `hasVerifiedPhone`: a stored identity with
+    `verifiedAt` set, as of account creation or the last verification
+    refresh. Never the contact itself.
+- **`activeRestrictions`:** `id`, `feature`, `startsAt` and `endsAt`, without
+  reasons. The full history with reasons is at
+  `GET /admin/users/:userId/restrictions`.
+- **`reports`:** counts by status (`submitted`, `underReview`, `actioned`,
+  `dismissed`):
+  - `aboutAccount`: `USER` and `PROFILE_PHOTO` reports naming the account;
+  - `filed`: reports the account made.
+- **`claimedReportCount`:** reports under review with this account as
+  reviewer, whatever its current role.
+- **`content`:**
+  - `trips`;
+  - `communityPosts` (`draft`, `published`, `removed`);
+  - `communityComments` (`visible`, `removed`);
+  - `blockedByCount`.
+- **`openDataRequests`:** the account's open data requests for
+  administrators (`[]` if none), `null` for moderators.
+
+Counts are of the rows that exist now. Erasure deletes the profile,
+identities and blocks and removes community content, but keeps trips and
+reports. The later purge changes no count. The account is read first, then
+the counts in one transaction at READ COMMITTED, then (for administrators)
+the open data requests. Under concurrent writes these can come from slightly
+different moments.
+
+Reports on the account's trips, posts, comments, messages or connection
+requests are deliberately not listed or counted per account, not even as a
+number. A report row carries only the content's ID. Linking it to its owner
+still needs `GET /admin/reports/:reportId`, which writes a
+`REPORT_INSPECTED` audit row.
+
+Two filters on existing lists open what the counts point to:
+
+- `GET /api/v1/admin/reports?userId=<id>`: the account's `USER` and
+  `PROFILE_PHOTO` reports only, combined with `status`. Same order, paging
+  and fields as before.
+- `GET /api/v1/admin/moderation-actions?targetType=USER&targetId=<id>`
+  (administrators only): the audit rows on one target, newest first.
+  `targetType` and `targetId` must be sent together, otherwise
+  `400 REQUEST_ERROR`.
+
 ### Moderation notices
 
 The affected account receives an in-app notification in the same transaction

@@ -6,6 +6,7 @@ import type {
   Prisma,
   Report,
   ReportStatus,
+  ReportTargetType,
   StaffRole,
 } from '../../generated/prisma/client.js';
 import { publishRealtimeEvent } from '../../realtime/realtime-events.js';
@@ -78,10 +79,19 @@ export function requireAdmin(role: StaffRole): void {
 
 export async function listStaffReports(
   status: ReportStatus | undefined,
+  userId: string | undefined,
   page: number,
   pageSize: number,
 ) {
-  const where: Prisma.ReportWhereInput = status ? { status } : {};
+  // Only reports that already name the account on the row. Reports on its
+  // content stay unlinked until a staff member inspects one (audited).
+  const where: Prisma.ReportWhereInput = {
+    ...(status && { status }),
+    ...(userId && {
+      reportedUserId: userId,
+      targetType: { in: ['USER', 'PROFILE_PHOTO'] },
+    }),
+  };
   const [reports, totalItems] = await database.$transaction([
     database.report.findMany({
       where,
@@ -801,14 +811,20 @@ export async function restoreAccount(
   });
 }
 
-export async function listModerationActions(page: number, pageSize: number) {
+export async function listModerationActions(
+  page: number,
+  pageSize: number,
+  target?: { targetType: ReportTargetType; targetId: string },
+) {
+  const where: Prisma.ModerationActionWhereInput = target ?? {};
   const [actions, totalItems] = await database.$transaction([
     database.moderationAction.findMany({
+      where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-    database.moderationAction.count(),
+    database.moderationAction.count({ where }),
   ]);
   return { actions, totalItems };
 }

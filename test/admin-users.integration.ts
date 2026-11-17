@@ -130,6 +130,9 @@ const switchable: AdminUserRepository = {
     }
     return prismaAdminUserRepository.lookup(input);
   },
+  detail(input) {
+    return prismaAdminUserRepository.detail(input);
+  },
 };
 const logApp = buildApp({
   logger: { level: 'info', stream },

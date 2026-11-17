@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { AppError } from '../../errors/app-error.js';
-import type { ReportStatus } from '../../generated/prisma/client.js';
+import type {
+  ReportStatus,
+  ReportTargetType,
+} from '../../generated/prisma/client.js';
 import {
   deleteObjectQuietly,
   requireStorage,
@@ -36,7 +39,23 @@ interface PageQuery {
 
 interface ReportQuery extends PageQuery {
   status?: ReportStatus;
+  userId?: string;
 }
+
+interface ActionQuery extends PageQuery {
+  targetType?: ReportTargetType;
+  targetId?: string;
+}
+
+const reportTargetTypes = [
+  'USER',
+  'TRIP',
+  'CONNECTION_REQUEST',
+  'MESSAGE',
+  'COMMUNITY_POST',
+  'COMMUNITY_COMMENT',
+  'PROFILE_PHOTO',
+] as const satisfies readonly ReportTargetType[];
 
 interface ReportParams {
   reportId: string;
@@ -150,14 +169,16 @@ export async function registerModerationRoutes(
               type: 'string',
               enum: ['SUBMITTED', 'UNDER_REVIEW', 'ACTIONED', 'DISMISSED'],
             },
+            // Only USER and PROFILE_PHOTO reports, which name the account.
+            userId: { type: 'string', format: 'uuid' },
           },
         },
       },
     },
     async (request) => {
       await staffIdentity(request, auth);
-      const { page = 1, pageSize = 20, status } = request.query;
-      const result = await listStaffReports(status, page, pageSize);
+      const { page = 1, pageSize = 20, status, userId } = request.query;
+      const result = await listStaffReports(status, userId, page, pageSize);
       return {
         data: result.reports,
         pagination: pagination(page, pageSize, result.totalItems),
@@ -351,21 +372,39 @@ export async function registerModerationRoutes(
     },
   );
 
-  app.get<{ Querystring: PageQuery }>(
+  app.get<{ Querystring: ActionQuery }>(
     '/admin/moderation-actions',
     {
       schema: {
         tags: ['Moderation'],
         summary: 'Read the moderation audit trail (administrators only)',
+        description:
+          'targetType and targetId filter to one target and must be sent together.',
         security: [{ bearerAuth: [] }],
-        querystring: pageSchema,
+        querystring: {
+          ...pageSchema,
+          properties: {
+            ...pageSchema.properties,
+            targetType: { type: 'string', enum: reportTargetTypes },
+            targetId: { type: 'string', format: 'uuid' },
+          },
+          // Together they match the (target_type, target_id) index.
+          dependencies: {
+            targetType: ['targetId'],
+            targetId: ['targetType'],
+          },
+        },
       },
     },
     async (request) => {
       const { role } = await staffIdentity(request, auth);
       requireAdmin(role);
-      const { page = 1, pageSize = 20 } = request.query;
-      const result = await listModerationActions(page, pageSize);
+      const { page = 1, pageSize = 20, targetType, targetId } = request.query;
+      const result = await listModerationActions(
+        page,
+        pageSize,
+        targetType && targetId ? { targetType, targetId } : undefined,
+      );
       return {
         data: result.actions,
         pagination: pagination(page, pageSize, result.totalItems),
